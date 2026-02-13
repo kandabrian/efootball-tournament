@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Vumbua eFootball</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* (Keep all existing styles from before) */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #060608; color: #f0f0f0; font-family: 'Outfit', sans-serif; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .login-box { max-width: 400px; margin: 100px auto; background: #111116; border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; padding: 40px; text-align: center; }
+        .login-box h1 { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: #00ff41; letter-spacing: 2px; margin-bottom: 20px; }
+        .login-box input { width: 100%; padding: 14px; background: #1a1a20; border: 1px solid #2a2a30; border-radius: 12px; color: white; font-size: 1rem; margin-bottom: 20px; }
+        .login-box button { width: 100%; padding: 14px; background: #00ff41; color: black; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+        .login-box button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,255,65,0.3); }
+        .error { color: #ff4444; margin-top: 10px; display: none; }
+        .dashboard { display: none; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 20px; }
+        .header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: #00ff41; letter-spacing: 2px; }
+        .header button { background: #ff4444; color: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: 600; cursor: pointer; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 1px solid #222; padding-bottom: 10px; }
+        .tab { padding: 10px 20px; background: none; border: none; color: #888; font-weight: 600; cursor: pointer; font-size: 1rem; transition: color 0.2s; }
+        .tab.active { color: #00ff41; border-bottom: 2px solid #00ff41; }
+        .table-container { background: #111116; border: 1px solid #222; border-radius: 16px; overflow-x: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 8px; color: #888; font-weight: 600; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid #222; }
+        td { padding: 16px 8px; border-bottom: 1px solid #1a1a20; }
+        tr:last-child td { border-bottom: none; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+        .status-pending { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); }
+        .status-paid { background: rgba(0,255,65,0.1); color: #00ff41; border: 1px solid rgba(0,255,65,0.2); }
+        .status-rejected { background: rgba(255,68,68,0.1); color: #ff4444; border: 1px solid rgba(255,68,68,0.2); }
+        .status-open { background: rgba(0,255,65,0.1); color: #00ff41; border: 1px solid rgba(0,255,65,0.2); }
+        .status-live { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); }
+        .status-closed { background: rgba(255,68,68,0.1); color: #ff4444; border: 1px solid rgba(255,68,68,0.2); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn { padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.8; }
+        .btn-green { background: #00ff41; color: black; }
+        .btn-red { background: #ff4444; color: white; }
+        .btn-blue { background: #0088ff; color: white; }
+        .btn-yellow { background: #ffb400; color: black; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+        .modal-overlay.open { opacity: 1; pointer-events: all; }
+        .modal-content { background: #111116; border: 1px solid #222; border-radius: 24px; padding: 30px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-content h3 { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; margin-bottom: 20px; color: #00ff41; }
+        .modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 12px; background: #1a1a20; border: 1px solid #2a2a30; border-radius: 10px; color: white; margin-bottom: 20px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn-create { background: #00ff41; color: black; padding: 10px 20px; border-radius: 20px; font-weight: 600; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Admin Login -->
+        <div id="login-section" class="login-box">
+            <h1>VUMBUA ADMIN</h1>
+            <input type="password" id="admin-key" placeholder="Enter Admin Key">
+            <button onclick="login()">Access Dashboard</button>
+            <div id="login-error" class="error">Invalid key</div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="dashboard">
+            <div class="header">
+                <h1>Admin Dashboard</h1>
+                <button onclick="logout()">Logout</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('withdrawals')">Withdrawals</button>
+                <button class="tab" onclick="switchTab('tournaments')">Tournaments</button>
+            </div>
+
+            <!-- Withdrawals Tab -->
+            <div id="withdrawals-tab">
+                <div class="table-container">
+                    <table id="withdrawals-table">
+                        <thead>
+                            <tr><th>ID</th><th>User</th><th>Amount</th><th>Phone</th><th>Name</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tournaments Tab -->
+            <div id="tournaments-tab" style="display: none;">
+                <div class="top-bar">
+                    <h2>Tournaments</h2>
+                    <button class="btn-create" onclick="openTournamentModal()">+ Create Tournament</button>
+                </div>
+                <div class="table-container">
+                    <table id="tournaments-table">
+                        <thead>
+                            <tr><th>Name</th><th>Entry Fee</th><th>Start Time</th><th>Max Players</th><th>Room Code</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Tournament Create/Edit -->
+    <div id="tournament-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('tournament-modal')">
+        <div class="modal-content">
+            <h3 id="tournament-modal-title">Create Tournament</h3>
+            <input type="text" id="tournament-name" placeholder="Tournament Name">
+            <input type="number" id="tournament-fee" placeholder="Entry Fee (KES)">
+            <input type="datetime-local" id="tournament-start" placeholder="Start Time">
+            <input type="number" id="tournament-max" placeholder="Max Players">
+            <input type="text" id="tournament-room" placeholder="Room Code (optional)">
+            <select id="tournament-status">
+                <option value="open">Open</option>
+                <option value="live">Live</option>
+                <option value="closed">Closed</option>
+            </select>
+            <div class="modal-actions">
+                <button class="btn btn-green" id="tournament-save" onclick="saveTournament()">Save</button>
+                <button class="btn btn-red" onclick="closeModal('tournament-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for confirming delete -->
+    <div id="delete-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('delete-modal')">
+        <div class="modal-content">
+            <h3>Confirm Delete</h3>
+            <p>Are you sure you want to delete this tournament?</p>
+            <div class="modal-actions">
+                <button class="btn btn-red" onclick="confirmDelete()">Delete</button>
+                <button class="btn" onclick="closeModal('delete-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- (Keep the paid/reject modals from previous version) -->
+    <div id="paid-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('paid-modal')">
+        <div class="modal-content"><h3>Mark as Paid</h3><input type="text" id="mpesa-code" placeholder="M-PESA Transaction Code"><div class="modal-actions"><button class="btn btn-green" onclick="submitPaid()">Confirm</button><button class="btn btn-red" onclick="closeModal('paid-modal')">Cancel</button></div></div>
+    </div>
+    <div id="reject-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('reject-modal')">
+        <div class="modal-content"><h3>Reject Withdrawal</h3><textarea id="reject-reason" placeholder="Reason for rejection (optional)" rows="3"></textarea><div class="modal-actions"><button class="btn btn-red" onclick="submitReject()">Reject</button><button class="btn" onclick="closeModal('reject-modal')">Cancel</button></div></div>
+    </div>
+
+    <script>
+        // State
+        let adminKey = localStorage.getItem('adminKey');
+        let currentWithdrawalId = null;
+        let currentTournamentId = null; // for editing
+
+        // Check login
+        if (adminKey) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            loadWithdrawals();
+        }
+
+        function login() {
+            const key = document.getElementById('admin-key').value;
+            if (!key) return;
+            adminKey = key;
+            localStorage.setItem('adminKey', key);
+            fetchWithdrawals().then(data => {
+                if (data.error) throw new Error(data.error);
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                loadWithdrawals();
+            }).catch(() => {
+                document.getElementById('login-error').style.display = 'block';
+                localStorage.removeItem('adminKey');
+                adminKey = null;
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('adminKey');
+            adminKey = null;
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+        }
+
+        async function adminFetch(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'x-admin-key': adminKey,
+                ...options.headers
+            };
+            const res = await fetch(url, { ...options, headers });
+            if (res.status === 403) {
+                alert('Session expired');
+                logout();
+                return null;
+            }
+            return res;
+        }
+
+        // ========== WITHDRAWALS ==========
+        async function fetchWithdrawals(status = 'pending') {
+            const res = await adminFetch(`/admin/withdrawals?status=${status}`);
+            return res ? await res.json() : [];
+        }
+
+        async function loadWithdrawals() {
+            const data = await fetchWithdrawals('pending');
+            if (data) renderWithdrawals(data);
+        }
+
+        function renderWithdrawals(withdrawals) {
+            const tbody = document.querySelector('#withdrawals-table tbody');
+            tbody.innerHTML = withdrawals.length ? '' : '<tr><td colspan="7" style="text-align:center; color:#888;">No pending withdrawals</td></tr>';
+            withdrawals.forEach(w => {
+                tbody.innerHTML += `<tr>
+                    <td>${w.id.substring(0,8)}...</td>
+                    <td>${w.user_id.substring(0,8)}...</td>
+                    <td>KES ${w.amount}</td>
+                    <td>${w.phone}</td>
+                    <td>${w.name}</td>
+                    <td><span class="status-badge status-pending">Pending</span></td>
+                    <td class="actions">
+                        <button class="btn btn-green" onclick="openPaidModal('${w.id}')">Paid</button>
+                        <button class="btn btn-red" onclick="openRejectModal('${w.id}')">Reject</button>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        // Paid / Reject functions (unchanged) ...
+        function openPaidModal(id) { currentWithdrawalId = id; document.getElementById('mpesa-code').value = ''; document.getElementById('paid-modal').classList.add('open'); }
+        async function submitPaid() {
+            const mpesaCode = document.getElementById('mpesa-code').value.trim();
+            if (!mpesaCode) return alert('Enter M-PESA code');
+            const res = await adminFetch(`/admin/withdrawals/${currentWithdrawalId}/paid`, { method: 'PATCH', body: JSON.stringify({ mpesaCode }) });
+            if (res && res.ok) { closeModal('paid-modal'); loadWithdrawals(); } else alert('Failed');
+        }
+        function openRejectModal(id) { currentWithdrawalId = id; document.getElementById('reject-reason').value = ''; document.getElementById('reject-modal').classList.add('open'); }
+        async function submitReject() {
+            const reason = document.getElementById('reject-reason').value.trim();
+            const res = await adminFetch(`/admin/withdrawals/${currentWithdrawalId}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) });
+            if (res && res.ok) { closeModal('reject-modal'); loadWithdrawals(); } else alert('Failed');
+        }
+
+        // ========== TOURNAMENTS ==========
+        async function loadTournaments() {
+            const res = await adminFetch('/admin/tournaments');
+            if (!res) return;
+            const data = await res.json();
+            renderTournaments(data);
+        }
+
+        function renderTournaments(tournaments) {
+            const tbody = document.querySelector('#tournaments-table tbody');
+            tbody.innerHTML = tournaments.length ? '' : '<tr><td colspan="7" style="text-align:center; color:#888;">No tournaments</td></tr>';
+            tournaments.forEach(t => {
+                const start = new Date(t.start_time).toLocaleString();
+                const statusClass = t.status === 'open' ? 'status-open' : t.status === 'live' ? 'status-live' : 'status-closed';
+                tbody.innerHTML += `<tr>
+                    <td>${t.name}</td>
+                    <td>KES ${t.entry_fee}</td>
+                    <td>${start}</td>
+                    <td>${t.max_players}</td>
+                    <td>${t.room_code || '—'}</td>
+                    <td><span class="status-badge ${statusClass}">${t.status}</span></td>
+                    <td class="actions">
+                        <button class="btn btn-yellow" onclick="editTournament('${t.id}')">Edit</button>
+                        <button class="btn btn-red" onclick="openDeleteModal('${t.id}')">Delete</button>
+                    </td>
+                </tr>`;
+            });
+        }
+
+        function openTournamentModal() {
+            currentTournamentId = null;
+            document.getElementById('tournament-modal-title').innerText = 'Create Tournament';
+            document.getElementById('tournament-name').value = '';
+            document.getElementById('tournament-fee').value = '';
+            document.getElementById('tournament-start').value = '';
+            document.getElementById('tournament-max').value = '';
+            document.getElementById('tournament-room').value = '';
+            document.getElementById('tournament-status').value = 'open';
+            document.getElementById('tournament-modal').classList.add('open');
+        }
+
+        async function editTournament(id) {
+            currentTournamentId = id;
+            const res = await adminFetch(`/admin/tournaments/${id}`);
+            if (!res) return;
+            const t = await res.json();
+            document.getElementById('tournament-modal-title').innerText = 'Edit Tournament';
+            document.getElementById('tournament-name').value = t.name;
+            document.getElementById('tournament-fee').value = t.entry_fee;
+            // Format datetime-local
+            const start = new Date(t.start_time);
+            const year = start.getFullYear();
+            const month = String(start.getMonth() + 1).padStart(2, '0');
+            const day = String(start.getDate()).padStart(2, '0');
+            const hours = String(start.getHours()).padStart(2, '0');
+            const mins = String(start.getMinutes()).padStart(2, '0');
+            document.getElementById('tournament-start').value = `${year}-${month}-${day}T${hours}:${mins}`;
+            document.getElementById('tournament-max').value = t.max_players;
+            document.getElementById('tournament-room').value = t.room_code || '';
+            document.getElementById('tournament-status').value = t.status;
+            document.getElementById('tournament-modal').classList.add('open');
+        }
+
+        async function saveTournament() {
+            const name = document.getElementById('tournament-name').value.trim();
+            const fee = parseFloat(document.getElementById('tournament-fee').value);
+            const start = document.getElementById('tournament-start').value;
+            const max = parseInt(document.getElementById('tournament-max').value);
+            const room = document.getElementById('tournament-room').value.trim();
+            const status = document.getElementById('tournament-status').value;
+
+            if (!name || !fee || !start || !max) return alert('Please fill all required fields');
+
+            const payload = {
+                name,
+                entry_fee: fee,
+                start_time: new Date(start).toISOString(),
+                max_players: max,
+                room_code: room || null,
+                status
+            };
+
+            let res;
+            if (currentTournamentId) {
+                res = await adminFetch(`/admin/tournaments/${currentTournamentId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                res = await adminFetch('/admin/tournaments', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            if (res && res.ok) {
+                closeModal('tournament-modal');
+                loadTournaments();
+            } else {
+                alert('Save failed');
+            }
+        }
+
+        function openDeleteModal(id) {
+            currentTournamentId = id;
+            document.getElementById('delete-modal').classList.add('open');
+        }
+
+        async function confirmDelete() {
+            const res = await adminFetch(`/admin/tournaments/${currentTournamentId}`, { method: 'DELETE' });
+            if (res && res.ok) {
+                closeModal('delete-modal');
+                loadTournaments();
+            } else {
+                alert('Delete failed');
+            }
+        }
+
+        // ========== UI Helpers ==========
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('open');
+            if (modalId === 'paid-modal' || modalId === 'reject-modal') currentWithdrawalId = null;
+            if (modalId === 'tournament-modal') currentTournamentId = null;
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            if (tabName === 'withdrawals') {
+                document.getElementById('withdrawals-tab').style.display = 'block';
+                document.getElementById('tournaments-tab').style.display = 'none';
+                loadWithdrawals();
+            } else {
+                document.getElementById('withdrawals-tab').style.display = 'none';
+                document.getElementById('tournaments-tab').style.display = 'block';
+                loadTournaments();
+            }
+        }
+    </script>
+</body>
+</html>
