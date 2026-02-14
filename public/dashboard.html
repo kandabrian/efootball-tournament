@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | Vumbua eFootball</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /wallet/balance /tournaments /tournament/join /friends/create-match /friends/join-match /friends/cancel-match /friends/my-matches /friends/submit-result /wallet/deposit /wallet/deposit/status /wallet/withdraw;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://short-cockroach-kandabrian-a2ff9aa5.koyeb.app;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -726,6 +726,10 @@
         const el = document.getElementById(elementId);
         if (el) el.style.display = 'none';
     }
+
+    // Base URL — all API calls go through here
+    const API = 'https://short-cockroach-kandabrian-a2ff9aa5.koyeb.app';
+
     async function fetchWithAuth(url, options = {}) {
         if (!authToken) { window.location.href = '/login'; return; }
         const headers = {
@@ -733,7 +737,8 @@
             'Authorization': `Bearer ${authToken}`,
             ...options.headers
         };
-        const res = await fetch(url, { ...options, headers });
+        const fullUrl = url.startsWith('http') ? url : `${API}${url}`;
+        const res = await fetch(fullUrl, { ...options, headers });
         if (res.status === 401) {
             localStorage.removeItem('supabaseToken');
             localStorage.removeItem('supabaseUser');
@@ -792,7 +797,7 @@
     // --- TOURNAMENTS (Safe DOM) ---
     async function loadTournaments() {
         try {
-            const res = await fetch('/tournaments');
+            const res = await fetch(`${API}/tournaments`);
             if (!res.ok) throw new Error('Failed to load tournaments');
             const tournaments = await res.json();
             renderTournaments(tournaments);

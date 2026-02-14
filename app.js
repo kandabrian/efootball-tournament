@@ -50,6 +50,7 @@ if (missing.length > 0) {
     process.exit(1);
 }
 console.log("✅ Required env vars present.");
+console.log("   APP_SERVER_URL:", process.env.APP_SERVER_URL || "⚠️  NOT SET");
 console.log("   FRONTEND_URL:", process.env.FRONTEND_URL || "⚠️  NOT SET (CORS may block frontend)");
 console.log("   ADMIN_KEY:", process.env.ADMIN_KEY ? "✅ set" : "⚠️  NOT SET (admin routes disabled)");
 console.log("   PORT:", process.env.PORT || "3000 (default)");
@@ -138,8 +139,10 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = [
     process.env.FRONTEND_URL,
+    process.env.APP_SERVER_URL,
     'http://localhost:5500',
-    'http://127.0.0.1:5500'
+    'http://127.0.0.1:5500',
+    'http://localhost:3000'
 ].filter(Boolean);
 
 app.use(cors({
@@ -159,8 +162,17 @@ app.use(cors({
 
 app.use(express.json());
 app.use((req, res, next) => {
+    const koyebUrl = process.env.APP_SERVER_URL || '';
+    const frontendUrl = process.env.FRONTEND_URL || '';
+    const connectSrc = [
+        "'self'",
+        'https://*.supabase.co',
+        koyebUrl,
+        frontendUrl
+    ].filter(Boolean).join(' ');
     res.setHeader("Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co");
+        `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src ${connectSrc}`
+    );
     next();
 });
 app.use(express.static('public'));

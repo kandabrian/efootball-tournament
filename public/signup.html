@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vumbua — Kenya's #1 eFootball Arena</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /auth/signup;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://short-cockroach-kandabrian-a2ff9aa5.koyeb.app;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -302,6 +302,9 @@
             .replace(/'/g, "&#039;");
     }
 
+    // Base URL — works both locally and on Koyeb
+    const API = 'https://short-cockroach-kandabrian-a2ff9aa5.koyeb.app';
+
     // Redirect if already logged in
     if (localStorage.getItem('supabaseToken')) {
         window.location.href = '/dashboard';
@@ -354,7 +357,7 @@
         btn.textContent = 'Inaload...';
 
         try {
-            const res = await fetch('/auth/signup', {
+            const res = await fetch(`${API}/auth/signup`, {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: cleanPhone, password, username })
