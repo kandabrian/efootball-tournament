@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | Vumbua eFootball</title>
+    <title>Login | Vumbua eFootball [v2.1-FIXED]</title>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://low-lilllie-kandabrian-18be1e15.koyeb.app;">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -196,7 +196,12 @@
     }
 
     // Base URL — works both locally and on Koyeb
+    // CRITICAL: If you see 'short-cockroach' in your console, clear your browser cache!
     const API = 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
+    
+    // Debug: Log API URL to console to verify correct version is loaded
+    console.log('🔍 API URL:', API);
+    console.log('✅ If you see low-lilllie-kandabrian above, you have the correct version!');
 
     // Redirect if session exists
     if (localStorage.getItem('supabaseToken')) { 

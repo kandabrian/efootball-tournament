@@ -306,7 +306,12 @@
     }
 
     // Base URL — works both locally and on Koyeb
+    // CRITICAL: If you see 'short-cockroach' in your console, clear your browser cache!
     const API = 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
+    
+    // Debug: Log API URL to console to verify correct version is loaded
+    console.log('🔍 API URL:', API);
+    console.log('✅ If you see low-lilllie-kandabrian above, you have the correct version!');
 
     // Redirect if already logged in
     if (localStorage.getItem('supabaseToken')) {
