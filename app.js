@@ -202,64 +202,89 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 // AUTH ROUTES
 // ============================================================
 app.post('/auth/signup', async (req, res) => {
-    let { phone, password, username } = req.body;
-    if (!phone || !password || !username) return res.status(400).json({ error: 'Missing fields.' });
-    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    try {
+        let { phone, password, username } = req.body;
+        if (!phone || !password || !username) return res.status(400).json({ error: 'Missing fields.' });
+        if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
 
-    phone = normalizePhone(phone);
-    if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
+        phone = normalizePhone(phone);
+        if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
 
-    const { data, error } = await supabase.auth.signUp({
-        phone, password, options: { data: { username } }
-    });
+        const { data, error } = await supabase.auth.signUp({
+            phone, password, options: { data: { username } }
+        });
 
-    if (error) return res.status(error.status || 400).json({ error: error.message });
+        if (error) return res.status(error.status || 400).json({ error: error.message });
 
-    if (data.user) {
-        await supabaseAdmin.from('profiles').upsert([{ id: data.user.id, username }]);
-        await supabaseAdmin.from('wallets').upsert([{ user_id: data.user.id, balance: 0 }]);
+        if (data.user) {
+            try {
+                await supabaseAdmin.from('profiles').upsert([{ id: data.user.id, username }]);
+                await supabaseAdmin.from('wallets').upsert([{ user_id: data.user.id, balance: 0 }]);
+            } catch (dbErr) {
+                console.error('Failed to create profile/wallet:', dbErr);
+                // Rollback user creation
+                await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch(() => {});
+                return res.status(500).json({ error: 'Account creation failed. Try again.' });
+            }
+        }
+
+        res.status(200).json({ message: "Signup successful!", user: data.user });
+    } catch (err) {
+        console.error('Signup error:', err);
+        res.status(500).json({ error: 'Internal server error.' });
     }
-
-    res.status(200).json({ message: "Signup successful!", user: data.user });
 });
 
 app.post('/auth/login', async (req, res) => {
-    let { phone, password } = req.body;
-    phone = normalizePhone(phone);
-    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
-    if (error) return res.status(400).json({ error: error.message });
-    res.status(200).json({ message: "Login successful!", session: data.session });
+    try {
+        let { phone, password } = req.body;
+        phone = normalizePhone(phone);
+        if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
+
+        const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+        if (error) return res.status(400).json({ error: error.message });
+
+        res.status(200).json({ message: "Login successful!", session: data.session });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
 });
 
 // ============================================================
 // WALLET ROUTES
 // ============================================================
 app.get('/wallet/balance', async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
 
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error } = await supabase.auth.getUser(jwt);
-    if (error || !user) return res.status(401).json({ error: 'Invalid session' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error } = await supabase.auth.getUser(jwt);
+        if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-    const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).single();
-    res.json({ balance: data ? data.balance : 0 });
+        const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).single();
+        res.json({ balance: data ? data.balance : 0 });
+    } catch (err) {
+        console.error('Balance error:', err);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
 });
 
 // ============================================================
 // TOURNAMENT JOIN
 // ============================================================
 app.post('/tournament/join', sensitiveLimiter, async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
-    const { tournamentId, entryFee, paymentMethod, checkoutId } = req.body;
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { tournamentId, entryFee, paymentMethod, checkoutId } = req.body;
+
         let roomCode = null;
 
         if (paymentMethod === 'wallet') {
@@ -302,19 +327,19 @@ app.post('/tournament/join', sensitiveLimiter, async (req, res) => {
 // PLAY WITH FRIENDS ROUTES
 // ============================================================
 app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
-    const { wagerAmount } = req.body;
-    if (!wagerAmount || isNaN(wagerAmount) || wagerAmount < 50) {
-        return res.status(400).json({ error: 'Minimum wager is KES 50' });
-    }
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { wagerAmount } = req.body;
+        if (!wagerAmount || isNaN(wagerAmount) || wagerAmount < 50) {
+            return res.status(400).json({ error: 'Minimum wager is KES 50' });
+        }
+
         const { data: wallet } = await supabase
             .from('wallets').select('balance').eq('user_id', user.id).single();
 
@@ -375,17 +400,17 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
 });
 
 app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
-    const { matchCode } = req.body;
-    if (!matchCode) return res.status(400).json({ error: 'Match code is required' });
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchCode } = req.body;
+        if (!matchCode) return res.status(400).json({ error: 'Match code is required' });
+
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches').select('*')
             .eq('match_code', matchCode.toUpperCase()).single();
@@ -438,17 +463,17 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
 });
 
 app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
-    const { matchId, winnerId, screenshotUrl } = req.body;
-    if (!matchId || !winnerId) return res.status(400).json({ error: 'Match ID and winner ID are required' });
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchId, winnerId, screenshotUrl } = req.body;
+        if (!matchId || !winnerId) return res.status(400).json({ error: 'Match ID and winner ID are required' });
+
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches').select('*').eq('id', matchId).single();
 
@@ -459,13 +484,33 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
         if (winnerId !== match.creator_id && winnerId !== match.joiner_id)
             return res.status(400).json({ error: 'Invalid winner ID' });
 
+        // Prevent same user from reporting twice
+        if (match.reported_by_id === user.id) {
+            return res.status(400).json({ error: 'You have already reported this match' });
+        }
+
         // Lazy-load verifier only when actually needed
         let verificationResult = null;
         if (screenshotUrl) {
+            // Validate screenshot URL to prevent SSRF
+            try {
+                const url = new URL(screenshotUrl);
+                // Allow only your own storage domain (e.g., Supabase storage)
+                if (!url.hostname.endsWith('supabase.co') && !url.hostname.includes('your-storage-domain.com')) {
+                    console.warn('Blocked SSRF attempt:', screenshotUrl);
+                    return res.status(400).json({ error: 'Invalid screenshot URL domain' });
+                }
+            } catch {
+                return res.status(400).json({ error: 'Invalid screenshot URL' });
+            }
+
             const verifier = getVerifier();
             if (verifier) {
                 try {
-                    const response = await fetch(screenshotUrl);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    const response = await fetch(screenshotUrl, { signal: controller.signal });
+                    clearTimeout(timeout);
                     if (!response.ok) throw new Error('Failed to fetch screenshot');
                     const buffer = Buffer.from(await response.arrayBuffer());
                     verificationResult = await verifier.verifyScreenshot(buffer, {
@@ -518,6 +563,7 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
             });
         }
 
+        // Both reports match – payout winner
         const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', {
             p_user_id: winnerId, p_amount: match.winner_prize
         });
@@ -553,14 +599,14 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
 });
 
 app.get('/friends/my-matches', async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
         const { data: matches, error } = await supabaseAdmin
             .from('friend_matches')
             .select(`*, creator:profiles!friend_matches_creator_id_fkey(username), joiner:profiles!friend_matches_joiner_id_fkey(username)`)
@@ -576,16 +622,16 @@ app.get('/friends/my-matches', async (req, res) => {
 });
 
 app.post('/friends/cancel-match', sensitiveLimiter, async (req, res) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
-
-    const { matchId } = req.body;
-
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchId } = req.body;
+
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches').select('*').eq('id', matchId).single();
 
@@ -609,18 +655,18 @@ app.post('/friends/cancel-match', sensitiveLimiter, async (req, res) => {
 // WALLET DEPOSIT / WITHDRAW
 // ============================================================
 async function handleDeposit(req, res) {
-    let { phone, amount, description } = req.body;
-    if (!phone || !amount || isNaN(amount) || amount < 10)
-        return res.status(400).json({ error: 'Invalid request. Min deposit KES 10.' });
-
-    phone = normalizePhone(phone);
-    if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
-
-    const jwt = req.headers['authorization']?.replace('Bearer ', '');
-    const { data: { user } } = await supabase.auth.getUser(jwt);
-    if (!user) return res.status(401).json({ error: 'Unauthorized.' });
-
     try {
+        let { phone, amount, description } = req.body;
+        if (!phone || !amount || isNaN(amount) || amount < 10)
+            return res.status(400).json({ error: 'Invalid request. Min deposit KES 10.' });
+
+        phone = normalizePhone(phone);
+        if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
+
+        const jwt = req.headers['authorization']?.replace('Bearer ', '');
+        const { data: { user } } = await supabase.auth.getUser(jwt);
+        if (!user) return res.status(401).json({ error: 'Unauthorized.' });
+
         const mpesaRes = await fetch(`${process.env.MPESA_SERVER_URL}/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -659,12 +705,17 @@ app.post('/wallet/deposit', depositLimiter, handleDeposit);
 app.post('/mpesa/deposit', depositLimiter, handleDeposit);
 
 app.get('/wallet/deposit/status', async (req, res) => {
-    const { checkoutId } = req.query;
-    if (!checkoutId) return res.status(400).json({ error: 'checkoutId is required' });
-    const { data } = await supabaseAdmin
-        .from('transactions').select('status, mpesa_receipt')
-        .eq('checkout_request_id', checkoutId).single();
-    res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt || null });
+    try {
+        const { checkoutId } = req.query;
+        if (!checkoutId) return res.status(400).json({ error: 'checkoutId is required' });
+        const { data } = await supabaseAdmin
+            .from('transactions').select('status, mpesa_receipt')
+            .eq('checkout_request_id', checkoutId).single();
+        res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt || null });
+    } catch (err) {
+        console.error('Deposit status error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/mpesa/callback', async (req, res) => {
@@ -704,23 +755,28 @@ app.post('/mpesa/callback', async (req, res) => {
 });
 
 app.get('/mpesa/status', async (req, res) => {
-    const { checkoutId } = req.query;
-    const { data } = await supabase.from('transactions').select('status, mpesa_receipt')
-        .eq('checkout_request_id', checkoutId).single();
-    res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt });
+    try {
+        const { checkoutId } = req.query;
+        const { data } = await supabase.from('transactions').select('status, mpesa_receipt')
+            .eq('checkout_request_id', checkoutId).single();
+        res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt });
+    } catch (err) {
+        console.error('Mpesa status error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
-    const jwt = req.headers['authorization']?.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
-
-    let { amount, phone, name } = req.body;
-    if (!amount || !phone || !name || isNaN(amount) || amount < 100)
-        return res.status(400).json({ error: 'Invalid details.' });
-    phone = normalizePhone(phone);
-
     try {
+        const jwt = req.headers['authorization']?.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
+
+        let { amount, phone, name } = req.body;
+        if (!amount || !phone || !name || isNaN(amount) || amount < 100)
+            return res.status(400).json({ error: 'Invalid details.' });
+        phone = normalizePhone(phone);
+
         const referenceId = 'WD-' + Date.now().toString(36).toUpperCase();
         const { error: rpcErr } = await supabase.rpc('request_withdrawal', {
             p_user_id: user.id, p_amount: Math.floor(Number(amount)),
@@ -729,6 +785,7 @@ app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
         if (rpcErr) return res.status(400).json({ error: rpcErr.message });
         res.status(200).json({ message: 'Request received.', referenceId, amount });
     } catch (err) {
+        console.error('Withdraw error:', err);
         res.status(500).json({ error: 'System error. Try again.' });
     }
 });
@@ -737,102 +794,156 @@ app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
 // ADMIN ROUTES
 // ============================================================
 app.get('/admin/withdrawals', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { status } = req.query;
-    let query = supabaseAdmin.from('withdrawals').select('*').order('created_at', { ascending: true });
-    if (status) query = query.eq('status', status);
-    const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { status } = req.query;
+        let query = supabaseAdmin.from('withdrawals').select('*').order('created_at', { ascending: true });
+        if (status) query = query.eq('status', status);
+        const { data, error } = await query;
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data || []);
+    } catch (err) {
+        console.error('Admin withdrawals error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.patch('/admin/withdrawals/:id/paid', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { data, error } = await supabaseAdmin.from('withdrawals')
-        .update({ status: 'paid', mpesa_code: req.body.mpesaCode, paid_at: new Date().toISOString() })
-        .eq('id', req.params.id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ message: 'Paid.', withdrawal: data });
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const withdrawal = await supabaseAdmin.from('withdrawals').select('status').eq('id', req.params.id).single();
+        if (withdrawal.error || withdrawal.data.status !== 'pending') {
+            return res.status(400).json({ error: 'Invalid withdrawal state' });
+        }
+        const { data, error } = await supabaseAdmin.from('withdrawals')
+            .update({ status: 'paid', mpesa_code: req.body.mpesaCode, paid_at: new Date().toISOString() })
+            .eq('id', req.params.id).select().single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ message: 'Paid.', withdrawal: data });
+    } catch (err) {
+        console.error('Admin paid error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.patch('/admin/withdrawals/:id/reject', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { data: wd } = await supabaseAdmin.from('withdrawals').select('*').eq('id', req.params.id).single();
-    if (!wd || wd.status !== 'pending') return res.status(400).json({ error: 'Invalid state' });
-    const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', { p_user_id: wd.user_id, p_amount: wd.amount });
-    if (refundErr) return res.status(500).json({ error: refundErr.message });
-    const { data, error } = await supabaseAdmin.from('withdrawals')
-        .update({ status: 'rejected', reject_reason: req.body.reason, rejected_at: new Date().toISOString() })
-        .eq('id', req.params.id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ message: 'Rejected and refunded.', withdrawal: data });
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { data: wd, error: fetchErr } = await supabaseAdmin.from('withdrawals').select('*').eq('id', req.params.id).single();
+        if (fetchErr || !wd || wd.status !== 'pending') return res.status(400).json({ error: 'Invalid state' });
+        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', { p_user_id: wd.user_id, p_amount: wd.amount });
+        if (refundErr) return res.status(500).json({ error: refundErr.message });
+        const { data, error } = await supabaseAdmin.from('withdrawals')
+            .update({ status: 'rejected', reject_reason: req.body.reason, rejected_at: new Date().toISOString() })
+            .eq('id', req.params.id).select().single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ message: 'Rejected and refunded.', withdrawal: data });
+    } catch (err) {
+        console.error('Admin reject error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.get('/admin/tournaments', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { data, error } = await supabaseAdmin.from('tournaments').select('*').order('created_at', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await supabaseAdmin.from('tournaments').select('*').order('created_at', { ascending: false });
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data || []);
+    } catch (err) {
+        console.error('Admin tournaments error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.get('/admin/tournaments/:id', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { data, error } = await supabaseAdmin.from('tournaments').select('*').eq('id', req.params.id).single();
-    if (error) return res.status(404).json({ error: 'Tournament not found' });
-    res.json(data);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { data, error } = await supabaseAdmin.from('tournaments').select('*').eq('id', req.params.id).single();
+        if (error) return res.status(404).json({ error: 'Tournament not found' });
+        res.json(data);
+    } catch (err) {
+        console.error('Admin tournament detail error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/admin/tournaments', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { name, entry_fee, start_time, max_players, room_code, status } = req.body;
-    if (!name || !entry_fee || !start_time || !max_players)
-        return res.status(400).json({ error: 'Missing required fields' });
-    const { data, error } = await supabaseAdmin.from('tournaments')
-        .insert([{ name, entry_fee, start_time, max_players, room_code: room_code || null, status: status || 'open' }])
-        .select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { name, entry_fee, start_time, max_players, room_code, status } = req.body;
+        if (!name || !entry_fee || !start_time || !max_players)
+            return res.status(400).json({ error: 'Missing required fields' });
+        const { data, error } = await supabaseAdmin.from('tournaments')
+            .insert([{ name, entry_fee, start_time, max_players, room_code: room_code || null, status: status || 'open' }])
+            .select().single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.status(201).json(data);
+    } catch (err) {
+        console.error('Admin create tournament error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.patch('/admin/tournaments/:id', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { name, entry_fee, start_time, max_players, room_code, status } = req.body;
-    const { data, error } = await supabaseAdmin.from('tournaments')
-        .update({ name, entry_fee, start_time, max_players, room_code, status, updated_at: new Date().toISOString() })
-        .eq('id', req.params.id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { name, entry_fee, start_time, max_players, room_code, status } = req.body;
+        const { data, error } = await supabaseAdmin.from('tournaments')
+            .update({ name, entry_fee, start_time, max_players, room_code, status, updated_at: new Date().toISOString() })
+            .eq('id', req.params.id).select().single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data);
+    } catch (err) {
+        console.error('Admin update tournament error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.delete('/admin/tournaments/:id', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { error } = await supabaseAdmin.from('tournaments').delete().eq('id', req.params.id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ message: 'Tournament deleted' });
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { error } = await supabaseAdmin.from('tournaments').delete().eq('id', req.params.id);
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ message: 'Tournament deleted' });
+    } catch (err) {
+        console.error('Admin delete tournament error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.get('/admin/friend-matches', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { status } = req.query;
-    let query = supabaseAdmin.from('friend_matches')
-        .select(`*, creator:profiles!friend_matches_creator_id_fkey(username), joiner:profiles!friend_matches_joiner_id_fkey(username), winner:profiles!friend_matches_winner_id_fkey(username)`)
-        .order('created_at', { ascending: false });
-    if (status && status !== 'all') query = query.eq('status', status);
-    const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+    try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { status } = req.query;
+        let query = supabaseAdmin.from('friend_matches')
+            .select(`*, creator:profiles!friend_matches_creator_id_fkey(username), joiner:profiles!friend_matches_joiner_id_fkey(username), winner:profiles!friend_matches_winner_id_fkey(username)`)
+            .order('created_at', { ascending: false });
+        if (status && status !== 'all') query = query.eq('status', status);
+        const { data, error } = await query;
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data || []);
+    } catch (err) {
+        console.error('Admin friend matches error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/admin/resolve-dispute/:matchId', async (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    const { winnerId } = req.body;
-    const { matchId } = req.params;
-    if (!winnerId) return res.status(400).json({ error: 'Winner ID is required' });
     try {
+        if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+        const { winnerId } = req.body;
+        const { matchId } = req.params;
+        if (!winnerId) return res.status(400).json({ error: 'Winner ID is required' });
+
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches').select('*').eq('id', matchId).single();
         if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
         if (match.status !== 'disputed') return res.status(400).json({ error: 'Match is not disputed' });
+        if (winnerId !== match.creator_id && winnerId !== match.joiner_id) {
+            return res.status(400).json({ error: 'Winner must be one of the players' });
+        }
+
         await supabaseAdmin.rpc('credit_wallet', { p_user_id: winnerId, p_amount: match.winner_prize });
         await supabaseAdmin.from('friend_matches').update({
             winner_id: winnerId, status: 'completed',
