@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | Vumbua eFootball</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /auth/login;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -181,6 +182,16 @@
 </div>
 
 <script>
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     // Redirect if session exists
     if (localStorage.getItem('supabaseToken')) { 
         window.location.href = '/dashboard'; 
@@ -190,10 +201,10 @@
     const btn = document.getElementById('submit-btn');
 
     function showError(msg) { 
-        errorEl.textContent = msg; 
+        errorEl.textContent = escapeHtml(msg); 
         errorEl.style.display = 'block';
         errorEl.classList.remove('shake');
-        void errorEl.offsetWidth; // Force reflow
+        void errorEl.offsetWidth;
         errorEl.classList.add('shake');
     }
 
@@ -204,13 +215,18 @@
         const phone = document.getElementById('login-phone').value.trim();
         const password = document.getElementById('login-password').value;
 
-        // Kenyan Phone Formatting
+        // Format phone
         let cleanPhone = phone.replace(/\s+/g, '');
+        if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.startsWith('0')) {
-            cleanPhone = '+254' + cleanPhone.substring(1);
-        } else if (cleanPhone.startsWith('254') && !cleanPhone.startsWith('+')) {
-            cleanPhone = '+' + cleanPhone;
+            cleanPhone = '254' + cleanPhone.substring(1);
+        } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
+            cleanPhone = '254' + cleanPhone;
         }
+        if (!/^254[17]\d{8}$/.test(cleanPhone)) {
+            return showError("Namba ya simu si sahihi.");
+        }
+        cleanPhone = '+' + cleanPhone;
 
         btn.disabled = true; 
         btn.textContent = 'Inaload...';
@@ -221,9 +237,9 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: cleanPhone, password })
             });
-            
+
             const result = await res.json();
-            
+
             if (res.ok) {
                 localStorage.setItem('supabaseToken', result.session.access_token);
                 localStorage.setItem('supabaseUser', JSON.stringify(result.session.user));

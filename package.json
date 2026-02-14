@@ -1,17 +1,24 @@
 {
   "name": "efootball-tournament",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "eFootball tournament platform with fraud detection",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
+    "dev": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kandabrian/efootball-tournament.git"
   },
-  "keywords": [],
+  "keywords": [
+    "efootball",
+    "tournament",
+    "gaming",
+    "mpesa",
+    "kenya"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -23,7 +30,16 @@
     "@supabase/supabase-js": "^2.95.3",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.4.0",
     "tesseract.js": "^7.0.0",
-    "express-rate-limit": "^7.4.0"
+    "exifreader": "^4.21.1",
+    "sharp": "^0.33.2",
+    "image-hash": "^6.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

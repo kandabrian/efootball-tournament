@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vumbua — Kenya's #1 eFootball Arena</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /auth/signup;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -49,7 +50,7 @@
 
         .page-wrap {
             position: relative; z-index: 1; min-height: 100vh;
-            display: grid; grid-template-columns: 1.1fr 0.9fr; /* Slightly favor hero section */
+            display: grid; grid-template-columns: 1.1fr 0.9fr;
         }
 
         /* ── Hero Section ── */
@@ -204,7 +205,7 @@
                 border: none;
             }
             .mobile-header { display: block; }
-            .form-row { grid-template-columns: 1fr; gap: 0; } /* Stack password inputs on mobile */
+            .form-row { grid-template-columns: 1fr; gap: 0; }
             .trust-row { justify-content: flex-start; }
         }
     </style>
@@ -290,14 +291,29 @@
 </div>
 
 <script>
+    // Escape function to prevent XSS
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Redirect if already logged in
+    if (localStorage.getItem('supabaseToken')) {
+        window.location.href = '/dashboard';
+    }
+
     const form = document.getElementById('signup-form');
     const errorEl = document.getElementById('error-msg');
     const btn = document.getElementById('submit-btn');
 
     function showError(msg) { 
-        errorEl.textContent = msg; 
+        errorEl.textContent = escapeHtml(msg); 
         errorEl.style.display = 'block'; 
-        // Trigger shake animation
         errorEl.classList.remove('shake');
         void errorEl.offsetWidth; // trigger reflow
         errorEl.classList.add('shake');
@@ -311,46 +327,49 @@
     form.addEventListener('submit', async (e) => {
         e.preventDefault(); 
         hideError();
-        
+
         const rawPhone = document.getElementById('phone').value;
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
         const confirm = document.getElementById('confirm-password').value;
 
-        // Basic Validations
         if (password !== confirm) return showError("Passwords do not match. Tafadhali rudia.");
         if (password.length < 6) return showError("Password must be at least 6 characters.");
 
-        // Smart Phone Formatter for Kenya
-        let cleanPhone = rawPhone.replace(/\s+/g, ''); // Remove spaces
+        // Improved phone formatting for Kenya
+        let cleanPhone = rawPhone.replace(/\s+/g, '');
+        if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.startsWith('0')) {
-            cleanPhone = '+254' + cleanPhone.substring(1);
-        } else if (cleanPhone.startsWith('254')) {
-            cleanPhone = '+' + cleanPhone;
+            cleanPhone = '254' + cleanPhone.substring(1);
         } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-            cleanPhone = '+254' + cleanPhone; // Fallback if they just type 712...
+            cleanPhone = '254' + cleanPhone;
         }
-        
-        // Simple length check for typical KE format (+2547XXXXXXXX or +2541XXXXXXXX)
-        if (cleanPhone.length !== 13) {
-            return showError("Weka namba ya simu sahihi (e.g. 0712345678).");
+        // Ensure it starts with 254 and has 9 digits after
+        if (!/^254[17]\d{8}$/.test(cleanPhone)) {
+            return showError("Weka namba ya simu sahihi (e.g., 0712345678).");
         }
+        cleanPhone = '+' + cleanPhone; // final format +254...
 
-        // Processing State
         btn.disabled = true; 
         btn.textContent = 'Inaload...';
-        
+
         try {
             const res = await fetch('/auth/signup', {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone: cleanPhone, password, username })
             });
-            
+
             const result = await res.json();
-            
-            if (res.ok) { 
-                window.location.href = '/dashboard'; 
+
+            if (res.ok) {
+                if (result.session) {
+                    localStorage.setItem('supabaseToken', result.session.access_token);
+                    localStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
+                    window.location.href = '/dashboard';
+                } else {
+                    window.location.href = '/login';
+                }
             } else { 
                 showError(result.error || 'Kuna shida kidogo. Please try again.'); 
             }

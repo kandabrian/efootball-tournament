@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | Vumbua eFootball</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /wallet/balance /tournaments /tournament/join /friends/create-match /friends/join-match /friends/cancel-match /friends/my-matches /friends/submit-result /wallet/deposit /wallet/deposit/status /wallet/withdraw;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* (Keep your existing CSS exactly as provided – no changes needed) */
         :root {
             --neon: #00ff41;
             --neon-dim: rgba(0,255,65,0.08);
@@ -173,46 +173,88 @@
         .friend-section { animation: slideUp 0.5s 0.35s ease both; margin-bottom: 24px; }
         .friend-card {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px; text-align: center;
+            border-radius: 16px; padding: 20px;
         }
-        .generated-code {
-            font-family: 'Bebas Neue', sans-serif; font-size: 2.8rem;
-            letter-spacing: 8px; color: var(--neon);
-            text-shadow: 0 0 20px rgba(0,255,65,0.3);
-            margin: 12px 0;
+        .friend-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
         }
-        .code-placeholder { font-size: 0.85rem; color: #444; margin: 14px 0; }
-        .btn-gen {
-            background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-            color: var(--text); padding: 11px 22px; border-radius: 10px;
-            font-weight: 600; font-size: 0.82rem; cursor: pointer; font-family: 'Outfit', sans-serif;
-            transition: border-color 0.2s;
-        }
-        .btn-gen:hover { border-color: rgba(0,255,65,0.3); }
-        .btn-whatsapp {
-            background: #25D366; color: white; border: none; padding: 12px;
-            border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
-            width: 100%; margin-top: 12px; font-family: 'Outfit', sans-serif;
+        .btn-friend {
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
             transition: transform 0.15s, box-shadow 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        .btn-whatsapp:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(37,211,102,0.3); }
-        .bottom-nav {
-            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-            width: 100%; max-width: 480px;
-            background: rgba(10,10,14,0.92); backdrop-filter: blur(12px);
-            border-top: 1px solid var(--border); padding: 10px 0;
-            display: grid; grid-template-columns: repeat(4, 1fr); z-index: 10;
+        .btn-friend:hover { transform: translateY(-2px); }
+        .btn-friend-create {
+            background: var(--neon);
+            color: #000;
+            box-shadow: 0 6px 20px rgba(0,255,65,0.2);
         }
-        .nav-item {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 3px; padding: 6px; cursor: pointer; opacity: 0.45;
-            transition: opacity 0.2s;
+        .btn-friend-create:hover { box-shadow: 0 10px 30px rgba(0,255,65,0.35); }
+        .btn-friend-join {
+            background: var(--card2);
+            color: var(--text);
+            border: 1px solid var(--border);
         }
-        .nav-item.active { opacity: 1; }
-        .nav-item svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
-        .nav-item.active svg { stroke: var(--neon); }
-        .nav-item-label { font-size: 0.62rem; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; }
-        .nav-item.active .nav-item-label { color: var(--neon); }
+        .friend-info {
+            background: rgba(0,255,65,0.05);
+            border: 1px solid rgba(0,255,65,0.1);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 0.75rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+        .my-matches-section { margin-top: 24px; }
+        .match-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .match-code {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            color: var(--neon);
+        }
+        .match-status {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,180,0,0.1);
+            color: #ffb400;
+            text-transform: uppercase;
+        }
+        .match-detail {
+            font-size: 0.85rem;
+            color: #aaa;
+            margin: 4px 0;
+        }
+        .match-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        /* NEW: Result Report Modal */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 500;
             background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
@@ -232,184 +274,105 @@
             width: 36px; height: 4px; background: #2a2a2a; border-radius: 4px;
             margin: 0 auto 24px;
         }
-        .modal-step { display: none; }
-        .modal-step.active { display: block; }
-        .step-icon {
-            width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 16px;
-            display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
-        }
-        .step-icon.mpesa { background: rgba(0,150,80,0.15); border: 1px solid rgba(0,200,100,0.2); }
-        .step-icon.waiting { background: rgba(0,255,65,0.07); border: 1px solid rgba(0,255,65,0.15); }
-        .step-icon.success { background: rgba(0,255,65,0.1); border: 1px solid rgba(0,255,65,0.3); }
-        .step-icon.failed { background: rgba(255,68,68,0.1); border: 1px solid rgba(255,68,68,0.25); }
-        .modal-title {
-            font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem;
-            letter-spacing: 2px; text-align: center; margin-bottom: 6px;
-        }
-        .modal-subtitle { font-size: 0.85rem; color: var(--muted); text-align: center; margin-bottom: 24px; line-height: 1.5; }
-        .amount-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
-        .preset-btn {
-            padding: 10px 6px; background: var(--card); border: 1px solid var(--border);
-            color: var(--text); border-radius: 10px; font-size: 0.8rem; font-weight: 600;
-            cursor: pointer; font-family: 'Outfit', sans-serif; text-align: center;
-            transition: border-color 0.15s, background 0.15s;
-        }
-        .preset-btn:hover, .preset-btn.selected {
-            border-color: rgba(0,255,65,0.5); background: rgba(0,255,65,0.07); color: var(--neon);
-        }
-        .modal-input-group { margin-bottom: 14px; }
+        .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 2px; margin-bottom: 6px; }
+        .modal-subtitle { font-size: 0.85rem; color: var(--muted); margin-bottom: 24px; }
+        .modal-input-group { margin-bottom: 16px; }
         .modal-input-group label {
             display: block; font-size: 0.68rem; letter-spacing: 2px;
-            text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
         }
         .modal-input {
             width: 100%; background: var(--card); border: 1px solid var(--border);
             color: var(--text); padding: 13px 16px; border-radius: 10px;
             font-size: 1rem; font-family: 'Outfit', sans-serif;
-            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .modal-input:focus { outline: none; border-color: rgba(0,255,65,0.45); box-shadow: 0 0 0 3px rgba(0,255,65,0.07); }
-        .modal-input::placeholder { color: #333; }
-        .modal-notice {
-            background: rgba(0,150,80,0.07); border: 1px solid rgba(0,200,100,0.15);
-            border-radius: 10px; padding: 12px 14px; font-size: 0.78rem; color: #aaa;
-            margin-bottom: 18px; line-height: 1.5;
-        }
-        .modal-notice strong { color: #00cc55; }
         .btn-mpesa {
             width: 100%; padding: 15px; border-radius: 12px; border: none;
             background: #00a651; color: white; font-weight: 800; font-size: 0.9rem;
-            letter-spacing: 1px; cursor: pointer; font-family: 'Outfit', sans-serif;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            cursor: pointer; font-family: 'Outfit', sans-serif;
         }
-        .btn-mpesa:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,166,81,0.35); }
-        .btn-mpesa:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
         .btn-cancel {
             width: 100%; padding: 13px; margin-top: 10px; border-radius: 12px;
             border: 1px solid var(--border); background: none; color: var(--muted);
-            font-size: 0.85rem; cursor: pointer; font-family: 'Outfit', sans-serif;
-            transition: color 0.2s, border-color 0.2s;
+            cursor: pointer;
         }
         .btn-cancel:hover { color: var(--text); border-color: #444; }
-        .wait-ring {
-            width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 16px;
-            border: 3px solid rgba(0,255,65,0.1); border-top-color: var(--neon);
-            animation: spin 0.9s linear infinite;
-        }
-        .wait-dots span {
-            display: inline-block; width: 6px; height: 6px; background: var(--neon);
-            border-radius: 50%; margin: 0 3px; opacity: 0.3;
-            animation: dotFade 1.2s infinite;
-        }
-        .wait-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .wait-dots span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes dotFade { 0%,80%,100%{opacity:0.2;} 40%{opacity:1;} }
-        .modal-error { color: #ff7777; font-size: 0.82rem; text-align: center; margin-top: 10px; display: none; }
-        .success-amount {
-            font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--neon);
-            text-align: center; text-shadow: 0 0 30px rgba(0,255,65,0.3);
-            margin-bottom: 6px;
-        }
-        .btn-done {
-            width: 100%; padding: 15px; border-radius: 12px; border: none;
-            background: var(--neon); color: #000; font-weight: 800; font-size: 0.9rem;
-            letter-spacing: 2px; cursor: pointer; font-family: 'Outfit', sans-serif;
-            margin-top: 20px; transition: transform 0.15s, box-shadow 0.15s;
-        }
-        .btn-done:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,255,65,0.3); }
-        @keyframes balanceFlash {
-            0% { color: var(--neon); text-shadow: 0 0 40px rgba(0,255,65,0.8); transform: scale(1.08); }
-            60% { color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.3); }
-            100% { color: var(--neon); text-shadow: 0 0 40px rgba(0,255,65,0.3); transform: scale(1); }
-        }
-        .balance-flash { animation: balanceFlash 0.8s ease forwards; display: inline-block; }
-        #challenge-modal .modal-sheet { max-height: 90vh; overflow-y: auto; }
-        .stake-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
         .match-details-box {
             background: rgba(0,255,65,0.04); border: 1px solid rgba(0,255,65,0.12);
             border-radius: 14px; padding: 16px; margin-bottom: 18px;
         }
         .match-detail-row {
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between;
             padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
         }
-        .match-detail-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .match-detail-label { font-size: 0.72rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-        .match-detail-value { font-size: 0.88rem; font-weight: 700; color: var(--text); }
-        .match-detail-value.neon { color: var(--neon); font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 1px; }
-        .vs-divider {
-            display: flex; align-items: center; gap: 12px; margin: 16px 0;
-            font-family: 'Bebas Neue', sans-serif; font-size: 1rem; color: var(--muted);
-        }
-        .vs-divider::before, .vs-divider::after { content:''; flex:1; height:1px; background: var(--border); }
-        .room-reveal-box {
-            background: linear-gradient(135deg, #0d1a12, #111116);
-            border: 1px solid rgba(0,255,65,0.25); border-radius: 16px;
-            padding: 20px; text-align: center; margin-bottom: 18px;
-            box-shadow: 0 0 30px rgba(0,255,65,0.06);
-        }
-        .room-code-display {
-            font-family: 'Bebas Neue', sans-serif; font-size: 3rem;
-            letter-spacing: 10px; color: var(--neon);
-            text-shadow: 0 0 30px rgba(0,255,65,0.4);
-            margin: 10px 0;
-        }
-        .room-code-hint { font-size: 0.75rem; color: #555; margin-top: 4px; }
+        .match-detail-row:last-child { border-bottom: none; }
+        .match-detail-label { font-size: 0.72rem; color: var(--muted); }
+        .match-detail-value { font-size: 0.88rem; font-weight: 700; }
+        .match-detail-value.neon { color: var(--neon); }
         .balance-insufficient {
             background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.2);
             border-radius: 10px; padding: 12px 14px; font-size: 0.82rem; color: #ff8888;
-            margin-bottom: 14px; display: none; text-align: center;
+            margin-bottom: 14px; display: none;
         }
-        .withdraw-info-box {
-            background: rgba(255,180,0,0.05); border: 1px solid rgba(255,180,0,0.15);
-            border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+
+        /* ── Bottom Nav ── */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 100%; max-width: 480px; background: rgba(10,10,14,0.95);
+            border-top: 1px solid var(--border); backdrop-filter: blur(12px);
+            display: flex; padding: 10px 0 18px; z-index: 20;
         }
-        .withdraw-info-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.82rem;
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            gap: 5px; cursor: pointer; color: var(--muted); transition: color 0.2s;
         }
-        .withdraw-info-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .withdraw-info-label { color: var(--muted); }
-        .withdraw-info-value { font-weight: 700; color: var(--text); }
-        .withdraw-info-value.warn { color: #ffb400; }
-        .withdraw-steps {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 12px; padding: 14px 16px; margin-bottom: 18px;
+        .nav-item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+        .nav-item-label { font-size: 0.6rem; letter-spacing: 0.5px; text-transform: uppercase; }
+        .nav-item.active { color: var(--neon); }
+        .nav-item.active svg { filter: drop-shadow(0 0 5px rgba(0,255,65,0.5)); }
+
+        /* ── Amount Presets ── */
+        .amount-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+        .preset-btn {
+            padding: 9px 6px; background: var(--card); border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text); font-size: 0.8rem; font-weight: 600;
+            cursor: pointer; font-family: 'Outfit', sans-serif; transition: all 0.2s;
         }
-        .withdraw-step-item {
-            display: flex; gap: 12px; align-items: flex-start;
-            padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+        .preset-btn:hover, .preset-btn.selected {
+            border-color: var(--neon); color: var(--neon); background: rgba(0,255,65,0.06);
         }
-        .withdraw-step-item:last-child { border-bottom: none; }
-        .step-num {
-            width: 22px; height: 22px; background: rgba(0,255,65,0.1);
-            border: 1px solid rgba(0,255,65,0.25); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.65rem; font-weight: 800; color: var(--neon); flex-shrink: 0; margin-top: 1px;
+
+        /* ── Match status badges ── */
+        .status-pending { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
+        .status-live { background: rgba(0,255,65,0.1); color: var(--neon); border: 1px solid rgba(0,255,65,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
+        .status-disputed { background: rgba(255,68,68,0.1); color: #ff6666; border: 1px solid rgba(255,68,68,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
+        .status-closed { background: rgba(100,100,100,0.1); color: #777; border: 1px solid rgba(100,100,100,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
+
+        /* ── Balance flash ── */
+        @keyframes balFlash { 0%,100%{color:var(--neon);} 50%{color:#fff; text-shadow:0 0 20px #fff;} }
+        .balance-flash { animation: balFlash 0.6s ease; }
+
+        /* ── Breakdown box ── */
+        .breakdown-box {
+            background: rgba(0,255,65,0.04); border: 1px solid rgba(0,255,65,0.12);
+            border-radius: 12px; padding: 14px; margin: 14px 0;
         }
-        .step-text { font-size: 0.8rem; color: #aaa; line-height: 1.4; }
-        .step-text strong { color: var(--text); }
-        .btn-submit-withdraw {
-            width: 100%; padding: 15px; border-radius: 12px; border: none;
-            background: #ffb400; color: #000; font-weight: 800; font-size: 0.9rem;
-            letter-spacing: 1px; cursor: pointer; font-family: 'Outfit', sans-serif;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+        .breakdown-row {
+            display: flex; justify-content: space-between;
+            font-size: 0.8rem; color: #aaa; padding: 4px 0;
         }
-        .btn-submit-withdraw:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255,180,0,0.3); }
-        .btn-submit-withdraw:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-        .pending-card {
-            background: linear-gradient(135deg, #141408, #111116);
-            border: 1px solid rgba(255,180,0,0.2); border-radius: 16px;
-            padding: 20px; text-align: center; margin-bottom: 18px;
-        }
-        .pending-ref { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 4px; color: #ffb400; margin: 8px 0; }
-        .pending-amount-display { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: #ffb400; text-shadow: 0 0 20px rgba(255,180,0,0.3); }
-        .eta-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: rgba(255,180,0,0.08); border: 1px solid rgba(255,180,0,0.2);
-            border-radius: 20px; padding: 5px 14px; font-size: 0.72rem; color: #ffb400; margin-top: 10px;
-        }
+        .breakdown-row.total { color: var(--neon); font-weight: 700; font-size: 0.9rem; border-top: 1px solid rgba(0,255,65,0.15); margin-top: 6px; padding-top: 10px; }
+
+        /* ── Step system ── */
+        .step { display: none; }
+        .step.active { display: block; }
+
+        /* ── Misc buttons ── */
+        .btn { padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: 'Outfit', sans-serif; border: none; transition: all 0.2s; }
+        .btn-green { background: var(--neon); color: #000; }
+        .btn-red { background: rgba(255,68,68,0.15); color: #ff6666; border: 1px solid rgba(255,68,68,0.3); }
+        .matches-list { min-height: 60px; }
+        .modal-select { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 13px 16px; border-radius: 10px; font-size: 1rem; font-family: 'Outfit', sans-serif; }
     </style>
 </head>
 <body>
@@ -477,7 +440,7 @@
                 <span class="section-link" onclick="loadTournaments()">Ona zote →</span>
             </div>
             <div id="tournament-list">
-                <!-- Tournament cards will be dynamically injected here -->
+                <!-- Tournament cards will be injected safely via JS -->
             </div>
         </div>
 
@@ -486,19 +449,30 @@
                 <div class="section-title">CHALLENGE RAFIKI</div>
             </div>
             <div class="friend-card">
-                <div id="code-display">
-                    <div class="code-placeholder">Generate a code and share with your friend to start a 1v1 match.</div>
-                    <button class="btn-gen" onclick="generateFriendCode()">⚡ Generate Code</button>
-                </div>
-                <div id="code-reveal" style="display:none;">
-                    <div style="font-size:0.68rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;">Your Friend Code</div>
-                    <div class="generated-code" id="generated-code">KE-XXXX</div>
-                    <div style="font-size:0.75rem;color:#555;margin-bottom:10px;">Share this code — expires in 30 minutes</div>
-                    <button class="btn-whatsapp" onclick="shareToWhatsApp()">
-                        📲 Share to WhatsApp
+                <div class="friend-buttons">
+                    <button class="btn-friend btn-friend-create" onclick="openCreateMatchModal()">
+                        ⚔️ Create Challenge
                     </button>
-                    <button class="btn-gen" style="margin-top:8px;width:100%;" onclick="generateFriendCode()">↻ New Code</button>
+                    <button class="btn-friend btn-friend-join" onclick="openJoinMatchModal()">
+                        🎯 Join Challenge
+                    </button>
                 </div>
+                <div class="friend-info">
+                    💰 Both players stake equal amounts<br/>
+                    🏆 Winner takes the pot (minus 10% fee)<br/>
+                    ⏱️ Match codes expire in 30 minutes
+                </div>
+            </div>
+        </div>
+
+        <!-- MY MATCHES SECTION -->
+        <div class="my-matches-section">
+            <div class="section-header">
+                <div class="section-title">MY MATCHES</div>
+                <span class="section-link" onclick="loadMyFriendMatches()">Refresh ↻</span>
+            </div>
+            <div id="my-matches-list" class="matches-list">
+                <!-- Dynamically loaded -->
             </div>
         </div>
     </div>
@@ -523,191 +497,237 @@
     </div>
 </div>
 
-<!-- Deposit Modal -->
-<div class="modal-overlay" id="deposit-modal" onclick="handleOverlayClick(event, 'deposit-modal')">
+<!-- ═══ DEPOSIT MODAL ═══ -->
+<div class="modal-overlay" id="deposit-modal" onclick="if(event.target === this) closeModal('deposit-modal')">
     <div class="modal-sheet">
         <div class="modal-handle"></div>
-        
-        <div class="modal-step active" id="deposit-step-1">
-            <div class="step-icon mpesa">💳</div>
-            <div class="modal-title">DEPOSIT VIA M-PESA</div>
-            <p class="modal-subtitle">Chagua kiasi na utapata prompt ya M-PESA kwenye simu yako moja kwa moja.</p>
-            
-            <div class="amount-presets" id="deposit-presets">
-                <button class="preset-btn" onclick="selectPreset(this, 100)">100</button>
-                <button class="preset-btn" onclick="selectPreset(this, 250)">250</button>
-                <button class="preset-btn" onclick="selectPreset(this, 500)">500</button>
-                <button class="preset-btn" onclick="selectPreset(this, 1000)">1000</button>
-            </div>
-            
+        <div class="modal-title">DEPOSIT</div>
+        <p class="modal-subtitle">Top up via M-PESA STK Push</p>
+
+        <div class="step active" id="deposit-step-1">
             <div class="modal-input-group">
                 <label>Amount (KES)</label>
-                <input type="number" id="deposit-amount" class="modal-input" placeholder="Min 50" oninput="clearPresets()">
+                <div class="amount-presets">
+                    <button class="preset-btn" onclick="selectPreset(this,100)">100</button>
+                    <button class="preset-btn" onclick="selectPreset(this,200)">200</button>
+                    <button class="preset-btn" onclick="selectPreset(this,500)">500</button>
+                    <button class="preset-btn" onclick="selectPreset(this,1000)">1000</button>
+                </div>
+                <input type="number" id="deposit-amount" class="modal-input" placeholder="Enter amount" min="10">
             </div>
             <div class="modal-input-group">
                 <label>M-PESA Number</label>
-                <input type="tel" id="deposit-phone" class="modal-input" placeholder="0712345678">
+                <input type="tel" id="deposit-phone" class="modal-input" placeholder="07XX XXX XXX">
             </div>
-            
-            <div class="modal-notice">
-                Kiasi hiki kitawekwa kwenye wallet yako mara moja. <strong>Minimum KES 50.</strong>
-            </div>
-            <button class="btn-mpesa" id="depositBtn" onclick="processDeposit()">DEPOSIT NOW</button>
+            <div class="balance-insufficient" id="deposit-error"></div>
+            <button class="btn-mpesa" onclick="processDeposit()">PAY WITH M-PESA 📲</button>
             <button class="btn-cancel" onclick="closeModal('deposit-modal')">Cancel</button>
-            <div class="modal-error" id="deposit-error"></div>
         </div>
 
-        <div class="modal-step" id="deposit-step-2">
-            <div class="wait-ring"></div>
-            <div class="modal-title">WAITING FOR M-PESA</div>
-            <p class="modal-subtitle">Please check your phone and enter your M-PESA PIN to authorize the transaction.</p>
-            <div class="wait-dots" style="text-align: center; margin-bottom: 20px;">
-                <span></span><span></span><span></span>
+        <div class="step" id="deposit-step-2">
+            <div class="friend-info" style="text-align:center; margin-bottom:20px;">
+                <div style="font-size:2rem; margin-bottom:10px;">📲</div>
+                <strong style="color:var(--text);">Check your phone!</strong><br>
+                An M-PESA prompt has been sent. Enter your PIN to complete the payment.
             </div>
-            <button class="btn-cancel" onclick="closeModal('deposit-modal')">Cancel Transaction</button>
-        </div>
-
-        <div class="modal-step" id="deposit-step-3">
-            <div class="step-icon success">✓</div>
-            <div class="modal-title">DEPOSIT SUCCESSFUL</div>
-            <p class="modal-subtitle">Your wallet has been credited.</p>
-            <div class="success-amount">KES <span id="success-deposit-val">0</span></div>
-            <button class="btn-done" onclick="closeModal('deposit-modal')">DONE</button>
-        </div>
-
-        <div class="modal-step" id="deposit-step-4">
-            <div class="step-icon failed">✗</div>
-            <div class="modal-title">DEPOSIT FAILED</div>
-            <p class="modal-subtitle" id="deposit-fail-reason">Transaction was cancelled or failed.</p>
-            <button class="btn-done" onclick="closeModal('deposit-modal')">CLOSE</button>
+            <div style="text-align:center; color:var(--muted); font-size:0.8rem; margin-bottom:20px;" id="deposit-status-text">Waiting for payment...</div>
+            <button class="btn-cancel" onclick="closeModal('deposit-modal')">Cancel</button>
         </div>
     </div>
 </div>
 
-<!-- Withdraw Modal -->
-<div class="modal-overlay" id="withdraw-modal" onclick="handleOverlayClick(event, 'withdraw-modal')">
+<!-- ═══ WITHDRAW MODAL ═══ -->
+<div class="modal-overlay" id="withdraw-modal" onclick="if(event.target === this) closeModal('withdraw-modal')">
     <div class="modal-sheet">
         <div class="modal-handle"></div>
-        
-        <div class="modal-step active" id="withdraw-step-1">
-            <div class="modal-title">WITHDRAW FUNDS</div>
-            <p class="modal-subtitle">Toa pesa zako moja kwa moja kwa M-PESA yako.</p>
-            
-            <div class="withdraw-info-box">
-                <div class="withdraw-info-row">
-                    <span class="withdraw-info-label">Available Balance</span>
-                    <span class="withdraw-info-value">KES <span id="withdraw-max">0</span></span>
-                </div>
-                <div class="withdraw-info-row">
-                    <span class="withdraw-info-label">Withdrawal Fee</span>
-                    <span class="withdraw-info-value warn">KES 15.00</span>
-                </div>
+        <div class="modal-title">WITHDRAW</div>
+        <p class="modal-subtitle">Send winnings to your M-PESA</p>
+        <div class="modal-input-group">
+            <label>Amount (KES)</label>
+            <input type="number" id="withdraw-amount" class="modal-input" placeholder="Enter amount" min="50">
+        </div>
+        <div class="modal-input-group">
+            <label>M-PESA Number</label>
+            <input type="tel" id="withdraw-phone" class="modal-input" placeholder="07XX XXX XXX">
+        </div>
+        <div class="balance-insufficient" id="withdraw-error"></div>
+        <button class="btn-mpesa" onclick="processWithdraw()">WITHDRAW NOW →</button>
+        <button class="btn-cancel" onclick="closeModal('withdraw-modal')">Cancel</button>
+    </div>
+</div>
+
+<!-- ═══ TOURNAMENT JOIN / CHALLENGE MODAL ═══ -->
+<div class="modal-overlay" id="challenge-modal" onclick="if(event.target === this) closeModal('challenge-modal')">
+    <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title" id="challenge-title">JOIN TOURNAMENT</div>
+        <p class="modal-subtitle">Choose how to pay the entry fee</p>
+
+        <div class="step active" id="challenge-step-1">
+            <div class="match-details-box">
+                <div class="match-detail-row"><span class="match-detail-label">Tournament</span><span class="match-detail-value" id="challenge-name">—</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Entry Fee</span><span class="match-detail-value neon" id="challenge-fee">KES 0</span></div>
             </div>
-
-            <div class="modal-input-group">
-                <label>Withdraw Amount (KES)</label>
-                <input type="number" id="withdraw-amount" class="modal-input" placeholder="Min 100">
-            </div>
-
-            <div class="modal-input-group">
-                <label>M-PESA Number</label>
-                <input type="tel" id="withdraw-phone" class="modal-input" placeholder="0712345678">
-            </div>
-
-            <div class="modal-input-group">
-                <label>Full Name (as on M-PESA)</label>
-                <input type="text" id="withdraw-name" class="modal-input" placeholder="John Doe">
-            </div>
-
-            <div class="balance-insufficient" id="withdraw-error"></div>
-
-            <button class="btn-submit-withdraw" id="withdrawBtn" onclick="processWithdraw()">CONFIRM WITHDRAWAL</button>
-            <button class="btn-cancel" onclick="closeModal('withdraw-modal')">Cancel</button>
+            <div class="balance-insufficient" id="challenge-error"></div>
+            <button class="btn-mpesa" style="background:var(--neon);color:#000;margin-bottom:10px;" onclick="confirmChallenge('wallet')">PAY FROM WALLET 💰</button>
+            <button class="btn-mpesa" onclick="confirmChallenge('mpesa')">PAY WITH M-PESA 📲</button>
+            <button class="btn-cancel" onclick="closeModal('challenge-modal')">Cancel</button>
         </div>
 
-        <div class="modal-step" id="withdraw-step-2">
-            <div class="pending-card">
-                <div class="step-icon waiting" style="color:#ffb400;">⏳</div>
-                <div class="modal-title" style="color:#ffb400;">WITHDRAWAL INITIATED</div>
-                <div class="pending-amount-display">KES <span id="success-withdraw-val">0</span></div>
-                <div class="eta-badge">ETA: M-PESA in 2-5 Mins</div>
+        <div class="step" id="challenge-step-2">
+            <div class="friend-info" style="text-align:center; margin-bottom:20px;">
+                <div style="font-size:2rem; margin-bottom:10px;">📲</div>
+                Check your phone for the M-PESA prompt. Enter your PIN to complete.
             </div>
-            <button class="btn-done" style="background:#ffb400;" onclick="closeModal('withdraw-modal')">DONE</button>
+            <div style="text-align:center; color:var(--muted); font-size:0.8rem; margin-bottom:20px;" id="challenge-status">Waiting for payment...</div>
+            <button class="btn-cancel" onclick="closeModal('challenge-modal')">Cancel</button>
         </div>
     </div>
 </div>
 
-<!-- Challenge Modal -->
-<div class="modal-overlay" id="challenge-modal" onclick="handleOverlayClick(event, 'challenge-modal')">
-    <div class="modal-sheet">
+<!-- ═══ ROOM CODE MODAL ═══ -->
+<div class="modal-overlay" id="room-modal" onclick="if(event.target === this) closeModal('room-modal')">
+    <div class="modal-sheet" style="text-align:center;">
         <div class="modal-handle"></div>
-        <div class="modal-title" id="chal-title">TOURNAMENT</div>
-        <p class="modal-subtitle">Confirm your entry details below.</p>
-        
-        <div class="match-details-box">
-            <div class="match-detail-row">
-                <span class="match-detail-label">Entry Fee</span>
-                <span class="match-detail-value neon">KES <span id="chal-fee">0</span></span>
-            </div>
-            <div class="match-detail-row">
-                <span class="match-detail-label">Your Balance</span>
-                <span class="match-detail-value">KES <span id="chal-bal">0</span></span>
-            </div>
-        </div>
-
-        <div class="balance-insufficient" id="chal-error">
-            Insufficient balance. Please deposit funds to join.
-        </div>
-
-        <button class="btn-mpesa" id="chal-btn" onclick="confirmChallenge()">CONFIRM & JOIN</button>
-        <button class="btn-cancel" onclick="closeModal('challenge-modal')">Cancel</button>
+        <div class="modal-title">YOU'RE IN! 🏆</div>
+        <p class="modal-subtitle">Use this code to enter the game room</p>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:3.5rem; color:var(--neon); letter-spacing:8px; margin:20px 0; text-shadow:0 0 30px rgba(0,255,65,0.4);" id="room-code-display">—</div>
+        <button class="btn-mpesa" style="background:var(--neon);color:#000;margin-bottom:10px;" onclick="shareRoomCode()">📲 Share via WhatsApp</button>
+        <button class="btn-cancel" onclick="closeModal('room-modal')">Close</button>
     </div>
 </div>
 
-<!-- Room Code Modal (for successful join) -->
-<div class="modal-overlay" id="room-modal" onclick="handleOverlayClick(event, 'room-modal')">
+<!-- ═══ CREATE FRIEND MATCH MODAL ═══ -->
+<div class="modal-overlay" id="create-friend-modal" onclick="if(event.target === this) closeModal('create-friend-modal')">
     <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="room-reveal-box">
-            <div class="step-icon success" style="margin-bottom: 20px;">🏟️</div>
-            <div class="modal-title">JOIN SUCCESSFUL</div>
-            <p class="modal-subtitle">Your room code is ready. Share it with your opponent.</p>
-            <div class="room-code-display" id="room-code-display">KE-XXXX</div>
-            <button class="btn-whatsapp" onclick="shareRoomCode()">📲 Share on WhatsApp</button>
-            <button class="btn-done" style="margin-top: 20px;" onclick="closeModal('room-modal')">CLOSE</button>
+        <div class="modal-title">CREATE CHALLENGE ⚔️</div>
+        <p class="modal-subtitle">Set your wager. Both players stake equal amounts.</p>
+        <div class="modal-input-group">
+            <label>Your Wager (KES)</label>
+            <div class="amount-presets">
+                <button class="preset-btn" onclick="selectFriendPreset(this,50)">50</button>
+                <button class="preset-btn" onclick="selectFriendPreset(this,100)">100</button>
+                <button class="preset-btn selected" onclick="selectFriendPreset(this,200)">200</button>
+                <button class="preset-btn" onclick="selectFriendPreset(this,500)">500</button>
+            </div>
+            <input type="number" id="friend-wager-input" class="modal-input" value="200" min="50" oninput="updateFriendBreakdown()">
         </div>
+        <div class="breakdown-box">
+            <div class="breakdown-row"><span>Your stake</span><span>KES <span id="friend-your-stake">200</span></span></div>
+            <div class="breakdown-row"><span>Opponent's stake</span><span>KES <span id="friend-opp-stake">200</span></span></div>
+            <div class="breakdown-row"><span>Total pot</span><span>KES <span id="friend-total-pot">400</span></span></div>
+            <div class="breakdown-row"><span>Platform fee (10%)</span><span>- KES <span id="friend-platform-fee">40</span></span></div>
+            <div class="breakdown-row total"><span>Winner gets</span><span>KES <span id="friend-winner-prize">360</span></span></div>
+        </div>
+        <div class="balance-insufficient" id="create-friend-error"></div>
+        <button class="btn-mpesa" id="create-friend-btn" style="background:var(--neon);color:#000;" onclick="createFriendMatch()">
+            CREATE CHALLENGE (Pay KES <span id="create-friend-amount">200</span>)
+        </button>
+        <button class="btn-cancel" onclick="closeModal('create-friend-modal')">Cancel</button>
+    </div>
+</div>
+
+<!-- ═══ WAITING FOR OPPONENT MODAL ═══ -->
+<div class="modal-overlay" id="waiting-friend-modal">
+    <div class="modal-sheet" style="text-align:center;">
+        <div class="modal-handle"></div>
+        <div class="modal-title">WAITING FOR OPPONENT ⏳</div>
+        <p class="modal-subtitle" id="friend-match-timer">Expires in 30:00</p>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--neon); letter-spacing:8px; margin:20px 0; text-shadow:0 0 30px rgba(0,255,65,0.4);" id="friend-match-code">VUM-XXXX</div>
+        <div class="friend-info" style="margin-bottom:20px;">
+            Your wager: KES <strong id="waiting-stake-display">0</strong> · Winner gets: KES <strong id="waiting-prize-display">0</strong>
+        </div>
+        <button class="btn-mpesa" style="background:var(--neon);color:#000;margin-bottom:10px;" onclick="shareFriendCode()">📲 Share Code via WhatsApp</button>
+        <button class="btn-cancel" onclick="cancelFriendMatch()">Cancel Match (Refund)</button>
+    </div>
+</div>
+
+<!-- ═══ JOIN FRIEND MATCH MODAL ═══ -->
+<div class="modal-overlay" id="join-friend-modal" onclick="if(event.target === this) closeModal('join-friend-modal')">
+    <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">JOIN CHALLENGE 🎯</div>
+        <p class="modal-subtitle">Enter the match code your opponent shared.</p>
+        <div class="modal-input-group">
+            <label>Match Code</label>
+            <input type="text" id="join-friend-code" class="modal-input" placeholder="VUM-XXXX" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
+        </div>
+        <div class="balance-insufficient" id="join-friend-error"></div>
+        <button class="btn-mpesa" style="background:var(--neon);color:#000;" onclick="joinFriendMatch()">JOIN & PAY WAGER</button>
+        <button class="btn-cancel" onclick="closeModal('join-friend-modal')">Cancel</button>
+    </div>
+</div>
+
+<!-- Report Result Modal -->
+<div class="modal-overlay" id="report-result-modal" onclick="if(event.target === this) closeModal('report-result-modal')">
+    <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">REPORT MATCH RESULT</div>
+        <p class="modal-subtitle">Who won? (Both players must agree)</p>
+        <div class="match-details-box" id="report-match-details">
+            <!-- filled by JS -->
+        </div>
+        <div class="modal-input-group">
+            <label>Select Winner</label>
+            <select id="report-winner" class="modal-input">
+                <option value="">-- Choose winner --</option>
+            </select>
+        </div>
+        <div class="modal-input-group">
+            <label>Screenshot URL (optional)</label>
+            <input type="url" id="report-screenshot" class="modal-input" placeholder="https://...">
+        </div>
+        <div class="balance-insufficient" id="report-error"></div>
+        <button class="btn-mpesa" onclick="submitMatchResult()">SUBMIT RESULT</button>
+        <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
     </div>
 </div>
 
 <script>
+    // --- Escape function for XSS prevention ---
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // --- Helper to safely create elements with text content ---
+    function createElementSafe(tag, attributes = {}, textContent = '') {
+        const el = document.createElement(tag);
+        Object.entries(attributes).forEach(([key, value]) => el.setAttribute(key, value));
+        if (textContent) el.textContent = escapeHtml(textContent);
+        return el;
+    }
+
     // --- Global variables ---
     let authToken = localStorage.getItem('supabaseToken');
     let currentUser = null;
     let currentBalance = 0;
     let currentPhone = '';
     let currentUsername = '';
-    let currentCheckoutId = null; // for deposit polling
+    let currentCheckoutId = null;
     let pollInterval = null;
+    let currentFriendMatch = null;
+    let friendMatchTimer = null;
+    let currentReportMatch = null;
+    let currentTournamentId = null, currentTournamentFee = 0, currentTournamentName = '';
 
     // --- Utility functions ---
     function showError(elementId, message) {
         const el = document.getElementById(elementId);
-        if (el) {
-            el.textContent = message;
-            el.style.display = 'block';
-        }
+        if (el) { el.textContent = escapeHtml(message); el.style.display = 'block'; }
     }
-
     function hideError(elementId) {
         const el = document.getElementById(elementId);
         if (el) el.style.display = 'none';
     }
-
     async function fetchWithAuth(url, options = {}) {
-        if (!authToken) {
-            window.location.href = '/login';
-            return;
-        }
+        if (!authToken) { window.location.href = '/login'; return; }
         const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}`,
@@ -715,7 +735,6 @@
         };
         const res = await fetch(url, { ...options, headers });
         if (res.status === 401) {
-            // Token expired or invalid
             localStorage.removeItem('supabaseToken');
             localStorage.removeItem('supabaseUser');
             window.location.href = '/login';
@@ -727,38 +746,30 @@
     // --- Load user data and balance ---
     async function loadDashboard() {
         try {
-            // Get user from localStorage
             const userStr = localStorage.getItem('supabaseUser');
-            if (!userStr) throw new Error('No user data');
+            if (!userStr) { window.location.href = '/login'; return; }
             currentUser = JSON.parse(userStr);
-            
-            // Set username and avatar
             currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0,8) || 'Player';
             document.getElementById('username-display').innerText = '@' + currentUsername;
             document.getElementById('avatar-letter').innerText = currentUsername.charAt(0).toUpperCase();
-            
-            // Format phone for display
             if (currentUser.phone) {
                 let phone = currentUser.phone.replace('+254', '0');
                 document.getElementById('phone-display').innerText = phone;
                 currentPhone = phone;
-                // Pre-fill deposit phone input
-                document.getElementById('deposit-phone').value = phone;
-                document.getElementById('withdraw-phone').value = phone;
+                const dPhone = document.getElementById('deposit-phone');
+                const wPhone = document.getElementById('withdraw-phone');
+                if (dPhone) dPhone.value = phone;
+                if (wPhone) wPhone.value = phone;
             }
-
-            // Load balance
             await refreshBalance();
-
-            // Load tournaments
-            await loadTournaments();
-
-            // Hide loading screen
+            loadTournaments();
+            loadMyFriendMatches();
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
         } catch (err) {
             console.error('Failed to load dashboard', err);
-            window.location.href = '/login';
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
         }
     }
 
@@ -778,7 +789,7 @@
         balElement.classList.add('balance-flash');
     }
 
-    // --- TOURNAMENTS (UPDATED) ---
+    // --- TOURNAMENTS (Safe DOM) ---
     async function loadTournaments() {
         try {
             const res = await fetch('/tournaments');
@@ -787,280 +798,517 @@
             renderTournaments(tournaments);
         } catch (err) {
             console.error('Error loading tournaments:', err);
-            document.getElementById('tournament-list').innerHTML = 
-                '<div class="tournament-card"><div class="t-name">Failed to load tournaments</div></div>';
+            const container = document.getElementById('tournament-list');
+            container.innerHTML = '';
+            container.appendChild(createElementSafe('div', { class: 'tournament-card' }, 'No active tournaments right now.'));
         }
     }
 
     function renderTournaments(tournaments) {
         const container = document.getElementById('tournament-list');
+        container.innerHTML = '';
         if (!tournaments || tournaments.length === 0) {
-            container.innerHTML = '<div class="tournament-card"><div class="t-name">No active tournaments</div></div>';
+            container.appendChild(createElementSafe('div', { class: 'tournament-card' }, 'No active tournaments right now.'));
             return;
         }
 
-        let html = '';
         tournaments.forEach(t => {
-            const isLive = t.status === 'live';
-            const badgeClass = isLive ? 'live-badge' : 'soon-badge';
-            
-            // Format start time nicely
-            const startTime = new Date(t.start_time);
-            const timeStr = isLive 
-                ? '<div class="live-pip"></div> Live' 
-                : '⏰ ' + startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            const fillPercent = (t.current_players / t.max_players) * 100;
-            // Use prize_pool from API if available, otherwise calculate
-            const prize = t.prize_pool || (t.entry_fee * t.max_players);
+            const card = createElementSafe('div', { class: `tournament-card ${t.status === 'live' ? 'live' : ''}` });
+            card.addEventListener('click', () => openChallengeModal(t.id, t.name, t.entry_fee));
 
-            html += `
-                <div class="tournament-card ${isLive ? 'live' : ''}">
-                    <div class="t-header">
-                        <div>
-                            <div class="t-name">${t.name}</div>
-                            <div class="t-meta">Entry: KES ${t.entry_fee}</div>
-                        </div>
-                        <div class="t-badge ${badgeClass}">${timeStr}</div>
-                    </div>
-                    <div class="t-footer">
-                        <div class="t-prize">
-                            <small>Prize Pool</small> KES ${prize.toLocaleString()}
-                        </div>
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-                            <div class="t-players">👥 ${t.current_players} / ${t.max_players} players</div>
-                            <button class="btn-join" onclick="openChallengeModal('${t.id}', '${t.name}', ${t.entry_fee})">
-                                Join — KES ${t.entry_fee}
-                            </button>
-                        </div>
-                    </div>
-                    <div class="progress-bar"><div class="progress-fill" style="width:${fillPercent}%"></div></div>
-                </div>
-            `;
+            // Header
+            const headerDiv = createElementSafe('div', { class: 't-header' });
+            const titleDiv = createElementSafe('div', {});
+            titleDiv.appendChild(createElementSafe('div', { class: 't-name' }, t.name));
+            const startTime = new Date(t.start_time).toLocaleDateString('en-KE', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+            titleDiv.appendChild(createElementSafe('div', { class: 't-meta' }, `Starts ${startTime}`));
+            headerDiv.appendChild(titleDiv);
+
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `t-badge ${t.status === 'live' ? 'live-badge' : 'soon-badge'}`;
+            if (t.status === 'live') {
+                const pip = document.createElement('span');
+                pip.className = 'live-pip';
+                badgeSpan.appendChild(pip);
+                badgeSpan.appendChild(document.createTextNode(' LIVE'));
+            } else {
+                badgeSpan.textContent = '🗓 SOON';
+            }
+            headerDiv.appendChild(badgeSpan);
+            card.appendChild(headerDiv);
+
+            // Footer
+            const footerDiv = createElementSafe('div', { class: 't-footer' });
+            const prizeDiv = createElementSafe('div', { class: 't-prize' });
+            prizeDiv.appendChild(createElementSafe('small', {}, 'PRIZE POOL'));
+            prizeDiv.appendChild(document.createTextNode(`KES ${(t.prize_pool || 0).toLocaleString()}`));
+            footerDiv.appendChild(prizeDiv);
+
+            const rightDiv = createElementSafe('div', { style: 'display:flex;flex-direction:column;align-items:flex-end;gap:8px;' });
+            rightDiv.appendChild(createElementSafe('div', { class: 't-players' }, `👥 ${t.current_players}/${t.max_players}`));
+            const joinBtn = createElementSafe('button', { class: 'btn-join' }, `KES ${t.entry_fee} →`);
+            rightDiv.appendChild(joinBtn);
+            footerDiv.appendChild(rightDiv);
+            card.appendChild(footerDiv);
+
+            // Progress
+            const pct = t.max_players > 0 ? Math.round((t.current_players / t.max_players) * 100) : 0;
+            const progressDiv = createElementSafe('div', { class: 'progress-bar' });
+            progressDiv.appendChild(createElementSafe('div', { class: 'progress-fill', style: `width:${pct}%` }));
+            card.appendChild(progressDiv);
+
+            container.appendChild(card);
         });
-        container.innerHTML = html;
     }
 
     // --- Modal Helpers ---
-    function handleOverlayClick(e, modalId) {
-        if (e.target.id === modalId) closeModal(modalId);
-    }
-
     function closeModal(modalId) {
         document.getElementById(modalId).classList.remove('open');
-        if (modalId === 'deposit-modal' && pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
-        }
+        if (modalId === 'deposit-modal' && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        if (modalId === 'waiting-friend-modal' && friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
+        if (modalId === 'report-result-modal') currentReportMatch = null;
     }
-
     function switchStep(modalId, stepNum) {
-        const modal = document.getElementById(modalId);
-        modal.querySelectorAll('.modal-step').forEach(step => step.classList.remove('active'));
-        document.getElementById(`${modalId.split('-')[0]}-step-${stepNum}`).classList.add('active');
+        document.querySelectorAll(`#${modalId} .step`).forEach((s, i) => {
+            s.classList.toggle('active', i + 1 === stepNum);
+        });
     }
 
     // --- Deposit Flow ---
     function openDepositModal() {
+        hideError('deposit-error');
         switchStep('deposit-modal', 1);
         document.getElementById('deposit-amount').value = '';
-        document.getElementById('deposit-error').style.display = 'none';
-        clearPresets();
         document.getElementById('deposit-modal').classList.add('open');
     }
-
     function selectPreset(btn, amount) {
-        clearPresets();
+        document.querySelectorAll('#deposit-modal .preset-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         document.getElementById('deposit-amount').value = amount;
     }
-
-    function clearPresets() {
-        const presets = document.querySelectorAll('#deposit-presets .preset-btn');
-        presets.forEach(p => p.classList.remove('selected'));
-    }
-
     async function processDeposit() {
-        const amount = parseFloat(document.getElementById('deposit-amount').value);
+        const amount = parseInt(document.getElementById('deposit-amount').value);
         const phone = document.getElementById('deposit-phone').value.trim();
-        if (!amount || amount < 50) return showError('deposit-error', 'Minimum deposit is KES 50');
-        if (!phone) return showError('deposit-error', 'Please enter your M-PESA number');
+        if (!amount || amount < 10) { showError('deposit-error', 'Minimum deposit is KES 10'); return; }
+        if (!phone) { showError('deposit-error', 'Enter your M-PESA number'); return; }
 
-        hideError('deposit-error');
-        document.getElementById('depositBtn').disabled = true;
+        let cleanPhone = phone.replace(/\s+/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '+254' + cleanPhone.substring(1);
 
+        const btn = document.querySelector('#deposit-modal .btn-mpesa');
+        btn.disabled = true; btn.textContent = 'Sending request...';
         try {
-            const res = await fetchWithAuth('/mpesa/deposit', {
+            const res = await fetchWithAuth('/wallet/deposit', {
                 method: 'POST',
-                body: JSON.stringify({ phone, amount, description: 'Vumbua Deposit' })
+                body: JSON.stringify({ amount, phone: cleanPhone })
             });
-            if (!res) return;
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Deposit failed');
-
-            currentCheckoutId = data.checkoutId;
+            if (!res.ok) throw new Error(data.error);
+            currentCheckoutId = data.checkoutRequestId;
             switchStep('deposit-modal', 2);
-            // Start polling for status
-            pollInterval = setInterval(() => checkDepositStatus(currentCheckoutId), 2000);
+            pollInterval = setInterval(() => checkDepositStatus(currentCheckoutId), 3000);
         } catch (err) {
             showError('deposit-error', err.message);
         } finally {
-            document.getElementById('depositBtn').disabled = false;
+            btn.disabled = false; btn.textContent = 'PAY WITH M-PESA 📲';
         }
     }
-
     async function checkDepositStatus(checkoutId) {
         try {
-            const res = await fetch(`/mpesa/status?checkoutId=${checkoutId}`);
+            const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${checkoutId}`);
+            if (!res) return;
             const data = await res.json();
-            if (data.status === 'success') {
-                clearInterval(pollInterval);
-                pollInterval = null;
+            if (data.status === 'completed') {
+                clearInterval(pollInterval); pollInterval = null;
+                closeModal('deposit-modal');
                 await refreshBalance();
-                document.getElementById('success-deposit-val').innerText = data.amount || '...';
-                switchStep('deposit-modal', 3);
-            } else if (data.status === 'failed' || data.status === 'cancelled') {
-                clearInterval(pollInterval);
-                pollInterval = null;
-                document.getElementById('deposit-fail-reason').innerText = 'Transaction was not completed.';
-                switchStep('deposit-modal', 4);
+                alert('✅ Deposit successful! Your balance has been updated.');
+            } else if (data.status === 'failed') {
+                clearInterval(pollInterval); pollInterval = null;
+                switchStep('deposit-modal', 1);
+                showError('deposit-error', 'Payment failed or cancelled. Try again.');
             }
-            // else still pending, continue polling
-        } catch (err) {
-            console.error('Polling error', err);
-        }
+        } catch (err) { /* keep polling */ }
     }
 
     // --- Withdraw Flow ---
     function openWithdrawModal() {
-        switchStep('withdraw-modal', 1);
-        document.getElementById('withdraw-max').innerText = currentBalance.toFixed(2);
+        hideError('withdraw-error');
         document.getElementById('withdraw-amount').value = '';
-        document.getElementById('withdraw-error').style.display = 'none';
-        if (currentPhone) document.getElementById('withdraw-phone').value = currentPhone;
         document.getElementById('withdraw-modal').classList.add('open');
     }
-
     async function processWithdraw() {
-        const amount = parseFloat(document.getElementById('withdraw-amount').value);
+        const amount = parseInt(document.getElementById('withdraw-amount').value);
         const phone = document.getElementById('withdraw-phone').value.trim();
-        const name = document.getElementById('withdraw-name').value.trim();
-        const errElement = document.getElementById('withdraw-error');
-        
-        if (!amount || amount < 100) {
-            errElement.innerText = 'Minimum withdrawal is KES 100';
-            errElement.style.display = 'block';
-            return;
-        }
-        if (amount + 15 > currentBalance) {
-            errElement.innerText = 'Insufficient balance (Amount + KES 15 Fee)';
-            errElement.style.display = 'block';
-            return;
-        }
-        if (!phone || !name) {
-            errElement.innerText = 'Please fill all fields';
-            errElement.style.display = 'block';
-            return;
-        }
+        if (!amount || amount < 50) { showError('withdraw-error', 'Minimum withdrawal is KES 50'); return; }
+        if (amount > currentBalance) { showError('withdraw-error', 'Insufficient balance'); return; }
+        if (!phone) { showError('withdraw-error', 'Enter your M-PESA number'); return; }
 
-        hideError('withdraw-error');
-        document.getElementById('withdrawBtn').disabled = true;
+        let cleanPhone = phone.replace(/\s+/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '+254' + cleanPhone.substring(1);
 
+        const btn = document.querySelector('#withdraw-modal .btn-mpesa');
+        btn.disabled = true; btn.textContent = 'Processing...';
         try {
             const res = await fetchWithAuth('/wallet/withdraw', {
                 method: 'POST',
-                body: JSON.stringify({ amount, phone, name })
+                body: JSON.stringify({ amount, phone: cleanPhone })
             });
-            if (!res) return;
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Withdrawal failed');
-
-            // Update local balance (backend already deducted)
-            currentBalance -= (amount + 15);
-            updateBalanceDisplay();
-
-            document.getElementById('success-withdraw-val').innerText = amount;
-            switchStep('withdraw-modal', 2);
+            if (!res.ok) throw new Error(data.error);
+            closeModal('withdraw-modal');
+            await refreshBalance();
+            alert(`✅ Withdrawal of KES ${amount} submitted! You'll receive an M-PESA shortly.`);
         } catch (err) {
             showError('withdraw-error', err.message);
         } finally {
-            document.getElementById('withdrawBtn').disabled = false;
+            btn.disabled = false; btn.textContent = 'WITHDRAW NOW →';
         }
     }
 
     // --- Tournament/Challenge Flow ---
-    let currentTournamentId = null;
-    let currentTournamentFee = 0;
-    let currentTournamentName = '';
-
     function openChallengeModal(tournamentId, name, fee) {
         currentTournamentId = tournamentId;
-        currentTournamentName = name;
         currentTournamentFee = fee;
-        document.getElementById('chal-title').innerText = name.toUpperCase();
-        document.getElementById('chal-fee').innerText = fee;
-        document.getElementById('chal-bal').innerText = currentBalance.toFixed(2);
-        document.getElementById('chal-error').style.display = 'none';
+        currentTournamentName = name;
+        document.getElementById('challenge-name').textContent = escapeHtml(name);
+        document.getElementById('challenge-fee').textContent = `KES ${fee}`;
+        hideError('challenge-error');
+        switchStep('challenge-modal', 1);
         document.getElementById('challenge-modal').classList.add('open');
     }
+    async function confirmChallenge(method) {
+        if (!currentTournamentId) return;
 
-    async function confirmChallenge() {
-        if (currentBalance < currentTournamentFee) {
-            document.getElementById('chal-error').style.display = 'block';
+        if (method === 'wallet' && currentBalance < currentTournamentFee) {
+            showError('challenge-error', 'Insufficient balance. Please deposit first.');
             return;
         }
 
-        const btn = document.getElementById('chal-btn');
-        btn.disabled = true;
-        btn.textContent = 'Processing...';
+        if (method === 'mpesa') {
+            switchStep('challenge-modal', 2);
+            try {
+                const payRes = await fetchWithAuth('/wallet/deposit', {
+                    method: 'POST',
+                    body: JSON.stringify({ amount: currentTournamentFee, phone: '+254' + currentPhone.replace(/^0/, '') })
+                });
+                const payData = await payRes.json();
+                if (!payRes.ok) { switchStep('challenge-modal', 1); showError('challenge-error', payData.error); return; }
+                currentCheckoutId = payData.checkoutRequestId;
+                pollInterval = setInterval(async () => {
+                    try {
+                        const sRes = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${currentCheckoutId}`);
+                        if (!sRes) return;
+                        const sData = await sRes.json();
+                        if (sData.status === 'completed') {
+                            clearInterval(pollInterval); pollInterval = null;
+                            await doJoinTournament('mpesa', currentCheckoutId);
+                        } else if (sData.status === 'failed') {
+                            clearInterval(pollInterval); pollInterval = null;
+                            switchStep('challenge-modal', 1);
+                            showError('challenge-error', 'M-PESA payment failed.');
+                        }
+                    } catch(e) {}
+                }, 3000);
+            } catch(err) {
+                switchStep('challenge-modal', 1);
+                showError('challenge-error', err.message);
+            }
+            return;
+        }
 
+        await doJoinTournament('wallet', null);
+    }
+    async function doJoinTournament(paymentMethod, checkoutId) {
         try {
             const res = await fetchWithAuth('/tournament/join', {
                 method: 'POST',
                 body: JSON.stringify({
                     tournamentId: currentTournamentId,
                     entryFee: currentTournamentFee,
-                    paymentMethod: 'wallet'
+                    paymentMethod,
+                    checkoutId
                 })
             });
-            if (!res) return;
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Join failed');
-
-            // Update balance (backend already deducted)
-            currentBalance -= currentTournamentFee;
-            updateBalanceDisplay();
-
+            if (!res.ok) throw new Error(data.error);
             closeModal('challenge-modal');
-            document.getElementById('room-code-display').innerText = data.roomCode;
-            document.getElementById('room-modal').classList.add('open');
+            if (paymentMethod === 'wallet') { currentBalance -= currentTournamentFee; updateBalanceDisplay(); }
+            if (data.roomCode) {
+                document.getElementById('room-code-display').textContent = data.roomCode;
+                document.getElementById('room-modal').classList.add('open');
+            } else {
+                alert(`✅ ${data.message || 'Umejiunga!'}`);
+            }
+            await loadTournaments();
         } catch (err) {
-            alert(err.message);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'CONFIRM & JOIN';
+            switchStep('challenge-modal', 1);
+            showError('challenge-error', err.message);
         }
     }
 
-    // --- Friend Code Generation (unchanged) ---
-    function generateFriendCode() {
-        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const nums = "0123456789";
-        let code = "KE-";
-        for(let i=0; i<2; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
-        for(let i=0; i<2; i++) code += nums.charAt(Math.floor(Math.random() * nums.length));
-        
-        document.getElementById('code-display').style.display = 'none';
-        document.getElementById('generated-code').innerText = code;
-        document.getElementById('code-reveal').style.display = 'block';
+    // --- Friend Match Functions ---
+    function openCreateMatchModal() {
+        document.getElementById('friend-wager-input').value = 100;
+        updateFriendBreakdown();
+        hideError('create-friend-error');
+        document.getElementById('create-friend-modal').classList.add('open');
     }
-
-    function shareToWhatsApp() {
-        const code = document.getElementById('generated-code').innerText;
-        const text = encodeURIComponent(`Come play me on Vumbua eFootball! My challenge room code is ${code}. Play here: https://vumbua.app`);
+    function openJoinMatchModal() {
+        document.getElementById('join-friend-code').value = '';
+        hideError('join-friend-error');
+        document.getElementById('join-friend-modal').classList.add('open');
+    }
+    function selectFriendPreset(btn, amount) {
+        document.querySelectorAll('#create-friend-modal .preset-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('friend-wager-input').value = amount;
+        updateFriendBreakdown();
+    }
+    function updateFriendBreakdown() {
+        const wager = parseInt(document.getElementById('friend-wager-input').value) || 100;
+        const platformFee = Math.floor(wager * 2 * 0.10);
+        const winnerPrize = (wager * 2) - platformFee;
+        document.getElementById('friend-your-stake').textContent = wager;
+        document.getElementById('friend-opp-stake').textContent = wager;
+        document.getElementById('friend-total-pot').textContent = wager * 2;
+        document.getElementById('friend-platform-fee').textContent = platformFee;
+        document.getElementById('friend-winner-prize').textContent = winnerPrize;
+        document.getElementById('create-friend-amount').textContent = wager;
+    }
+    async function createFriendMatch() {
+        const wagerAmount = parseInt(document.getElementById('friend-wager-input').value);
+        const errorEl = document.getElementById('create-friend-error');
+        const btn = document.getElementById('create-friend-btn');
+        if (wagerAmount < 50) { showError('create-friend-error', 'Minimum wager is KES 50'); return; }
+        if (wagerAmount > currentBalance) { showError('create-friend-error', 'Insufficient balance'); return; }
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        try {
+            const res = await fetchWithAuth('/friends/create-match', {
+                method: 'POST',
+                body: JSON.stringify({ wagerAmount })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            currentFriendMatch = data;
+            currentBalance -= wagerAmount;
+            updateBalanceDisplay();
+            document.getElementById('friend-match-code').textContent = data.matchCode;
+            document.getElementById('waiting-stake-display').textContent = wagerAmount;
+            document.getElementById('waiting-prize-display').textContent = data.winnerPrize;
+            startFriendTimer(data.expiresAt);
+            closeModal('create-friend-modal');
+            document.getElementById('waiting-friend-modal').classList.add('open');
+            await loadMyFriendMatches();
+        } catch (err) {
+            showError('create-friend-error', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'CREATE CHALLENGE (Pay KES <span id="create-friend-amount">' + wagerAmount + '</span>)';
+        }
+    }
+    async function joinFriendMatch() {
+        const matchCode = document.getElementById('join-friend-code').value.trim().toUpperCase();
+        const errorEl = document.getElementById('join-friend-error');
+        if (!matchCode) { showError('join-friend-error', 'Please enter a match code'); return; }
+        try {
+            const res = await fetchWithAuth('/friends/join-match', {
+                method: 'POST',
+                body: JSON.stringify({ matchCode })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            currentBalance -= data.wagerAmount;
+            updateBalanceDisplay();
+            currentFriendMatch = data;
+            closeModal('join-friend-modal');
+            alert(`Match joined! Play now. Winner gets KES ${data.winnerPrize}`);
+            await loadMyFriendMatches();
+        } catch (err) {
+            showError('join-friend-error', err.message);
+        }
+    }
+    async function cancelFriendMatch() {
+        if (!confirm('Are you sure you want to cancel? You\'ll get your wager back.')) return;
+        try {
+            const res = await fetchWithAuth('/friends/cancel-match', {
+                method: 'POST',
+                body: JSON.stringify({ matchId: currentFriendMatch.matchId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            currentBalance += data.refundedAmount;
+            updateBalanceDisplay();
+            if (friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
+            closeModal('waiting-friend-modal');
+            alert(`Match cancelled. KES ${data.refundedAmount} refunded.`);
+            await loadMyFriendMatches();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+    function shareFriendCode() {
+        const code = document.getElementById('friend-match-code').textContent;
+        const wager = parseInt(document.getElementById('waiting-stake-display').textContent);
+        const prize = parseInt(document.getElementById('waiting-prize-display').textContent);
+        const text = encodeURIComponent(
+            `🎮 Challenge me on Vumbua eFootball!\n\nMatch Code: ${code}\nWager: KES ${wager}\nWinner gets: KES ${prize}\n\nJoin here: https://vumbua.app`
+        );
         window.open(`https://wa.me/?text=${text}`, '_blank');
     }
+    function startFriendTimer(expiresAt) {
+        if (friendMatchTimer) clearInterval(friendMatchTimer);
+        friendMatchTimer = setInterval(() => {
+            const now = new Date();
+            const expires = new Date(expiresAt);
+            const diff = Math.max(0, expires - now);
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            document.getElementById('friend-match-timer').textContent = 
+                `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            if (diff === 0) {
+                clearInterval(friendMatchTimer);
+                closeModal('waiting-friend-modal');
+                alert('Match expired. Your wager has been refunded.');
+                refreshBalance();
+                loadMyFriendMatches();
+            }
+        }, 1000);
+    }
 
+    // --- My Matches & Result Reporting (Safe DOM) ---
+    async function loadMyFriendMatches() {
+        const res = await fetchWithAuth('/friends/my-matches');
+        if (!res) return;
+        const matches = await res.json();
+        renderMyMatches(matches);
+    }
+
+    function renderMyMatches(matches) {
+        const container = document.getElementById('my-matches-list');
+        container.innerHTML = '';
+        if (!matches || matches.length === 0) {
+            container.appendChild(createElementSafe('div', { class: 'friend-info', style: 'text-align:center;' }, 'No matches yet. Create or join one!'));
+            return;
+        }
+
+        matches.forEach(m => {
+            const item = createElementSafe('div', { class: 'match-item' });
+
+            // Header
+            const headerDiv = createElementSafe('div', { class: 'match-header' });
+            headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, m.match_code));
+            const statusSpan = createElementSafe('span', { class: `match-status status-${m.status}` }, m.status);
+            headerDiv.appendChild(statusSpan);
+            item.appendChild(headerDiv);
+
+            // Details
+            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Wager: KES ${m.wager_amount}`));
+            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Winner prize: KES ${m.winner_prize}`));
+            const opponentName = (m.creator_id === currentUser.id)
+                ? (m.joiner?.username || 'Waiting...')
+                : (m.creator?.username || 'Unknown');
+            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Opponent: ${opponentName}`));
+
+            // Actions
+            if (m.status === 'pending' && m.creator_id === currentUser.id) {
+                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
+                const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel');
+                cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancelPendingMatch(m.id); });
+                actionsDiv.appendChild(cancelBtn);
+                item.appendChild(actionsDiv);
+            } else if (m.status === 'active') {
+                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
+                const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Report Result');
+                reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
+                actionsDiv.appendChild(reportBtn);
+                item.appendChild(actionsDiv);
+            } else if (m.status === 'disputed') {
+                item.appendChild(createElementSafe('div', { class: 'match-actions' }, 'Disputed - awaiting admin'));
+            } else if (m.status === 'completed') {
+                const winnerText = m.winner_id === currentUser.id ? 'You won!' : (m.winner ? `${m.winner.username} won` : 'Completed');
+                item.appendChild(createElementSafe('div', { class: 'match-detail' }, `🏆 ${winnerText}`));
+            }
+
+            container.appendChild(item);
+        });
+    }
+
+    async function cancelPendingMatch(matchId) {
+        if (!confirm('Cancel this pending match? Your wager will be refunded.')) return;
+        try {
+            const res = await fetchWithAuth('/friends/cancel-match', {
+                method: 'POST',
+                body: JSON.stringify({ matchId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            currentBalance += data.refundedAmount;
+            updateBalanceDisplay();
+            await loadMyFriendMatches();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    function openReportResultModal(matchId) {
+        fetchWithAuth('/friends/my-matches').then(async res => {
+            const matches = await res.json();
+            const match = matches.find(m => m.id === matchId);
+            if (!match) return alert('Match not found');
+            currentReportMatch = match;
+            const detailsDiv = document.getElementById('report-match-details');
+            detailsDiv.innerHTML = `
+                <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
+            `;
+            const select = document.getElementById('report-winner');
+            select.innerHTML = `<option value="">-- Choose winner --</option>`;
+            if (match.creator_id === currentUser.id || match.joiner_id === currentUser.id) {
+                if (match.creator_id === currentUser.id) {
+                    select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+                    if (match.joiner_id) select.innerHTML += `<option value="${match.joiner_id}">Opponent (${escapeHtml(match.joiner?.username || 'Joiner')})</option>`;
+                } else {
+                    select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+                    select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
+                }
+            }
+            document.getElementById('report-result-modal').classList.add('open');
+        });
+    }
+
+    async function submitMatchResult() {
+        if (!currentReportMatch) return;
+        const winnerId = document.getElementById('report-winner').value;
+        if (!winnerId) { showError('report-error', 'Please select a winner'); return; }
+        const screenshot = document.getElementById('report-screenshot').value.trim();
+        const btn = document.querySelector('#report-result-modal .btn-mpesa');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        try {
+            const res = await fetchWithAuth('/friends/submit-result', {
+                method: 'POST',
+                body: JSON.stringify({
+                    matchId: currentReportMatch.id,
+                    winnerId,
+                    screenshotUrl: screenshot || null
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            alert(data.message);
+            closeModal('report-result-modal');
+            await loadMyFriendMatches();
+        } catch (err) {
+            showError('report-error', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'SUBMIT RESULT';
+        }
+    }
+
+    // --- Room Code Share (for tournaments) ---
     function shareRoomCode() {
         const code = document.getElementById('room-code-display').innerText;
         const text = encodeURIComponent(`Join my match on Vumbua eFootball! Room code: ${code}. Play here: https://vumbua.app`);
@@ -1076,10 +1324,7 @@
 
     // --- Initial load ---
     window.onload = () => {
-        if (!authToken) {
-            window.location.href = '/login';
-            return;
-        }
+        if (!authToken) { window.location.href = '/login'; return; }
         loadDashboard();
     };
 </script>

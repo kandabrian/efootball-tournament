@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin | Vumbua eFootball</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' /admin/withdrawals /admin/tournaments /admin/friend-matches /admin/resolve-dispute/*;">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* (Keep all existing styles from before) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #060608; color: #f0f0f0; font-family: 'Outfit', sans-serif; min-height: 100vh; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
@@ -36,6 +36,7 @@
         .status-open { background: rgba(0,255,65,0.1); color: #00ff41; border: 1px solid rgba(0,255,65,0.2); }
         .status-live { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); }
         .status-closed { background: rgba(255,68,68,0.1); color: #ff4444; border: 1px solid rgba(255,68,68,0.2); }
+        .status-disputed { background: rgba(255,68,68,0.2); color: #ff8888; border: 1px solid #ff4444; }
         .actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn { padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.2s; }
         .btn:hover { opacity: 0.8; }
@@ -72,12 +73,13 @@
 
             <!-- Tabs -->
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('withdrawals')">Withdrawals</button>
-                <button class="tab" onclick="switchTab('tournaments')">Tournaments</button>
+                <button class="tab active" data-tab="withdrawals">Withdrawals</button>
+                <button class="tab" data-tab="tournaments">Tournaments</button>
+                <button class="tab" data-tab="friend-matches">Friend Matches</button>
             </div>
 
             <!-- Withdrawals Tab -->
-            <div id="withdrawals-tab">
+            <div id="withdrawals-tab" class="tab-pane active">
                 <div class="table-container">
                     <table id="withdrawals-table">
                         <thead>
@@ -89,7 +91,7 @@
             </div>
 
             <!-- Tournaments Tab -->
-            <div id="tournaments-tab" style="display: none;">
+            <div id="tournaments-tab" class="tab-pane" style="display: none;">
                 <div class="top-bar">
                     <h2>Tournaments</h2>
                     <button class="btn-create" onclick="openTournamentModal()">+ Create Tournament</button>
@@ -103,10 +105,34 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Friend Matches Tab -->
+            <div id="friend-matches-tab" class="tab-pane" style="display: none;">
+                <div class="top-bar">
+                    <h2>Friend Matches</h2>
+                    <select id="fm-status-filter" style="background:#1a1a20; color:white; border:1px solid #2a2a30; border-radius:8px; padding:6px 12px;">
+                        <option value="all">All</option>
+                        <option value="pending">Pending</option>
+                        <option value="active">Active</option>
+                        <option value="disputed">Disputed</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="expired">Expired</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="friend-matches-table">
+                        <thead>
+                            <tr><th>Code</th><th>Creator</th><th>Joiner</th><th>Wager</th><th>Winner Prize</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Modal for Tournament Create/Edit -->
+    <!-- Tournament Modal -->
     <div id="tournament-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('tournament-modal')">
         <div class="modal-content">
             <h3 id="tournament-modal-title">Create Tournament</h3>
@@ -127,7 +153,7 @@
         </div>
     </div>
 
-    <!-- Modal for confirming delete -->
+    <!-- Delete Tournament Modal -->
     <div id="delete-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('delete-modal')">
         <div class="modal-content">
             <h3>Confirm Delete</h3>
@@ -139,19 +165,68 @@
         </div>
     </div>
 
-    <!-- (Keep the paid/reject modals from previous version) -->
+    <!-- Dispute Resolution Modal -->
+    <div id="dispute-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('dispute-modal')">
+        <div class="modal-content">
+            <h3>Resolve Dispute</h3>
+            <p>Select the winner for this match.</p>
+            <select id="dispute-winner">
+                <option value="">-- Choose winner --</option>
+            </select>
+            <div class="modal-actions">
+                <button class="btn btn-green" onclick="resolveDispute()">Confirm Winner</button>
+                <button class="btn btn-red" onclick="closeModal('dispute-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paid / Reject Modals -->
     <div id="paid-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('paid-modal')">
-        <div class="modal-content"><h3>Mark as Paid</h3><input type="text" id="mpesa-code" placeholder="M-PESA Transaction Code"><div class="modal-actions"><button class="btn btn-green" onclick="submitPaid()">Confirm</button><button class="btn btn-red" onclick="closeModal('paid-modal')">Cancel</button></div></div>
+        <div class="modal-content">
+            <h3>Mark as Paid</h3>
+            <input type="text" id="mpesa-code" placeholder="M-PESA Transaction Code">
+            <div class="modal-actions">
+                <button class="btn btn-green" onclick="submitPaid()">Confirm</button>
+                <button class="btn btn-red" onclick="closeModal('paid-modal')">Cancel</button>
+            </div>
+        </div>
     </div>
     <div id="reject-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('reject-modal')">
-        <div class="modal-content"><h3>Reject Withdrawal</h3><textarea id="reject-reason" placeholder="Reason for rejection (optional)" rows="3"></textarea><div class="modal-actions"><button class="btn btn-red" onclick="submitReject()">Reject</button><button class="btn" onclick="closeModal('reject-modal')">Cancel</button></div></div>
+        <div class="modal-content">
+            <h3>Reject Withdrawal</h3>
+            <textarea id="reject-reason" placeholder="Reason for rejection (optional)" rows="3"></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-red" onclick="submitReject()">Reject</button>
+                <button class="btn" onclick="closeModal('reject-modal')">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // State
+        // --- Escape function for XSS prevention ---
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // --- Helper to safely create elements with text content ---
+        function createElementSafe(tag, attributes = {}, textContent = '') {
+            const el = document.createElement(tag);
+            Object.entries(attributes).forEach(([key, value]) => el.setAttribute(key, value));
+            if (textContent) el.textContent = escapeHtml(textContent);
+            return el;
+        }
+
+        // --- State ---
         let adminKey = localStorage.getItem('adminKey');
         let currentWithdrawalId = null;
-        let currentTournamentId = null; // for editing
+        let currentTournamentId = null;
+        let currentFriendMatchId = null;
 
         // Check login
         if (adminKey) {
@@ -160,12 +235,28 @@
             loadWithdrawals();
         }
 
+        // --- Tab switching ---
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.style.display = 'none');
+                document.getElementById(tabName + '-tab').style.display = 'block';
+                if (tabName === 'withdrawals') loadWithdrawals();
+                else if (tabName === 'tournaments') loadTournaments();
+                else loadFriendMatches();
+            });
+        });
+
+        // --- Login ---
         function login() {
             const key = document.getElementById('admin-key').value;
             if (!key) return;
             adminKey = key;
             localStorage.setItem('adminKey', key);
-            fetchWithdrawals().then(data => {
+            // Test the key by fetching withdrawals
+            fetchWithdrawals('pending').then(data => {
                 if (data.error) throw new Error(data.error);
                 document.getElementById('login-section').style.display = 'none';
                 document.getElementById('dashboard').style.display = 'block';
@@ -212,24 +303,38 @@
 
         function renderWithdrawals(withdrawals) {
             const tbody = document.querySelector('#withdrawals-table tbody');
-            tbody.innerHTML = withdrawals.length ? '' : '<tr><td colspan="7" style="text-align:center; color:#888;">No pending withdrawals</td></tr>';
+            tbody.innerHTML = '';
+            if (!withdrawals || withdrawals.length === 0) {
+                const row = document.createElement('tr');
+                const td = createElementSafe('td', { colspan: '7', style: 'text-align:center; color:#888;' }, 'No pending withdrawals');
+                row.appendChild(td);
+                tbody.appendChild(row);
+                return;
+            }
             withdrawals.forEach(w => {
-                tbody.innerHTML += `<tr>
-                    <td>${w.id.substring(0,8)}...</td>
-                    <td>${w.user_id.substring(0,8)}...</td>
-                    <td>KES ${w.amount}</td>
-                    <td>${w.phone}</td>
-                    <td>${w.name}</td>
-                    <td><span class="status-badge status-pending">Pending</span></td>
-                    <td class="actions">
-                        <button class="btn btn-green" onclick="openPaidModal('${w.id}')">Paid</button>
-                        <button class="btn btn-red" onclick="openRejectModal('${w.id}')">Reject</button>
-                    </td>
-                </tr>`;
+                const row = document.createElement('tr');
+                row.appendChild(createElementSafe('td', {}, w.id.substring(0,8) + '...'));
+                row.appendChild(createElementSafe('td', {}, w.user_id.substring(0,8) + '...'));
+                row.appendChild(createElementSafe('td', {}, `KES ${w.amount}`));
+                row.appendChild(createElementSafe('td', {}, w.phone));
+                row.appendChild(createElementSafe('td', {}, w.name));
+                const statusTd = document.createElement('td');
+                const badge = createElementSafe('span', { class: 'status-badge status-pending' }, 'Pending');
+                statusTd.appendChild(badge);
+                row.appendChild(statusTd);
+                const actionsTd = document.createElement('td');
+                actionsTd.className = 'actions';
+                const paidBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Paid');
+                paidBtn.addEventListener('click', () => openPaidModal(w.id));
+                actionsTd.appendChild(paidBtn);
+                const rejectBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Reject');
+                rejectBtn.addEventListener('click', () => openRejectModal(w.id));
+                actionsTd.appendChild(rejectBtn);
+                row.appendChild(actionsTd);
+                tbody.appendChild(row);
             });
         }
 
-        // Paid / Reject functions (unchanged) ...
         function openPaidModal(id) { currentWithdrawalId = id; document.getElementById('mpesa-code').value = ''; document.getElementById('paid-modal').classList.add('open'); }
         async function submitPaid() {
             const mpesaCode = document.getElementById('mpesa-code').value.trim();
@@ -254,22 +359,37 @@
 
         function renderTournaments(tournaments) {
             const tbody = document.querySelector('#tournaments-table tbody');
-            tbody.innerHTML = tournaments.length ? '' : '<tr><td colspan="7" style="text-align:center; color:#888;">No tournaments</td></tr>';
+            tbody.innerHTML = '';
+            if (!tournaments || tournaments.length === 0) {
+                const row = document.createElement('tr');
+                const td = createElementSafe('td', { colspan: '7', style: 'text-align:center; color:#888;' }, 'No tournaments');
+                row.appendChild(td);
+                tbody.appendChild(row);
+                return;
+            }
             tournaments.forEach(t => {
+                const row = document.createElement('tr');
+                row.appendChild(createElementSafe('td', {}, t.name));
+                row.appendChild(createElementSafe('td', {}, `KES ${t.entry_fee}`));
                 const start = new Date(t.start_time).toLocaleString();
+                row.appendChild(createElementSafe('td', {}, start));
+                row.appendChild(createElementSafe('td', {}, t.max_players));
+                row.appendChild(createElementSafe('td', {}, t.room_code || '—'));
+                const statusTd = document.createElement('td');
                 const statusClass = t.status === 'open' ? 'status-open' : t.status === 'live' ? 'status-live' : 'status-closed';
-                tbody.innerHTML += `<tr>
-                    <td>${t.name}</td>
-                    <td>KES ${t.entry_fee}</td>
-                    <td>${start}</td>
-                    <td>${t.max_players}</td>
-                    <td>${t.room_code || '—'}</td>
-                    <td><span class="status-badge ${statusClass}">${t.status}</span></td>
-                    <td class="actions">
-                        <button class="btn btn-yellow" onclick="editTournament('${t.id}')">Edit</button>
-                        <button class="btn btn-red" onclick="openDeleteModal('${t.id}')">Delete</button>
-                    </td>
-                </tr>`;
+                const badge = createElementSafe('span', { class: `status-badge ${statusClass}` }, t.status);
+                statusTd.appendChild(badge);
+                row.appendChild(statusTd);
+                const actionsTd = document.createElement('td');
+                actionsTd.className = 'actions';
+                const editBtn = createElementSafe('button', { class: 'btn btn-yellow' }, 'Edit');
+                editBtn.addEventListener('click', () => editTournament(t.id));
+                actionsTd.appendChild(editBtn);
+                const deleteBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Delete');
+                deleteBtn.addEventListener('click', () => openDeleteModal(t.id));
+                actionsTd.appendChild(deleteBtn);
+                row.appendChild(actionsTd);
+                tbody.appendChild(row);
             });
         }
 
@@ -293,7 +413,6 @@
             document.getElementById('tournament-modal-title').innerText = 'Edit Tournament';
             document.getElementById('tournament-name').value = t.name;
             document.getElementById('tournament-fee').value = t.entry_fee;
-            // Format datetime-local
             const start = new Date(t.start_time);
             const year = start.getFullYear();
             const month = String(start.getMonth() + 1).padStart(2, '0');
@@ -362,26 +481,91 @@
             }
         }
 
+        // ========== FRIEND MATCHES ==========
+        async function loadFriendMatches() {
+            const status = document.getElementById('fm-status-filter').value;
+            const url = status === 'all' ? '/admin/friend-matches' : `/admin/friend-matches?status=${status}`;
+            const res = await adminFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            renderFriendMatches(data);
+        }
+
+        function renderFriendMatches(matches) {
+            const tbody = document.querySelector('#friend-matches-table tbody');
+            tbody.innerHTML = '';
+            if (!matches || matches.length === 0) {
+                const row = document.createElement('tr');
+                const td = createElementSafe('td', { colspan: '7', style: 'text-align:center; color:#888;' }, 'No friend matches');
+                row.appendChild(td);
+                tbody.appendChild(row);
+                return;
+            }
+            matches.forEach(m => {
+                const row = document.createElement('tr');
+                row.appendChild(createElementSafe('td', {}, m.match_code));
+                const creatorName = m.creator?.username || m.creator_id.substring(0,8);
+                row.appendChild(createElementSafe('td', {}, creatorName));
+                const joinerName = m.joiner ? (m.joiner.username || m.joiner_id.substring(0,8)) : '—';
+                row.appendChild(createElementSafe('td', {}, joinerName));
+                row.appendChild(createElementSafe('td', {}, `KES ${m.wager_amount}`));
+                row.appendChild(createElementSafe('td', {}, `KES ${m.winner_prize}`));
+                const statusTd = document.createElement('td');
+                const statusClass = 
+                    m.status === 'pending' ? 'status-pending' :
+                    m.status === 'active' ? 'status-live' :
+                    m.status === 'disputed' ? 'status-disputed' : 'status-closed';
+                const badge = createElementSafe('span', { class: `status-badge ${statusClass}` }, m.status);
+                statusTd.appendChild(badge);
+                row.appendChild(statusTd);
+                const actionsTd = document.createElement('td');
+                actionsTd.className = 'actions';
+                if (m.status === 'disputed') {
+                    const resolveBtn = createElementSafe('button', { class: 'btn btn-yellow' }, 'Resolve');
+                    resolveBtn.addEventListener('click', () => openDisputeModal(m.id, m.creator_id, m.joiner_id));
+                    actionsTd.appendChild(resolveBtn);
+                } else {
+                    actionsTd.appendChild(createElementSafe('span', {}, '—'));
+                }
+                row.appendChild(actionsTd);
+                tbody.appendChild(row);
+            });
+        }
+
+        function openDisputeModal(matchId, creatorId, joinerId) {
+            currentFriendMatchId = matchId;
+            const select = document.getElementById('dispute-winner');
+            select.innerHTML = `<option value="">-- Choose winner --</option>
+                <option value="${escapeHtml(creatorId)}">Creator (${escapeHtml(creatorId.substring(0,8))})</option>
+                <option value="${escapeHtml(joinerId)}">Joiner (${escapeHtml(joinerId.substring(0,8))})</option>`;
+            document.getElementById('dispute-modal').classList.add('open');
+        }
+
+        async function resolveDispute() {
+            const winnerId = document.getElementById('dispute-winner').value;
+            if (!winnerId) return alert('Select a winner');
+            const res = await adminFetch(`/admin/resolve-dispute/${currentFriendMatchId}`, {
+                method: 'POST',
+                body: JSON.stringify({ winnerId })
+            });
+            if (res && res.ok) {
+                closeModal('dispute-modal');
+                loadFriendMatches();
+            } else {
+                alert('Failed to resolve dispute');
+            }
+        }
+
         // ========== UI Helpers ==========
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('open');
             if (modalId === 'paid-modal' || modalId === 'reject-modal') currentWithdrawalId = null;
             if (modalId === 'tournament-modal') currentTournamentId = null;
+            if (modalId === 'dispute-modal') currentFriendMatchId = null;
         }
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            if (tabName === 'withdrawals') {
-                document.getElementById('withdrawals-tab').style.display = 'block';
-                document.getElementById('tournaments-tab').style.display = 'none';
-                loadWithdrawals();
-            } else {
-                document.getElementById('withdrawals-tab').style.display = 'none';
-                document.getElementById('tournaments-tab').style.display = 'block';
-                loadTournaments();
-            }
-        }
+        // Attach filter change listener
+        document.getElementById('fm-status-filter').addEventListener('change', loadFriendMatches);
     </script>
 </body>
 </html>
