@@ -359,18 +359,7 @@ app.get('/wallet/balance', async (req, res) => {
         const { data: { user }, error } = await supabase.auth.getUser(jwt);
         if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-        // ✨ FIXED: Use supabaseAdmin to bypass RLS and get real-time balance
-        const { data, error: queryError } = await supabaseAdmin
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', user.id)
-            .single();
-        
-        if (queryError) {
-            console.error('Balance query error:', queryError);
-            return res.status(500).json({ error: 'Failed to fetch balance' });
-        }
-        
+        const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).single();
         res.json({ balance: data ? data.balance : 0 });
     } catch (err) {
         console.error('Balance error:', err);
@@ -743,20 +732,63 @@ app.post('/friends/cancel-match', sensitiveLimiter, async (req, res) => {
         if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
         const { matchId } = req.body;
+        
+        if (!matchId) {
+            return res.status(400).json({ error: 'Match ID is required' });
+        }
 
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches').select('*').eq('id', matchId).single();
 
-        if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
-        if (match.creator_id !== user.id) return res.status(403).json({ error: 'Only match creator can cancel' });
-        if (match.status !== 'pending') return res.status(400).json({ error: 'Can only cancel pending matches' });
+        if (matchErr || !match) {
+            console.error('Match not found:', matchId, matchErr);
+            return res.status(404).json({ error: 'Match not found' });
+        }
+        
+        if (match.creator_id !== user.id) {
+            return res.status(403).json({ error: 'Only match creator can cancel' });
+        }
+        
+        // Better status checking with specific error messages
+        if (match.status === 'cancelled') {
+            return res.status(400).json({ error: 'Match already cancelled' });
+        }
+        if (match.status === 'active') {
+            return res.status(400).json({ error: 'Cannot cancel - someone already joined this match' });
+        }
+        if (match.status === 'completed') {
+            return res.status(400).json({ error: 'Cannot cancel completed match' });
+        }
+        if (match.status === 'disputed') {
+            return res.status(400).json({ error: 'Cannot cancel disputed match - awaiting admin review' });
+        }
+        
+        // Allow cancelling both pending and expired matches
+        if (match.status !== 'pending' && match.status !== 'expired') {
+            return res.status(400).json({ error: `Cannot cancel ${match.status} match` });
+        }
 
-        await supabaseAdmin.rpc('credit_wallet', { p_user_id: user.id, p_amount: match.wager_amount });
+        // Refund the wager
+        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', { 
+            p_user_id: user.id, 
+            p_amount: match.wager_amount 
+        });
+        
+        if (refundErr) {
+            console.error('Refund error:', refundErr);
+            return res.status(500).json({ error: 'Failed to refund wager' });
+        }
+        
+        // Update match status
         await supabaseAdmin.from('friend_matches').update({
-            status: 'cancelled', cancelled_at: new Date().toISOString()
+            status: 'cancelled', 
+            cancelled_at: new Date().toISOString()
         }).eq('id', matchId);
 
-        res.status(200).json({ message: 'Match cancelled and wager refunded', refundedAmount: match.wager_amount });
+        res.status(200).json({ 
+            message: 'Match cancelled and wager refunded', 
+            refundedAmount: match.wager_amount 
+        });
     } catch (err) {
         console.error('Cancel match error:', err);
         res.status(500).json({ error: 'Failed to cancel match' });
