@@ -166,7 +166,6 @@ app.use((req, res, next) => {
     const frontendUrl = process.env.FRONTEND_URL || '';
     const connectSrc = [
         "'self'",
-        'https://*.supabase.co',
         koyebUrl,
         frontendUrl
     ].filter(Boolean).join(' ');
@@ -193,6 +192,34 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Diagnostic endpoint - check all configurations
+app.get('/debug/config', (req, res) => {
+    res.json({
+        environment: {
+            NODE_ENV: process.env.NODE_ENV || 'not set',
+            PORT: process.env.PORT || 'not set',
+            APP_SERVER_URL: process.env.APP_SERVER_URL ? '✅ set' : '❌ NOT SET',
+            FRONTEND_URL: process.env.FRONTEND_URL ? '✅ set' : '❌ NOT SET',
+            SUPABASE_URL: process.env.SUPABASE_URL ? '✅ set' : '❌ NOT SET',
+            SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? '✅ set (length: ' + process.env.SUPABASE_ANON_KEY.length + ')' : '❌ NOT SET',
+            SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ set (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : '❌ NOT SET',
+            MPESA_SERVER_URL: process.env.MPESA_SERVER_URL ? '✅ set' : '❌ NOT SET',
+            ADMIN_KEY: process.env.ADMIN_KEY ? '✅ set' : '❌ NOT SET'
+        },
+        supabase: {
+            client_initialized: !!supabase,
+            admin_initialized: !!supabaseAdmin,
+            url: process.env.SUPABASE_URL || 'NOT SET'
+        },
+        server: {
+            uptime_seconds: Math.round(process.uptime()),
+            memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+            node_version: process.version,
+            platform: process.platform
+        }
+    });
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
@@ -203,35 +230,62 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 // ============================================================
 app.post('/auth/signup', async (req, res) => {
     try {
+        console.log('📝 Signup request received:', { phone: req.body.phone, username: req.body.username });
+        
         let { phone, password, username } = req.body;
-        if (!phone || !password || !username) return res.status(400).json({ error: 'Missing fields.' });
-        if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+        if (!phone || !password || !username) {
+            console.log('❌ Missing fields');
+            return res.status(400).json({ error: 'Missing fields.' });
+        }
+        if (password.length < 6) {
+            console.log('❌ Password too short');
+            return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+        }
 
         phone = normalizePhone(phone);
-        if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
+        if (!phone) {
+            console.log('❌ Invalid phone format');
+            return res.status(400).json({ error: 'Invalid phone number.' });
+        }
+        console.log('✅ Phone normalized:', phone);
 
+        console.log('🔐 Attempting Supabase auth signup...');
         const { data, error } = await supabase.auth.signUp({
             phone, password, options: { data: { username } }
         });
 
-        if (error) return res.status(error.status || 400).json({ error: error.message });
+        if (error) {
+            console.error('❌ Supabase auth error:', error);
+            return res.status(error.status || 400).json({ error: error.message });
+        }
+        console.log('✅ User created:', data.user?.id);
 
         if (data.user) {
             try {
+                console.log('💾 Creating profile...');
                 await supabaseAdmin.from('profiles').upsert([{ id: data.user.id, username }]);
+                console.log('✅ Profile created');
+                
+                console.log('💰 Creating wallet...');
                 await supabaseAdmin.from('wallets').upsert([{ user_id: data.user.id, balance: 0 }]);
+                console.log('✅ Wallet created');
             } catch (dbErr) {
-                console.error('Failed to create profile/wallet:', dbErr);
+                console.error('❌ Failed to create profile/wallet:', dbErr);
+                console.error('   Error details:', dbErr.message, dbErr.code);
                 // Rollback user creation
-                await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch(() => {});
+                await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch((delErr) => {
+                    console.error('❌ Failed to rollback user:', delErr);
+                });
                 return res.status(500).json({ error: 'Account creation failed. Try again.' });
             }
         }
 
+        console.log('🎉 Signup successful!');
         res.status(200).json({ message: "Signup successful!", user: data.user });
     } catch (err) {
-        console.error('Signup error:', err);
-        res.status(500).json({ error: 'Internal server error.' });
+        console.error('💥 Signup error:', err);
+        console.error('   Stack:', err.stack);
+        res.status(500).json({ error: 'Internal server error: ' + err.message });
     }
 });
 
@@ -605,19 +659,28 @@ app.get('/friends/my-matches', async (req, res) => {
 
         const jwt = authHeader.replace('Bearer ', '');
         const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+        if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
 
         const { data: matches, error } = await supabaseAdmin
-            .from('friend_matches')
-            .select(`*, creator:profiles!friend_matches_creator_id_fkey(username), joiner:profiles!friend_matches_joiner_id_fkey(username)`)
-            .or(`creator_id.eq.${user.id},joiner_id.eq.${user.id}`)
-            .order('created_at', { ascending: false }).limit(50);
+            .from('matches')
+            .select(`
+                *,
+                creator:profiles!matches_creator_id_fkey(username),
+                opponent:profiles!matches_opponent_id_fkey(username)
+            `)
+            .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
+            .order('created_at', { ascending: false })
+            .limit(50);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Fetch matches error:', error);
+            return res.json([]); // Return empty array instead of error
+        }
+        
         res.json(matches || []);
     } catch (err) {
         console.error('Fetch matches error:', err);
-        res.status(500).json({ error: 'Failed to fetch matches' });
+        res.json([]); // Return empty array on exception
     }
 });
 

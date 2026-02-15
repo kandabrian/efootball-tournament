@@ -195,13 +195,15 @@
             .replace(/'/g, "&#039;");
     }
 
-    // Base URL — works both locally and on Koyeb
-    // CRITICAL: If you see 'short-cockroach' in your console, clear your browser cache!
-    const API = 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
+    // Auto-detect: Use localhost for local dev, Koyeb URL for production
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API = isLocal 
+        ? 'http://localhost:3000' 
+        : 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
     
-    // Debug: Log API URL to console to verify correct version is loaded
+    // Debug: Log API URL to console
+    console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
     console.log('🔍 API URL:', API);
-    console.log('✅ If you see low-lilllie-kandabrian above, you have the correct version!');
 
     // Redirect if session exists
     if (localStorage.getItem('supabaseToken')) { 
