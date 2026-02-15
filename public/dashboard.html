@@ -719,6 +719,7 @@
     let friendMatchTimer = null;
     let currentReportMatch = null;
     let currentTournamentId = null, currentTournamentFee = 0, currentTournamentName = '';
+    let balanceRefreshInterval = null;
 
     // --- Utility functions ---
     function showError(elementId, message) {
@@ -781,6 +782,10 @@
             loadMyFriendMatches();
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
+            
+            // Start auto-refresh
+            startBalanceAutoRefresh();
+            
         } catch (err) {
             console.error('Failed to load dashboard', err);
             document.getElementById('loading-screen').style.display = 'none';
@@ -802,6 +807,30 @@
         balElement.classList.remove('balance-flash');
         void balElement.offsetWidth;
         balElement.classList.add('balance-flash');
+    }
+
+    // Auto-refresh balance every 30 seconds
+    function startBalanceAutoRefresh() {
+        if (balanceRefreshInterval) {
+            clearInterval(balanceRefreshInterval);
+        }
+        
+        balanceRefreshInterval = setInterval(() => {
+            console.log('🔄 Auto-refreshing balance...');
+            refreshBalance().catch(err => {
+                console.error('Failed to auto-refresh balance:', err);
+            });
+        }, 30000); // 30 seconds
+        
+        console.log('✅ Balance auto-refresh started (30s interval)');
+    }
+
+    function stopBalanceAutoRefresh() {
+        if (balanceRefreshInterval) {
+            clearInterval(balanceRefreshInterval);
+            balanceRefreshInterval = null;
+            console.log('⏹️  Balance auto-refresh stopped');
+        }
     }
 
     // --- TOURNAMENTS (Safe DOM) ---
@@ -1332,6 +1361,7 @@
 
     // --- Logout ---
     document.getElementById('logoutBtn').addEventListener('click', () => {
+        stopBalanceAutoRefresh();
         localStorage.removeItem('supabaseToken');
         localStorage.removeItem('supabaseUser');
         window.location.href = '/login';

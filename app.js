@@ -45,7 +45,7 @@ if (missing.length > 0) {
     console.error("❌ FATAL: Missing required env vars:", missing.join(', '));
     console.error("   Present vars:", Object.keys(process.env).filter(k =>
         ['SUPABASE_URL','SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY',
-         'MPESA_SERVER_URL','ADMIN_KEY','FRONTEND_URL','PORT'].includes(k)
+         'MPESA_SERVER_URL','ADMIN_KEY','FRONTEND_URL','PORT','STORAGE_DOMAIN'].includes(k)
     ).join(', ') || "NONE");
     process.exit(1);
 }
@@ -53,6 +53,7 @@ console.log("✅ Required env vars present.");
 console.log("   APP_SERVER_URL:", process.env.APP_SERVER_URL || "⚠️  NOT SET");
 console.log("   FRONTEND_URL:", process.env.FRONTEND_URL || "⚠️  NOT SET (CORS may block frontend)");
 console.log("   ADMIN_KEY:", process.env.ADMIN_KEY ? "✅ set" : "⚠️  NOT SET (admin routes disabled)");
+console.log("   STORAGE_DOMAIN:", process.env.STORAGE_DOMAIN || "⚠️  NOT SET (using default: *.supabase.co)");
 console.log("   PORT:", process.env.PORT || "3000 (default)");
 
 // ============================================================
@@ -77,8 +78,9 @@ function getVerifier() {
             _verifier = new ScreenshotVerifier(supabaseAdmin);
             console.log("✅ ScreenshotVerifier loaded.");
         } catch (err) {
-            console.error("❌ Failed to load ScreenshotVerifier:", err.message);
-            return null; // Don't crash — just skip verification
+            console.error("❌ CRITICAL: Failed to load ScreenshotVerifier:", err.message);
+            console.error("   Screenshot verification will be DISABLED - all submissions require manual review!");
+            return null;
         }
     }
     return _verifier;
@@ -130,6 +132,37 @@ function generateMatchCode() {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+}
+
+// Generic error response - prevents leaking internal errors
+function sendGenericError(res, statusCode, message, internalError) {
+    console.error('Error:', message, '|', internalError?.message || internalError);
+    res.status(statusCode).json({ error: message });
+}
+
+// Validate screenshot URL to prevent SSRF
+function isValidScreenshotUrl(url) {
+    try {
+        const parsed = new URL(url);
+        const storageDomain = process.env.STORAGE_DOMAIN || 'supabase.co';
+
+        // Must be HTTPS
+        if (parsed.protocol !== 'https:') {
+            console.warn('❌ Screenshot URL must use HTTPS:', url);
+            return false;
+        }
+
+        // Must be from allowed storage domain
+        if (!parsed.hostname.endsWith(storageDomain)) {
+            console.warn('❌ Screenshot URL from unauthorized domain:', parsed.hostname);
+            return false;
+        }
+
+        return true;
+    } catch (err) {
+        console.warn('❌ Invalid screenshot URL:', url);
+        return false;
+    }
 }
 
 // ============================================================
@@ -204,7 +237,8 @@ app.get('/debug/config', (req, res) => {
             SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? '✅ set (length: ' + process.env.SUPABASE_ANON_KEY.length + ')' : '❌ NOT SET',
             SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ set (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : '❌ NOT SET',
             MPESA_SERVER_URL: process.env.MPESA_SERVER_URL ? '✅ set' : '❌ NOT SET',
-            ADMIN_KEY: process.env.ADMIN_KEY ? '✅ set' : '❌ NOT SET'
+            ADMIN_KEY: process.env.ADMIN_KEY ? '✅ set' : '❌ NOT SET',
+            STORAGE_DOMAIN: process.env.STORAGE_DOMAIN ? '✅ set' : '⚠️  using default: *.supabase.co'
         },
         supabase: {
             client_initialized: !!supabase,
@@ -230,8 +264,9 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 // ============================================================
 app.post('/auth/signup', async (req, res) => {
     try {
-        console.log('📝 Signup request received:', { phone: req.body.phone, username: req.body.username });
-        
+        // Mask phone number in logs to avoid leaking PII
+        console.log('📝 Signup request received:', { phone: req.body.phone?.slice(0, 8) + '***', username: req.body.username });
+
         let { phone, password, username } = req.body;
         if (!phone || !password || !username) {
             console.log('❌ Missing fields');
@@ -247,7 +282,7 @@ app.post('/auth/signup', async (req, res) => {
             console.log('❌ Invalid phone format');
             return res.status(400).json({ error: 'Invalid phone number.' });
         }
-        console.log('✅ Phone normalized:', phone);
+        console.log('✅ Phone normalized');
 
         console.log('🔐 Attempting Supabase auth signup...');
         const { data, error } = await supabase.auth.signUp({
@@ -255,28 +290,36 @@ app.post('/auth/signup', async (req, res) => {
         });
 
         if (error) {
-            console.error('❌ Supabase auth error:', error);
-            return res.status(error.status || 400).json({ error: error.message });
+            console.error('❌ Supabase auth error:', error.message);
+            // Don't leak internal error details
+            return sendGenericError(res, 400, 'Signup failed. Please try again.', error);
         }
         console.log('✅ User created:', data.user?.id);
 
         if (data.user) {
             try {
                 console.log('💾 Creating profile...');
-                await supabaseAdmin.from('profiles').upsert([{ id: data.user.id, username }]);
+                const { error: profileError } = await supabaseAdmin
+                    .from('profiles')
+                    .upsert([{ id: data.user.id, username }]);
+
+                if (profileError) throw profileError;
                 console.log('✅ Profile created');
-                
+
                 console.log('💰 Creating wallet...');
-                await supabaseAdmin.from('wallets').upsert([{ user_id: data.user.id, balance: 0 }]);
+                const { error: walletError } = await supabaseAdmin
+                    .from('wallets')
+                    .upsert([{ user_id: data.user.id, balance: 0 }]);
+
+                if (walletError) throw walletError;
                 console.log('✅ Wallet created');
             } catch (dbErr) {
-                console.error('❌ Failed to create profile/wallet:', dbErr);
-                console.error('   Error details:', dbErr.message, dbErr.code);
+                console.error('❌ Failed to create profile/wallet:', dbErr.message, dbErr.code);
                 // Rollback user creation
                 await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch((delErr) => {
                     console.error('❌ Failed to rollback user:', delErr);
                 });
-                return res.status(500).json({ error: 'Account creation failed. Try again.' });
+                return sendGenericError(res, 500, 'Account creation failed. Please try again.', dbErr);
             }
         }
 
@@ -284,8 +327,7 @@ app.post('/auth/signup', async (req, res) => {
         res.status(200).json({ message: "Signup successful!", user: data.user });
     } catch (err) {
         console.error('💥 Signup error:', err);
-        console.error('   Stack:', err.stack);
-        res.status(500).json({ error: 'Internal server error: ' + err.message });
+        return sendGenericError(res, 500, 'Internal server error', err);
     }
 });
 
@@ -296,12 +338,12 @@ app.post('/auth/login', async (req, res) => {
         if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
 
         const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
-        if (error) return res.status(400).json({ error: error.message });
+        if (error) return sendGenericError(res, 400, 'Invalid phone number or password', error);
 
         res.status(200).json({ message: "Login successful!", session: data.session });
     } catch (err) {
         console.error('Login error:', err);
-        res.status(500).json({ error: 'Internal server error.' });
+        return sendGenericError(res, 500, 'Internal server error', err);
     }
 });
 
@@ -317,11 +359,22 @@ app.get('/wallet/balance', async (req, res) => {
         const { data: { user }, error } = await supabase.auth.getUser(jwt);
         if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-        const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).single();
+        // ✨ FIXED: Use supabaseAdmin to bypass RLS and get real-time balance
+        const { data, error: queryError } = await supabaseAdmin
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .single();
+        
+        if (queryError) {
+            console.error('Balance query error:', queryError);
+            return res.status(500).json({ error: 'Failed to fetch balance' });
+        }
+        
         res.json({ balance: data ? data.balance : 0 });
     } catch (err) {
         console.error('Balance error:', err);
-        res.status(500).json({ error: 'Internal server error.' });
+        return sendGenericError(res, 500, 'Failed to fetch balance', err);
     }
 });
 
@@ -546,15 +599,8 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
         // Lazy-load verifier only when actually needed
         let verificationResult = null;
         if (screenshotUrl) {
-            // Validate screenshot URL to prevent SSRF
-            try {
-                const url = new URL(screenshotUrl);
-                // Allow only your own storage domain (e.g., Supabase storage)
-                if (!url.hostname.endsWith('supabase.co') && !url.hostname.includes('your-storage-domain.com')) {
-                    console.warn('Blocked SSRF attempt:', screenshotUrl);
-                    return res.status(400).json({ error: 'Invalid screenshot URL domain' });
-                }
-            } catch {
+            // Validate screenshot URL to prevent SSRF using isValidScreenshotUrl()
+            if (!isValidScreenshotUrl(screenshotUrl)) {
                 return res.status(400).json({ error: 'Invalid screenshot URL' });
             }
 
@@ -652,6 +698,9 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
     }
 });
 
+// ============================================================
+// MY MATCHES ENDPOINT (FIXED)
+// ============================================================
 app.get('/friends/my-matches', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -676,7 +725,7 @@ app.get('/friends/my-matches', async (req, res) => {
             console.error('Fetch matches error:', error);
             return res.json([]); // Return empty array instead of error
         }
-        
+
         res.json(matches || []);
     } catch (err) {
         console.error('Fetch matches error:', err);
@@ -1046,9 +1095,9 @@ app.get('/tournaments', async (req, res) => {
 });
 
 // ============================================================
-// START SERVER — with memory log to catch OOM
+// SERVER START
 // ============================================================
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
     const memMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
     console.log("========================================");
     console.log(`✅ Vumbua Game running on port ${port}`);
