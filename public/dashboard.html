@@ -376,6 +376,91 @@
         .btn-red { background: rgba(255,68,68,0.15); color: #ff6666; border: 1px solid rgba(255,68,68,0.3); }
         .matches-list { min-height: 60px; }
         .modal-select { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 13px 16px; border-radius: 10px; font-size: 1rem; font-family: 'Outfit', sans-serif; }
+
+        /* OCR Auto-Settle Cards */
+        .ocr-result-card {
+            background: rgba(0,255,65,0.06); border: 1px solid rgba(0,255,65,0.2);
+            border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 14px;
+        }
+        .ocr-result-score {
+            font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem;
+            color: var(--neon); letter-spacing: 8px; line-height: 1;
+            text-shadow: 0 0 30px rgba(0,255,65,0.4);
+        }
+        .ocr-result-label { font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; color: #555; margin-top: 8px; }
+        .winner-announce {
+            background: linear-gradient(135deg, rgba(0,255,65,0.08), rgba(0,255,65,0.03));
+            border: 1px solid rgba(0,255,65,0.15); border-radius: 16px;
+            padding: 20px; text-align: center; margin-bottom: 16px;
+        }
+        .winner-crown { font-size: 2rem; margin-bottom: 6px; }
+        .winner-name { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 3px; color: var(--neon); }
+        .winner-prize-text { font-size: 0.85rem; color: #aaa; margin-top: 4px; font-weight: 600; }
+        .winner-announce.you-won { border-color: rgba(0,255,65,0.4); background: linear-gradient(135deg, rgba(0,255,65,0.12), rgba(0,255,65,0.04)); }
+        .winner-announce.you-won .winner-name { text-shadow: 0 0 20px rgba(0,255,65,0.5); }
+
+        /* Screenshot Upload UI */
+        .screenshot-upload-zone {
+            border: 2px dashed rgba(0,255,65,0.25);
+            border-radius: 14px; padding: 24px 16px;
+            text-align: center; cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: rgba(0,255,65,0.02);
+            position: relative; margin-bottom: 4px;
+        }
+        .screenshot-upload-zone:hover, .screenshot-upload-zone.drag-over {
+            border-color: rgba(0,255,65,0.6);
+            background: rgba(0,255,65,0.05);
+        }
+        .screenshot-upload-zone input[type=file] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .upload-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+        .upload-label { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+        .upload-label strong { color: var(--neon); }
+        .ocr-panel {
+            background: rgba(0,255,65,0.05); border: 1px solid rgba(0,255,65,0.2);
+            border-radius: 12px; padding: 14px 16px; margin: 12px 0; display: none;
+        }
+        .ocr-panel.visible { display: block; animation: fadeIn 0.3s ease; }
+        .ocr-panel.fraud { background: rgba(255,68,68,0.07); border-color: rgba(255,68,68,0.3); }
+        .ocr-panel.warn { background: rgba(255,180,0,0.07); border-color: rgba(255,180,0,0.3); }
+        .ocr-title { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+        .ocr-score-display {
+            font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem;
+            color: var(--neon); letter-spacing: 4px; text-align: center;
+            margin: 6px 0; line-height: 1;
+        }
+        .ocr-confidence { font-size: 0.72rem; color: #888; text-align: center; margin-top: 4px; }
+        .ocr-badge {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 0.65rem; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; margin-top: 6px;
+        }
+        .ocr-badge.ok { background: rgba(0,255,65,0.15); color: var(--neon); }
+        .ocr-badge.low { background: rgba(255,180,0,0.15); color: #ffb400; }
+        .ocr-badge.fail { background: rgba(255,68,68,0.15); color: #ff4444; }
+        .ocr-warn-list { margin-top: 8px; }
+        .ocr-warn-item { font-size: 0.72rem; color: #ffb400; padding: 2px 0; }
+        .ocr-warn-item::before { content: '\26A0 '; }
+        .upload-progress {
+            height: 3px; background: rgba(255,255,255,0.06); border-radius: 3px;
+            margin-top: 8px; overflow: hidden; display: none;
+        }
+        .upload-progress.visible { display: block; }
+        .upload-progress-fill { height: 100%; background: var(--neon); border-radius: 3px; }
+        .upload-progress-fill.indeterminate {
+            width: 40%; animation: progressSlide 1.2s ease-in-out infinite;
+        }
+        @keyframes progressSlide { 0%{transform:translateX(-200%)} 100%{transform:translateX(400%)} }
+        .screenshot-thumb {
+            width: 100%; max-height: 120px; object-fit: contain;
+            border-radius: 8px; margin-top: 8px; display: none;
+            border: 1px solid var(--border);
+        }
+        .screenshot-thumb.visible { display: block; }
+        .auto-fill-notice { font-size: 0.72rem; color: var(--neon); padding: 6px 0; display: none; }
+        .auto-fill-notice.visible { display: block; }
     </style>
 </head>
 <body>
@@ -666,24 +751,82 @@
 <div class="modal-overlay" id="report-result-modal" onclick="if(event.target === this) closeModal('report-result-modal')">
     <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">REPORT MATCH RESULT</div>
-        <p class="modal-subtitle">Who won? (Both players must agree)</p>
-        <div class="match-details-box" id="report-match-details">
-            <!-- filled by JS -->
+        <div class="modal-title">PIGA PICHA 📸</div>
+        <p class="modal-subtitle">Upload your end-of-match screenshot — we'll read the score automatically.</p>
+        <div class="match-details-box" id="report-match-details"></div>
+
+        <!-- Step 1: Upload zone (always shown first) -->
+        <div id="report-step-upload">
+            <div class="modal-input-group">
+                <label>Match Screenshot <span style="color:var(--neon)">*</span></label>
+                <div class="screenshot-upload-zone" id="upload-zone">
+                    <input type="file" id="screenshot-file-input" accept="image/jpeg,image/png,image/webp"
+                        onchange="handleScreenshotSelected(this.files[0])"
+                        ondragover="event.preventDefault();this.parentElement.classList.add('drag-over')"
+                        ondragleave="this.parentElement.classList.remove('drag-over')"
+                        ondrop="this.parentElement.classList.remove('drag-over')">
+                    <span class="upload-icon" id="upload-icon">📸</span>
+                    <div class="upload-label" id="upload-label">
+                        <strong>Tap to upload</strong> or drag &amp; drop<br>
+                        <span style="font-size:0.72rem;color:#555;">JPEG / PNG / WebP · Max 10MB</span>
+                    </div>
+                    <img class="screenshot-thumb" id="screenshot-thumb" alt="preview">
+                </div>
+                <div class="upload-progress" id="upload-progress">
+                    <div class="upload-progress-fill indeterminate" id="upload-progress-fill"></div>
+                </div>
+            </div>
+            <div class="balance-insufficient" id="report-error"></div>
+            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
         </div>
-        <div class="modal-input-group">
-            <label>Select Winner</label>
-            <select id="report-winner" class="modal-input">
-                <option value="">-- Choose winner --</option>
-            </select>
+
+        <!-- Step 2a: OCR success — auto-settle confirmation -->
+        <div id="report-step-auto" style="display:none;">
+            <div class="ocr-result-card" id="ocr-result-card">
+                <div class="ocr-result-score" id="ocr-result-score">0 – 0</div>
+                <div class="ocr-result-label" id="ocr-result-label">Score detected</div>
+            </div>
+            <div class="winner-announce" id="winner-announce">
+                <div class="winner-crown">🏆</div>
+                <div class="winner-name" id="winner-name-display">—</div>
+                <div class="winner-prize-text" id="winner-prize-text">wins KES 0</div>
+            </div>
+            <div class="ocr-panel" id="ocr-panel-auto" style="margin-bottom:16px;">
+                <div class="ocr-warn-list" id="ocr-warn-list-auto"></div>
+            </div>
+            <div class="balance-insufficient" id="report-error-auto"></div>
+            <button class="btn-mpesa" id="auto-settle-btn" style="background:var(--neon);color:#000;" onclick="confirmAutoSettle()">
+                ✅ SUBMIT MY SCORE
+            </button>
+            <div style="font-size:0.7rem;color:#555;text-align:center;margin-top:8px;">
+                Your opponent also needs to upload their screenshot to confirm
+            </div>
+            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">
+                Score wrong? Report manually →
+            </button>
         </div>
-        <div class="modal-input-group">
-            <label>Screenshot URL (optional)</label>
-            <input type="url" id="report-screenshot" class="modal-input" placeholder="https://...">
+
+        <!-- Step 2b: Manual fallback (low OCR confidence or user override) -->
+        <div id="report-step-manual" style="display:none;">
+            <div class="ocr-panel" id="ocr-panel-manual" style="margin-bottom:12px;">
+                <div class="ocr-title">🤖 OCR Result</div>
+                <div class="ocr-score-display" id="ocr-score-manual">–  –</div>
+                <div class="ocr-confidence" id="ocr-confidence-manual"></div>
+                <div id="ocr-badge-wrap-manual"></div>
+                <div class="ocr-warn-list" id="ocr-warn-list-manual"></div>
+            </div>
+            <div class="modal-input-group">
+                <label>Select Winner Manually</label>
+                <select id="report-winner" class="modal-input">
+                    <option value="">-- Choose winner --</option>
+                </select>
+            </div>
+            <div class="balance-insufficient" id="report-error-manual"></div>
+            <button class="btn-mpesa" id="submit-result-btn" onclick="submitMatchResult()" style="background:var(--neon);color:#000;">
+                SUBMIT RESULT →
+            </button>
+            <button class="btn-cancel" style="margin-top:8px;" onclick="closeModal('report-result-modal')">Cancel</button>
         </div>
-        <div class="balance-insufficient" id="report-error"></div>
-        <button class="btn-mpesa" onclick="submitMatchResult()">SUBMIT RESULT</button>
-        <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
     </div>
 </div>
 
@@ -720,6 +863,7 @@
     let currentReportMatch = null;
     let currentTournamentId = null, currentTournamentFee = 0, currentTournamentName = '';
     let balanceRefreshInterval = null;
+    let matchStatusPollInterval = null;
 
     // --- Utility functions ---
     function showError(elementId, message) {
@@ -833,6 +977,76 @@
         }
     }
 
+    // Real-time match status polling
+    function startMatchStatusPolling(matchId) {
+        if (matchStatusPollInterval) {
+            clearInterval(matchStatusPollInterval);
+        }
+        
+        console.log('🔄 Started polling match status for:', matchId);
+        
+        matchStatusPollInterval = setInterval(async () => {
+            try {
+                const res = await fetchWithAuth(`/friends/match-status/${matchId}`);
+                if (!res || !res.ok) return;
+                
+                const data = await res.json();
+                console.log('📊 Match status:', data.status);
+                
+                if (data.status === 'active') {
+                    stopMatchStatusPolling();
+                    onMatchBecameActive(data);
+                } else if (data.status === 'expired' || data.status === 'cancelled') {
+                    stopMatchStatusPolling();
+                    onMatchExpiredOrCancelled(data);
+                }
+                
+            } catch (err) {
+                console.error('Poll error:', err);
+            }
+        }, 3000);
+    }
+
+    function stopMatchStatusPolling() {
+        if (matchStatusPollInterval) {
+            clearInterval(matchStatusPollInterval);
+            matchStatusPollInterval = null;
+            console.log('⏹️  Stopped polling match status');
+        }
+    }
+
+    function onMatchBecameActive(matchData) {
+        if (friendMatchTimer) {
+            clearInterval(friendMatchTimer);
+            friendMatchTimer = null;
+        }
+        
+        closeModal('waiting-friend-modal');
+        
+        const joinerName = matchData.joinerUsername || 'Opponent';
+        alert(`🎮 Match Started!\n\n${joinerName} joined your match!\nGood luck! Winner gets KES ${matchData.winnerPrize}`);
+        
+        loadMyFriendMatches();
+    }
+
+    function onMatchExpiredOrCancelled(matchData) {
+        if (friendMatchTimer) {
+            clearInterval(friendMatchTimer);
+            friendMatchTimer = null;
+        }
+        
+        closeModal('waiting-friend-modal');
+        
+        if (matchData.status === 'expired') {
+            alert('⏰ Match Expired\n\nNo one joined in time. Your wager has been refunded.');
+        } else {
+            alert('❌ Match Cancelled\n\nYour wager has been refunded.');
+        }
+        
+        refreshBalance();
+        loadMyFriendMatches();
+    }
+
     // --- TOURNAMENTS (Safe DOM) ---
     async function loadTournaments() {
         try {
@@ -910,7 +1124,7 @@
         document.getElementById(modalId).classList.remove('open');
         if (modalId === 'deposit-modal' && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
         if (modalId === 'waiting-friend-modal' && friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
-        if (modalId === 'report-result-modal') currentReportMatch = null;
+        if (modalId === 'report-result-modal') { currentReportMatch = null; resetReportModal(); }
     }
     function switchStep(modalId, stepNum) {
         document.querySelectorAll(`#${modalId} .step`).forEach((s, i) => {
@@ -1144,6 +1358,10 @@
             startFriendTimer(data.expiresAt);
             closeModal('create-friend-modal');
             document.getElementById('waiting-friend-modal').classList.add('open');
+            
+            // Start real-time polling for match status
+            startMatchStatusPolling(data.matchId);
+            
             await loadMyFriendMatches();
         } catch (err) {
             showError('create-friend-error', err.message);
@@ -1175,6 +1393,9 @@
     }
     async function cancelFriendMatch() {
         if (!confirm('Are you sure you want to cancel? You\'ll get your wager back.')) return;
+        
+        stopMatchStatusPolling();
+        
         try {
             const res = await fetchWithAuth('/friends/cancel-match', {
                 method: 'POST',
@@ -1264,9 +1485,23 @@
                 item.appendChild(actionsDiv);
             } else if (m.status === 'active') {
                 const actionsDiv = createElementSafe('div', { class: 'match-actions' });
-                const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Report Result');
-                reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
-                actionsDiv.appendChild(reportBtn);
+                // Show different state if first OCR already submitted (waiting for opponent)
+                if (m.reported_by_id && m.reported_by_id === currentUser.id && m.first_ocr_data) {
+                    const waitEl = createElementSafe('div', { style: 'font-size:0.78rem;color:#ffb400;padding:6px 0;' }, '⏳ Score submitted — waiting for opponent\'s screenshot');
+                    actionsDiv.appendChild(waitEl);
+                } else if (m.reported_by_id && m.reported_by_id !== currentUser.id && m.first_ocr_data) {
+                    // Opponent submitted, this user hasn't yet
+                    const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Your Screenshot');
+                    reportBtn.style.cssText = 'animation: pulse 1.5s infinite;';
+                    reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
+                    actionsDiv.appendChild(reportBtn);
+                    const nudge = createElementSafe('div', { style: 'font-size:0.72rem;color:var(--neon);margin-top:4px;' }, '🟢 Opponent uploaded — your turn to confirm!');
+                    actionsDiv.appendChild(nudge);
+                } else {
+                    const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Report Result');
+                    reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
+                    actionsDiv.appendChild(reportBtn);
+                }
                 item.appendChild(actionsDiv);
             } else if (m.status === 'disputed') {
                 item.appendChild(createElementSafe('div', { class: 'match-actions' }, 'Disputed - awaiting admin'));
@@ -1296,60 +1531,343 @@
         }
     }
 
-    function openReportResultModal(matchId) {
-        fetchWithAuth('/friends/my-matches').then(async res => {
-            const matches = await res.json();
-            const match = matches.find(m => m.id === matchId);
-            if (!match) return alert('Match not found');
-            currentReportMatch = match;
-            const detailsDiv = document.getElementById('report-match-details');
-            detailsDiv.innerHTML = `
-                <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
-                <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
-            `;
-            const select = document.getElementById('report-winner');
-            select.innerHTML = `<option value="">-- Choose winner --</option>`;
-            if (match.creator_id === currentUser.id || match.joiner_id === currentUser.id) {
-                if (match.creator_id === currentUser.id) {
-                    select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
-                    if (match.joiner_id) select.innerHTML += `<option value="${match.joiner_id}">Opponent (${escapeHtml(match.joiner?.username || 'Joiner')})</option>`;
-                } else {
-                    select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
-                    select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
-                }
+    // ── Screenshot OCR & Auto-Settle ────────────────────────────
+    let _uploadedScreenshotUrl = null;
+    let _ocrData = null;
+    let _verifyData = null;
+
+    function resetReportModal() {
+        _uploadedScreenshotUrl = null;
+        _ocrData = null;
+        _verifyData = null;
+
+        // Reset upload zone
+        const icon = document.getElementById('upload-icon');
+        const label = document.getElementById('upload-label');
+        const thumb = document.getElementById('screenshot-thumb');
+        const progress = document.getElementById('upload-progress');
+        const fileInput = document.getElementById('screenshot-file-input');
+        if (icon) icon.textContent = '📸';
+        if (label) label.innerHTML = '<strong>Tap to upload</strong> or drag &amp; drop<br><span style="font-size:0.72rem;color:#555;">JPEG / PNG / WebP · Max 10MB</span>';
+        if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
+        if (progress) { progress.classList.remove('visible'); }
+        if (fileInput) fileInput.value = '';
+
+        // Show only upload step
+        document.getElementById('report-step-upload').style.display = 'block';
+        document.getElementById('report-step-auto').style.display = 'none';
+        document.getElementById('report-step-manual').style.display = 'none';
+        document.getElementById('report-error').style.display = 'none';
+
+        const progressFill = document.getElementById('upload-progress-fill');
+        if (progressFill) {
+            progressFill.classList.add('indeterminate');
+            progressFill.style.width = '';
+        }
+    }
+
+    async function handleScreenshotSelected(file) {
+        if (!file || !currentReportMatch) return;
+
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowed.includes(file.type)) { showError('report-error', 'Only JPEG, PNG, or WebP images allowed'); return; }
+        if (file.size > 10 * 1024 * 1024) { showError('report-error', 'Screenshot must be under 10MB'); return; }
+        document.getElementById('report-error').style.display = 'none';
+
+        // Show thumbnail immediately
+        const thumb = document.getElementById('screenshot-thumb');
+        thumb.src = URL.createObjectURL(file);
+        thumb.classList.add('visible');
+        document.getElementById('upload-icon').textContent = '⏳';
+        document.getElementById('upload-label').innerHTML = '<strong>Reading score…</strong><br><span style="font-size:0.72rem;color:#555;">OCR + fraud checks running</span>';
+
+        const progressEl = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('upload-progress-fill');
+        progressEl.classList.add('visible');
+        progressFill.classList.add('indeterminate');
+
+        try {
+            const formData = new FormData();
+            formData.append('screenshot', file);
+            formData.append('matchId', currentReportMatch.id);
+
+            const token = localStorage.getItem('supabaseToken');
+            const response = await fetch(`${API}/screenshots/upload-and-verify`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                // Server returned a hard rejection (duplicate, pre-match, too early, etc.)
+                const reason = result.error || 'Upload failed';
+                const extraWarnings = result.warnings?.length > 0
+                    ? '\n\n⚠️ ' + result.warnings.join('\n⚠️ ')
+                    : '';
+                throw new Error(reason + extraWarnings);
             }
-            document.getElementById('report-result-modal').classList.add('open');
-        });
+
+            _uploadedScreenshotUrl = result.screenshotUrl;
+            _ocrData = result.ocrResult;
+            _verifyData = result.verificationResult;
+
+            progressFill.classList.remove('indeterminate');
+            progressFill.style.width = '100%';
+            setTimeout(() => progressEl.classList.remove('visible'), 500);
+            document.getElementById('upload-icon').textContent = '✅';
+            document.getElementById('upload-label').innerHTML = `<strong>${escapeHtml(file.name)}</strong><br><span style="font-size:0.72rem;color:#555;">${(file.size/1024).toFixed(0)} KB · uploaded</span>`;
+
+            // Route to correct step based on OCR confidence
+            const conf = result.ocrResult?.confidence ?? 0;
+            const fraud = result.verificationResult?.fraudScore ?? 999;
+            const reason = result.ocrResult?.autoWinnerReason;
+
+            if (conf >= 80 && fraud < 50 && reason && reason !== 'draw') {
+                showAutoSettleStep(result);
+            } else {
+                showManualStep(result);
+            }
+
+        } catch (err) {
+            progressEl.classList.remove('visible');
+            document.getElementById('upload-icon').textContent = '❌';
+            document.getElementById('upload-label').innerHTML = '<strong style="color:var(--danger)">Upload failed</strong><br><span style="font-size:0.72rem;color:#555;">Tap to try again</span>';
+            thumb.classList.remove('visible');
+            showError('report-error', err.message);
+        }
+    }
+
+    function showAutoSettleStep(result) {
+        const ocr = result.ocrResult;
+        const verify = result.verificationResult;
+        const match = currentReportMatch;
+
+        // Score display
+        document.getElementById('ocr-result-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
+        document.getElementById('ocr-result-label').textContent = `Confidence: ${ocr.confidence}%`;
+
+        // Determine winner name and whether current user won
+        const uploaderWins = ocr.autoWinnerReason === 'home_wins';
+        const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
+        const opponentName = match.creator_id === currentUser.id
+            ? (match.joiner?.username || 'Opponent')
+            : (match.creator?.username || 'Opponent');
+
+        const youWon = uploaderWins;
+        const winnerName = youWon ? `YOU (${escapeHtml(currentUsername)})` : escapeHtml(opponentName);
+        const prizeAmount = match.winner_prize;
+
+        document.getElementById('winner-name-display').textContent = winnerName;
+        document.getElementById('winner-prize-text').textContent = `wins KES ${prizeAmount}`;
+
+        const announceEl = document.getElementById('winner-announce');
+        announceEl.className = 'winner-announce' + (youWon ? ' you-won' : '');
+
+        // Show any fraud warnings
+        const warnList = document.getElementById('ocr-warn-list-auto');
+        warnList.innerHTML = '';
+        const panel = document.getElementById('ocr-panel-auto');
+        if (verify?.warnings?.length > 0) {
+            verify.warnings.forEach(w => {
+                const el = document.createElement('div');
+                el.className = 'ocr-warn-item';
+                el.textContent = w;
+                warnList.appendChild(el);
+            });
+            panel.classList.add('visible', 'warn');
+        } else {
+            panel.style.display = 'none';
+        }
+
+        document.getElementById('report-error-auto').style.display = 'none';
+        document.getElementById('report-step-upload').style.display = 'none';
+        document.getElementById('report-step-auto').style.display = 'block';
+        document.getElementById('report-step-manual').style.display = 'none';
+    }
+
+    function showManualStep(result) {
+        const ocr = result.ocrResult;
+        const verify = result.verificationResult;
+
+        // Fill OCR panel
+        const scoreEl = document.getElementById('ocr-score-manual');
+        const confEl = document.getElementById('ocr-confidence-manual');
+        const badgeWrap = document.getElementById('ocr-badge-wrap-manual');
+        const warnList = document.getElementById('ocr-warn-list-manual');
+        warnList.innerHTML = '';
+        badgeWrap.innerHTML = '';
+
+        const panel = document.getElementById('ocr-panel-manual');
+
+        if (ocr?.isValid && ocr.score1 !== null && ocr.score2 !== null) {
+            scoreEl.textContent = `${ocr.score1}  –  ${ocr.score2}`;
+            confEl.textContent = `Confidence: ${ocr.confidence}% — too low for auto-settle`;
+            const bc = ocr.confidence >= 80 ? 'ok' : 'low';
+            badgeWrap.innerHTML = `<span class="ocr-badge ${bc}">${ocr.confidence >= 80 ? 'HIGH' : 'LOW'} CONFIDENCE</span>`;
+        } else {
+            scoreEl.textContent = '?  –  ?';
+            confEl.textContent = 'Score not detected — select winner below';
+            badgeWrap.innerHTML = '<span class="ocr-badge fail">UNDETECTED</span>';
+        }
+
+        if (verify?.warnings?.length > 0) {
+            verify.warnings.forEach(w => {
+                const el = document.createElement('div');
+                el.className = 'ocr-warn-item';
+                el.textContent = w;
+                warnList.appendChild(el);
+            });
+        }
+        panel.classList.add('visible');
+
+        // Populate winner dropdown
+        const select = document.getElementById('report-winner');
+        select.innerHTML = '<option value="">-- Choose winner --</option>';
+        const match = currentReportMatch;
+        if (match.creator_id === currentUser.id) {
+            select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+            if (match.joiner_id) select.innerHTML += `<option value="${match.joiner_id}">Opponent (${escapeHtml(match.joiner?.username || 'Joiner')})</option>`;
+        } else {
+            select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+            select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
+        }
+
+        // Auto-suggest from low-confidence OCR
+        if (ocr?.autoWinnerReason && ocr.autoWinnerReason !== 'draw') {
+            const uploaderWins = ocr.autoWinnerReason === 'home_wins';
+            const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
+            const suggestedId = uploaderWins ? currentUser.id : opponentId;
+            if (suggestedId) select.value = suggestedId;
+        }
+
+        document.getElementById('report-error-manual').style.display = 'none';
+        document.getElementById('report-step-upload').style.display = 'none';
+        document.getElementById('report-step-auto').style.display = 'none';
+        document.getElementById('report-step-manual').style.display = 'block';
+    }
+
+    function showManualFallback() {
+        // User chose to override auto-settle — go to manual step with existing data
+        showManualStep({ ocrResult: _ocrData, verificationResult: _verifyData });
+    }
+
+    async function confirmAutoSettle() {
+        if (!currentReportMatch || !_uploadedScreenshotUrl) return;
+
+        const btn = document.getElementById('auto-settle-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting…';
+        document.getElementById('report-error-auto').style.display = 'none';
+
+        try {
+            const res = await fetchWithAuth('/friends/submit-ocr-result', {
+                method: 'POST',
+                body: JSON.stringify({
+                    matchId: currentReportMatch.id,
+                    screenshotUrl: _uploadedScreenshotUrl,
+                    ocrResult: _ocrData,
+                    verificationResult: _verifyData
+                })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                // Backend rejected — fall back to manual if recoverable
+                if (res.status === 422) {
+                    showManualFallback();
+                    // Show error in the manual step
+                    showError('report-error-manual', data.error);
+                } else {
+                    showError('report-error-auto', data.error);
+                    btn.disabled = false;
+                    btn.textContent = '✅ CONFIRM & SETTLE MATCH';
+                }
+                return;
+            }
+
+            closeModal('report-result-modal');
+
+            if (data.waitingForOpponent) {
+                // First submission — waiting for opponent's screenshot
+                const scoreStr = data.claimedScore?.replace('-', ' – ') || '?';
+                alert(
+                    `✅ Score recorded: ${scoreStr}\n\n` +
+                    `Your opponent now needs to upload their screenshot to confirm.\n` +
+                    `If they don't upload within 2 hours, you'll be auto-awarded the win.`
+                );
+            } else if (data.corroborated) {
+                // Both uploaded, scores matched — match is settled
+                const msg = data.youWon
+                    ? `🏆 You won! KES ${data.prizePaid} added to your wallet.\nScore: ${data.score}`
+                    : `Match settled — ${data.score}.\nBetter luck next time!`;
+                alert(msg);
+                await refreshBalance();
+            }
+            await loadMyFriendMatches();
+
+        } catch (err) {
+            showError('report-error-auto', err.message);
+            btn.disabled = false;
+            btn.textContent = '✅ CONFIRM & SETTLE MATCH';
+        }
     }
 
     async function submitMatchResult() {
+        // Manual fallback submission (still requires both players to confirm)
         if (!currentReportMatch) return;
         const winnerId = document.getElementById('report-winner').value;
-        if (!winnerId) { showError('report-error', 'Please select a winner'); return; }
-        const screenshot = document.getElementById('report-screenshot').value.trim();
-        const btn = document.querySelector('#report-result-modal .btn-mpesa');
+        if (!winnerId) { showError('report-error-manual', 'Please select a winner'); return; }
+        if (!_uploadedScreenshotUrl) { showError('report-error-manual', 'Please upload a match screenshot'); return; }
+
+        const btn = document.getElementById('submit-result-btn');
         btn.disabled = true;
-        btn.textContent = 'Submitting...';
+        btn.textContent = 'Submitting…';
+
         try {
             const res = await fetchWithAuth('/friends/submit-result', {
                 method: 'POST',
                 body: JSON.stringify({
                     matchId: currentReportMatch.id,
                     winnerId,
-                    screenshotUrl: screenshot || null
+                    screenshotUrl: _uploadedScreenshotUrl
                 })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            alert(data.message);
+
             closeModal('report-result-modal');
+            if (data.requiresConfirmation) {
+                alert(`✅ Result submitted!\n\nWaiting for your opponent to confirm.\nIf they don't report within 2 hours, you'll be auto-awarded the win.`);
+            } else {
+                alert(`🏆 Match complete! ${data.message}`);
+                await refreshBalance();
+            }
             await loadMyFriendMatches();
         } catch (err) {
-            showError('report-error', err.message);
-        } finally {
+            showError('report-error-manual', err.message);
             btn.disabled = false;
-            btn.textContent = 'SUBMIT RESULT';
+            btn.textContent = 'SUBMIT RESULT →';
         }
+    }
+    // ── End OCR / Result Reporting ───────────────────────────────
+
+    function openReportResultModal(matchId) {
+        fetchWithAuth('/friends/my-matches').then(async res => {
+            const matches = await res.json();
+            const match = matches.find(m => m.id === matchId);
+            if (!match) return alert('Match not found');
+            currentReportMatch = match;
+
+            resetReportModal();
+
+            const detailsDiv = document.getElementById('report-match-details');
+            detailsDiv.innerHTML = `
+                <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
+            `;
+
+            document.getElementById('report-result-modal').classList.add('open');
+        });
     }
 
     // --- Room Code Share (for tournaments) ---
@@ -1362,6 +1880,12 @@
     // --- Logout ---
     document.getElementById('logoutBtn').addEventListener('click', () => {
         stopBalanceAutoRefresh();
+        stopMatchStatusPolling();
+        currentBalance = 0;
+        currentUser = null;
+        currentUsername = '';
+        currentPhone = '';
+        authToken = null;
         localStorage.removeItem('supabaseToken');
         localStorage.removeItem('supabaseUser');
         window.location.href = '/login';

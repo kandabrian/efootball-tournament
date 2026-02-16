@@ -7,323 +7,291 @@ const ExifReader = require('exifreader');
 const sharp = require('sharp');
 const Tesseract = require('tesseract.js');
 
+// ─── Persistent Tesseract Worker ─────────────────────────────────────────────
+let _tesseractWorker = null;
+let _workerInitializing = false;
+let _workerInitQueue = [];
+
+async function getTesseractWorker() {
+    if (_tesseractWorker) return _tesseractWorker;
+    if (_workerInitializing) {
+        return new Promise((resolve, reject) => _workerInitQueue.push({ resolve, reject }));
+    }
+    _workerInitializing = true;
+    console.log('📦 Initializing persistent Tesseract worker (one-time)...');
+    try {
+        const worker = await Tesseract.createWorker('eng', 1, {
+            logger: () => {},
+            errorHandler: (err) => console.error('Tesseract worker error:', err)
+        });
+        await worker.setParameters({ tessedit_char_whitelist: '0123456789-: ' });
+        _tesseractWorker = worker;
+        console.log('✅ Persistent Tesseract worker ready.');
+        _workerInitQueue.forEach(({ resolve }) => resolve(_tesseractWorker));
+        _workerInitQueue = [];
+        return _tesseractWorker;
+    } catch (err) {
+        console.error('❌ Failed to initialize Tesseract worker:', err.message);
+        _workerInitQueue.forEach(({ reject }) => reject(err));
+        _workerInitQueue = [];
+        _workerInitializing = false;
+        throw err;
+    } finally {
+        _workerInitializing = false;
+    }
+}
+
+getTesseractWorker().catch(() => {});
+// ─────────────────────────────────────────────────────────────────────────────
+
 class ScreenshotVerifier {
-    /**
-     * @param {Object} supabase - Supabase client instance (admin privileges recommended)
-     */
     constructor(supabase) {
         this.supabase = supabase;
     }
 
-    /**
-     * Verify screenshot authenticity with multiple checks
-     */
     async verifyScreenshot(imageBuffer, matchData) {
-        const results = {
-            isValid: true,
-            fraudScore: 0,
-            warnings: [],
-            checks: {}
-        };
+        const results = { isValid: true, fraudScore: 0, warnings: [], checks: {} };
 
-        // Check 1: EXIF Metadata Analysis
-        const metadataCheck = await this.checkMetadata(imageBuffer, matchData);
-        results.checks.metadata = metadataCheck;
-        if (!metadataCheck.passed) {
-            results.fraudScore += 30;
-            results.warnings.push(metadataCheck.warning);
+        const checks = [
+            ['metadata',     () => this.checkMetadata(imageBuffer, matchData),                          true  ],
+            ['timestamp',    () => this.checkTimestamp(matchData),                                       false ],
+            ['manipulation', () => this.checkManipulation(imageBuffer),                                  true  ],
+            ['duplicate',    () => this.checkDuplicate(imageBuffer, matchData.userId, matchData.matchId), true ],
+            ['device',       () => this.checkDeviceConsistency(imageBuffer, matchData.userId),           true  ],
+            ['ocrSanity',    () => this.checkOcrSanity(imageBuffer),                                     true  ],
+            ['matchContext', () => this.checkMatchContext(imageBuffer, matchData),                        true  ],
+        ];
+
+        const scores = { metadata: 30, timestamp: 25, manipulation: 35, duplicate: 40, device: 15, ocrSanity: 20, matchContext: 35 };
+
+        for (const [name, fn, isAsync] of checks) {
+            try {
+                const check = isAsync ? await fn() : fn();
+                results.checks[name] = check;
+                if (!check.passed) {
+                    results.fraudScore += check.score ?? scores[name];
+                    if (check.warning) results.warnings.push(check.warning);
+                }
+            } catch (err) {
+                console.error(`Check "${name}" threw:`, err.message);
+                results.checks[name] = { passed: true, warning: null, details: { error: err.message } };
+            }
         }
 
-        // Check 2: Timestamp Validation
-        const timestampCheck = this.checkTimestamp(imageBuffer, matchData);
-        results.checks.timestamp = timestampCheck;
-        if (!timestampCheck.passed) {
-            results.fraudScore += 25;
-            results.warnings.push(timestampCheck.warning);
-        }
-
-        // Check 3: Image Manipulation Detection
-        const manipulationCheck = await this.checkManipulation(imageBuffer);
-        results.checks.manipulation = manipulationCheck;
-        if (!manipulationCheck.passed) {
-            results.fraudScore += 35;
-            results.warnings.push(manipulationCheck.warning);
-        }
-
-        // Check 4: Duplicate Screenshot Detection
-        const duplicateCheck = await this.checkDuplicate(imageBuffer, matchData.userId, matchData.matchId);
-        results.checks.duplicate = duplicateCheck;
-        if (!duplicateCheck.passed) {
-            results.fraudScore += 40;
-            results.warnings.push(duplicateCheck.warning);
-        }
-
-        // Check 5: Resolution & Device Consistency
-        const deviceCheck = await this.checkDeviceConsistency(imageBuffer, matchData.userId);
-        results.checks.device = deviceCheck;
-        if (!deviceCheck.passed) {
-            results.fraudScore += 15;
-            results.warnings.push(deviceCheck.warning);
-        }
-
-        // Final verdict
-        results.isValid = results.fraudScore < 50;
+        // isValid = safe for auto-settle (no significant flags)
+        // < 30  → clean, auto-settle allowed
+        // 30-49 → one soft flag (e.g. missing EXIF), manual confirm required  
+        // 50+   → multiple flags or one hard flag, admin review
+        results.isValid = results.fraudScore < 30;
         results.confidence = results.isValid ? 'high' : 'low';
-
-        if (results.fraudScore >= 70) {
-            results.recommendation = 'REJECT - High fraud probability';
-        } else if (results.fraudScore >= 50) {
-            results.recommendation = 'MANUAL_REVIEW - Suspicious';
-        } else if (results.fraudScore >= 30) {
-            results.recommendation = 'ACCEPT_WITH_WARNING';
-        } else {
-            results.recommendation = 'ACCEPT - Likely authentic';
-        }
+        if      (results.fraudScore >= 70) results.recommendation = 'REJECT - High fraud probability';
+        else if (results.fraudScore >= 50) results.recommendation = 'MANUAL_REVIEW - Suspicious';
+        else if (results.fraudScore >= 30) results.recommendation = 'MANUAL_CONFIRM - Needs opponent corroboration';
+        else                               results.recommendation = 'ACCEPT - Likely authentic';
 
         return results;
     }
 
-    /**
-     * Check 1: EXIF Metadata
-     */
+    // Check 1: EXIF metadata + timestamp against match start
     async checkMetadata(imageBuffer, matchData) {
         try {
             const tags = ExifReader.load(imageBuffer);
 
-            const result = {
-                passed: true,
-                warning: null,
-                details: {}
-            };
-
             if (!tags || Object.keys(tags).length < 5) {
-                result.passed = false;
-                result.warning = 'EXIF metadata missing or stripped (possible edit)';
-                return result;
+                return { passed: false, score: 30, warning: 'Screenshot has no metadata — may have been edited or re-saved from gallery', details: { missingExif: true } };
             }
 
-            const dateTime = tags.DateTime?.description ||
-                tags.DateTimeOriginal?.description ||
-                tags.CreateDate?.description;
+            const result = { passed: true, score: 0, warning: null, details: {} };
 
+            const dateTime = tags.DateTime?.description || tags.DateTimeOriginal?.description || tags.CreateDate?.description;
             if (dateTime) {
                 const photoTime = new Date(dateTime);
-                const matchTime = new Date(matchData.startedAt);
-                const timeDiffMinutes = Math.abs(photoTime - matchTime) / 60000;
-
-                if (timeDiffMinutes > 60) {
-                    result.passed = false;
-                    result.warning = `Screenshot timestamp (${photoTime.toLocaleString()}) is ${Math.floor(timeDiffMinutes)} minutes from match time`;
-                }
-
+                const matchStart = new Date(matchData.startedAt);
+                const diffMinutes = (photoTime - matchStart) / 60000;
                 result.details.photoTime = photoTime;
-                result.details.timeDiffMinutes = timeDiffMinutes;
+                result.details.timeDiffMinutes = Math.round(diffMinutes);
+
+                if (diffMinutes < -5) {
+                    result.passed = false; result.score = 30;
+                    result.warning = `Screenshot taken ${Math.abs(Math.floor(diffMinutes))} min BEFORE this match started`;
+                    return result;
+                }
+                // Key old-screenshot check: photo outside this match's window = different session
+                if (diffMinutes > 90) {
+                    result.passed = false; result.score = 30;
+                    result.warning = `Screenshot is ${Math.floor(diffMinutes)} minutes old — it's from a different session, not this match`;
+                    return result;
+                }
+                // Too early for a finished game (eFootball takes ~15 min minimum)
+                if (diffMinutes < 8) {
+                    result.passed = false; result.score = 30;
+                    result.warning = `Screenshot taken only ${Math.round(diffMinutes)} minutes into the match — too early for a final result`;
+                    return result;
+                }
             }
 
             const software = tags.Software?.description || '';
-            const suspiciousSoftware = ['photoshop', 'gimp', 'pixlr', 'canva', 'paint.net'];
-            if (suspiciousSoftware.some(s => software.toLowerCase().includes(s))) {
-                result.passed = false;
-                result.warning = `Image edited with ${software} - potential manipulation`;
+            const bad = ['photoshop', 'gimp', 'pixlr', 'canva', 'paint.net', 'lightroom', 'snapseed'];
+            if (bad.some(s => software.toLowerCase().includes(s))) {
+                result.passed = false; result.score = 30;
+                result.warning = `Image edited with "${software}"`;
                 result.details.software = software;
             }
 
             result.details.device = tags.Model?.description || 'Unknown';
-            result.details.make = tags.Make?.description || 'Unknown';
-
+            result.details.make   = tags.Make?.description  || 'Unknown';
             return result;
-        } catch (error) {
-            console.error('EXIF metadata check failed:', error);
-            return {
-                passed: false,
-                warning: 'Failed to read EXIF data - possibly corrupted or edited',
-                details: { error: error.message }
-            };
+        } catch (err) {
+            return { passed: false, score: 30, warning: 'Could not read screenshot metadata — may have been edited', details: { error: err.message } };
         }
     }
 
-    /**
-     * Check 2: Timestamp Validation
-     */
-    checkTimestamp(imageBuffer, matchData) {
-        const result = {
-            passed: true,
-            warning: null,
-            details: {}
-        };
-
+    // Check 2: Wall-clock upload timing
+    checkTimestamp(matchData) {
         const now = new Date();
         const matchStart = new Date(matchData.startedAt);
-        const maxMatchDuration = 45; // minutes
-        const matchEnd = new Date(matchStart.getTime() + maxMatchDuration * 60000);
-        const uploadDelay = (now - matchStart) / 60000;
+        const delayMinutes = (now - matchStart) / 60000;
+        const result = { passed: true, warning: null, details: { matchStart, uploadTime: now, delayMinutes: Math.round(delayMinutes) } };
 
-        if (uploadDelay > 120) {
+        if (delayMinutes < 0.5) {
             result.passed = false;
-            result.warning = `Screenshot uploaded ${Math.floor(uploadDelay)} minutes after match - too late`;
+            result.warning = 'Screenshot uploaded before match could have finished';
+        } else if (delayMinutes > 90) {
+            result.passed = false;
+            result.warning = `Screenshot uploaded ${Math.floor(delayMinutes)} minutes after match started — too late`;
         }
-
-        result.details.matchStart = matchStart;
-        result.details.uploadTime = now;
-        result.details.delayMinutes = uploadDelay;
-
         return result;
     }
 
-    /**
-     * Check 3: Image Manipulation Detection
-     */
+    // Check 3: Image manipulation via file size and color stats
     async checkManipulation(imageBuffer) {
-        const result = {
-            passed: true,
-            warning: null,
-            details: {}
-        };
-
+        const result = { passed: true, warning: null, details: {} };
         try {
             const image = sharp(imageBuffer);
             const metadata = await image.metadata();
+            result.details = { width: metadata.width, height: metadata.height, format: metadata.format };
 
-            const fileSize = imageBuffer.length;
-            const expectedSize = (metadata.width * metadata.height * 3) / 10;
-
-            if (fileSize < expectedSize * 0.1) {
+            const bytesPerPixel = imageBuffer.length / (metadata.width * metadata.height);
+            if (bytesPerPixel < 0.05) {
                 result.passed = false;
-                result.warning = 'File size too small - possibly re-compressed after editing';
+                result.warning = 'Image is unusually small for its size — likely re-compressed after editing';
+                result.details.bytesPerPixel = bytesPerPixel.toFixed(3);
+                return result;
             }
 
             if (metadata.format === 'jpeg') {
                 const stats = await image.stats();
-                const channels = stats.channels;
-                if (channels.length > 0) {
-                    const redMean = channels[0].mean;
-                    const greenMean = channels[1].mean;
-                    const blueMean = channels[2].mean;
-
-                    const colorImbalance = Math.abs(redMean - greenMean) +
-                        Math.abs(greenMean - blueMean) +
-                        Math.abs(blueMean - redMean);
-
-                    if (colorImbalance > 200) {
+                const ch = stats.channels;
+                if (ch.length >= 3) {
+                    const imbalance = Math.abs(ch[0].mean - ch[1].mean) + Math.abs(ch[1].mean - ch[2].mean) + Math.abs(ch[2].mean - ch[0].mean);
+                    if (imbalance > 200) {
                         result.passed = false;
-                        result.warning = 'Unusual color distribution - possible manipulation';
-                        result.details.colorImbalance = colorImbalance;
+                        result.warning = 'Unusual color distribution — image may have been manipulated';
+                        result.details.colorImbalance = Math.round(imbalance);
                     }
                 }
             }
-
-            result.details.width = metadata.width;
-            result.details.height = metadata.height;
-            result.details.format = metadata.format;
-
-            const commonResolutions = [
-                { w: 1920, h: 1080 },
-                { w: 2340, h: 1080 },
-                { w: 2400, h: 1080 },
-                { w: 1280, h: 720 },
-                { w: 1080, h: 1920 },
-                { w: 1080, h: 2340 }
-            ];
-
-            const hasCommonRes = commonResolutions.some(res =>
-                Math.abs(metadata.width - res.w) < 50 &&
-                Math.abs(metadata.height - res.h) < 50
-            );
-
-            if (!hasCommonRes) {
-                result.details.unusualResolution = true;
-            }
-
             return result;
-        } catch (error) {
-            console.error('Manipulation check failed:', error);
-            return {
-                passed: false,
-                warning: 'Image analysis failed - possibly corrupted',
-                details: { error: error.message }
-            };
+        } catch (err) {
+            return { passed: false, warning: 'Image analysis failed — possibly corrupted', details: { error: err.message } };
         }
     }
 
-    /**
-     * Check 4: Duplicate Screenshot Detection
-     */
+    // Check 4: Duplicate — checks exact AND near-duplicate hashes
+    // Near-duplicate (hamming distance <= 4) catches:
+    //   - Same screenshot re-cropped or slightly compressed
+    //   - Screenshot of a screenshot on another screen
+    //   - Same image with minor brightness/contrast edits
     async checkDuplicate(imageBuffer, userId, matchId) {
-        const result = {
-            passed: true,
-            warning: null,
-            details: {}
-        };
-
+        const result = { passed: true, warning: null, details: {} };
         try {
             const hash = await this.generatePerceptualHash(imageBuffer);
             result.details.hash = hash;
 
-            // Query Supabase for existing screenshot with same hash, different user
-            const { data: existing, error } = await this.supabase
+            // Fetch this user's recent screenshot hashes (last 50) for near-duplicate check
+            const { data: userHashes, error: userErr } = await this.supabase
+                .from('screenshot_hashes')
+                .select('hash, match_id, user_id')
+                .eq('user_id', userId)
+                .neq('match_id', matchId)
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (userErr) throw userErr;
+
+            // Check user's own history for near-duplicates (hamming distance <= 4)
+            if (userHashes && userHashes.length > 0) {
+                for (const row of userHashes) {
+                    const dist = this.hammingDistance(hash, row.hash);
+                    if (dist <= 4) {
+                        result.passed = false;
+                        result.warning = dist === 0
+                            ? 'You already used this exact screenshot in a previous match'
+                            : `This screenshot is nearly identical to one you used in a previous match (similarity: ${Math.round((1 - dist/64)*100)}%)`;
+                        result.details.originalMatch = row.match_id;
+                        result.details.hammingDistance = dist;
+                        result.details.isSameUser = true;
+                        return result;
+                    }
+                }
+            }
+
+            // Also check globally for exact hash reuse by any user
+            const { data: globalMatch, error: globalErr } = await this.supabase
                 .from('screenshot_hashes')
                 .select('match_id, user_id')
                 .eq('hash', hash)
-                .neq('user_id', userId)
+                .neq('match_id', matchId)
                 .maybeSingle();
 
-            if (error) throw error;
+            if (globalErr) throw globalErr;
 
-            if (existing) {
+            if (globalMatch) {
                 result.passed = false;
-                result.warning = 'Screenshot already used in another match';
-                result.details.originalMatch = existing.match_id;
-                return result;
+                result.warning = 'This exact screenshot was already submitted in another match';
+                result.details.originalMatch = globalMatch.match_id;
+                result.details.isSameUser = globalMatch.user_id === userId;
             }
 
             return result;
-        } catch (error) {
-            console.error('Duplicate check failed:', error);
-            return {
-                passed: false,
-                warning: 'Duplicate detection error',
-                details: { error: error.message }
-            };
+        } catch (err) {
+            console.error('Duplicate check DB error:', err.message);
+            return { passed: true, warning: null, details: { dbError: err.message } };
         }
     }
 
-    /**
-     * Generate perceptual hash using sharp's built-in method
-     */
+    // Hamming distance between two equal-length binary strings
+    hammingDistance(a, b) {
+        if (a.length !== b.length) return 64; // treat mismatched lengths as max distance
+        let dist = 0;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) dist++;
+        }
+        return dist;
+    }
+
     async generatePerceptualHash(imageBuffer) {
-        try {
-            const hash = await sharp(imageBuffer)
-                .resize(8, 8, { fit: 'fill' })
-                .grayscale()
-                .raw()
-                .toBuffer()
-                .then(buf => {
-                    const pixels = Array.from(buf);
-                    const avg = pixels.reduce((a, b) => a + b, 0) / pixels.length;
-                    return pixels.map(p => (p > avg ? '1' : '0')).join('');
-                });
-            return hash;
-        } catch (error) {
-            throw new Error('Failed to generate perceptual hash: ' + error.message);
-        }
+        return sharp(imageBuffer)
+            .resize(8, 8, { fit: 'fill' })
+            .grayscale()
+            .raw()
+            .toBuffer()
+            .then(buf => {
+                const pixels = Array.from(buf);
+                const avg = pixels.reduce((a, b) => a + b, 0) / pixels.length;
+                return pixels.map(p => (p > avg ? '1' : '0')).join('');
+            });
     }
 
-    /**
-     * Check 5: Device Consistency
-     */
+    // Check 5: Device consistency (only flags after 3+ previous uploads)
     async checkDeviceConsistency(imageBuffer, userId) {
-        const result = {
-            passed: true,
-            warning: null,
-            details: {}
-        };
-
+        const result = { passed: true, warning: null, details: {} };
         try {
             const tags = ExifReader.load(imageBuffer);
-            const device = tags.Model?.description || 'Unknown';
+            const device = tags?.Model?.description || 'Unknown';
             result.details.device = device;
+            if (device === 'Unknown') return result;
 
-            // Get user's last 10 devices from history
             const { data: history, error } = await this.supabase
                 .from('user_screenshot_history')
                 .select('device')
@@ -333,31 +301,143 @@ class ScreenshotVerifier {
 
             if (error) throw error;
 
-            if (history && history.length > 0) {
+            if (history && history.length >= 3) {
                 const freq = {};
                 history.forEach(h => freq[h.device] = (freq[h.device] || 0) + 1);
                 const mostCommon = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-
-                if (device !== mostCommon && device !== 'Unknown') {
+                if (device !== mostCommon) {
                     result.passed = false;
-                    result.warning = `Screenshot from different device (${device}) than usual (${mostCommon})`;
+                    result.warning = `Screenshot from "${device}" — you usually submit from "${mostCommon}"`;
                 }
             }
-
             return result;
-        } catch (error) {
-            console.error('Device consistency check failed:', error);
-            return {
-                passed: true,
-                warning: null,
-                details: {}
-            };
+        } catch (err) {
+            return { passed: true, warning: null, details: {} };
         }
     }
 
-    /**
-     * Advanced: OCR-based score extraction with confidence checking
-     */
+    // Check 6: OCR sanity — the image must contain at least some numbers
+    async checkOcrSanity(imageBuffer) {
+        try {
+            const preprocessed = await sharp(imageBuffer)
+                .resize(800, 600, { fit: 'inside' })
+                .grayscale()
+                .normalize()
+                .toBuffer();
+
+            const worker = await getTesseractWorker();
+            const { data: { text, confidence } } = await worker.recognize(preprocessed);
+            const hasNumbers = /\d/.test(text);
+
+            return {
+                passed: hasNumbers,
+                warning: hasNumbers ? null : 'No numbers found in image — does not look like a game result screen',
+                details: { hasNumbers, ocrConfidence: Math.round(confidence), textLength: text.trim().length }
+            };
+        } catch (err) {
+            return { passed: true, warning: null, details: { error: err.message } };
+        }
+    }
+
+    // Check 7: Match context — does the screenshot actually show THIS match?
+    // OCR the full image and look for:
+    //   a) The opponent's username (strongest signal)
+    //   b) The match code (VUM-XXXX) if visible
+    // If neither appears, the screenshot could be from any match or downloaded.
+    // We don't hard-block on this (OCR isn't perfect) but it adds heavy fraud points.
+    async checkMatchContext(imageBuffer, matchData) {
+        // If we weren't given any context to check against, skip gracefully
+        if (!matchData.opponentUsername && !matchData.matchCode) {
+            return { passed: true, warning: null, details: { skipped: 'no context provided' } };
+        }
+
+        try {
+            const worker = await getTesseractWorker();
+
+            // Full alphabet whitelist to read usernames
+            await worker.setParameters({ tessedit_char_whitelist: '' });
+
+            const preprocessed = await sharp(imageBuffer)
+                .resize(1920, 1080, { fit: 'inside' })
+                .sharpen()
+                .normalize()
+                .toBuffer();
+
+            const { data: { text } } = await worker.recognize(preprocessed);
+
+            // Restore numeric-only whitelist for score extraction
+            await worker.setParameters({ tessedit_char_whitelist: '0123456789-: ' });
+
+            const rawText = text.toLowerCase();
+            const result = { passed: true, warning: null, details: { rawTextLength: rawText.length } };
+
+            const findName = (name) => {
+                if (!name) return { found: false, partial: false };
+                const n = name.toLowerCase().trim();
+                if (rawText.includes(n)) return { found: true, partial: false };
+                // Fuzzy: first 4+ chars (handles truncated names in UI)
+                const stub = n.length >= 4 ? n.substring(0, 4) : null;
+                if (stub && rawText.includes(stub)) return { found: false, partial: true };
+                return { found: false, partial: false };
+            };
+
+            // Check for opponent username — must appear on final score screen
+            if (matchData.opponentUsername) {
+                const opponentResult = findName(matchData.opponentUsername);
+                result.details.opponentUsername = matchData.opponentUsername;
+                result.details.foundOpponentUsername = opponentResult.found;
+                result.details.foundOpponentPartial = opponentResult.partial;
+
+                if (!opponentResult.found && !opponentResult.partial) {
+                    result.passed = false;
+                    result.score = 35;
+                    result.warning = `Opponent "${matchData.opponentUsername}" not found in screenshot — this may be from a different match`;
+                    return result;
+                }
+                if (!opponentResult.found && opponentResult.partial) {
+                    result.details.partialMatchOnly = true;
+                    result.warning = `Could only partially match opponent name — screenshot may be from a different match`;
+                }
+            }
+
+            // Check for uploader's own username — both players appear on the final screen
+            // If the uploader's name also isn't there, it's very likely the wrong match
+            if (matchData.uploaderUsername) {
+                const uploaderResult = findName(matchData.uploaderUsername);
+                result.details.uploaderUsername = matchData.uploaderUsername;
+                result.details.foundUploaderUsername = uploaderResult.found;
+
+                if (!uploaderResult.found && !uploaderResult.partial) {
+                    // Combine with opponent check: if neither name is found, strong fraud signal
+                    if (result.details.foundOpponentUsername === false && !result.details.foundOpponentPartial) {
+                        result.passed = false;
+                        result.score = 35;
+                        result.warning = 'Neither player’s username found in screenshot — this is from a different match';
+                        return result;
+                    }
+                    // Uploader alone not found — softer signal
+                    result.details.uploaderMissing = true;
+                    if (!result.warning) {
+                        result.warning = 'Your username wasn’t clearly visible in the screenshot — make sure it’s the final result screen';
+                    }
+                }
+            }
+
+            // Match code is never in-game, but log it for admin audit trails
+            if (matchData.matchCode) {
+                result.details.matchCode = matchData.matchCode;
+                result.details.foundMatchCode = rawText.includes(matchData.matchCode.toLowerCase());
+            }
+
+            return result;
+        } catch (err) {
+            console.error('Match context check failed:', err.message);
+            // OCR failure = skip, don't penalise
+            return { passed: true, warning: null, details: { error: err.message } };
+        }
+    }
+
+    // Full-resolution OCR for score extraction
     async extractScoreWithConfidence(imageBuffer) {
         try {
             const preprocessed = await sharp(imageBuffer)
@@ -366,14 +446,8 @@ class ScreenshotVerifier {
                 .normalize()
                 .toBuffer();
 
-            const { data: { text, confidence } } = await Tesseract.recognize(
-                preprocessed,
-                'eng',
-                {
-                    logger: m => console.log(m),
-                    tessedit_char_whitelist: '0123456789-: '
-                }
-            );
+            const worker = await getTesseractWorker();
+            const { data: { text, confidence } } = await worker.recognize(preprocessed);
 
             const patterns = [
                 /(\d+)\s*[-:]\s*(\d+)/,
@@ -385,28 +459,19 @@ class ScreenshotVerifier {
             for (const pattern of patterns) {
                 const match = text.match(pattern);
                 if (match) {
-                    score1 = parseInt(match[1]);
-                    score2 = parseInt(match[2]);
-                    break;
+                    const s1 = parseInt(match[1]);
+                    const s2 = parseInt(match[2]);
+                    if (s1 <= 20 && s2 <= 20) { score1 = s1; score2 = s2; break; }
                 }
             }
 
             return {
-                score1,
-                score2,
-                confidence,
-                rawText: text,
+                score1, score2, confidence, rawText: text,
                 isValid: score1 !== undefined && score2 !== undefined && confidence > 70
             };
-        } catch (error) {
-            console.error('OCR extraction failed:', error);
-            return {
-                score1: null,
-                score2: null,
-                confidence: 0,
-                isValid: false,
-                error: error.message
-            };
+        } catch (err) {
+            console.error('OCR extraction failed:', err);
+            return { score1: null, score2: null, confidence: 0, isValid: false, error: err.message };
         }
     }
 }

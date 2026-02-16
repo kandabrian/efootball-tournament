@@ -28,7 +28,17 @@ const path = require('path');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const { Readable } = require('stream');
 console.log("✅ Core modules loaded.");
+
+// Multer — lazy-loaded only when screenshot route is first hit
+let _multer = null;
+function getMulter() {
+    if (!_multer) {
+        _multer = require('multer');
+    }
+    return _multer;
+}
 
 // ============================================================
 // STEP 3: Validate ALL env vars before touching Supabase
@@ -67,7 +77,6 @@ console.log("✅ Supabase clients created.");
 
 // ============================================================
 // STEP 5: LAZY-LOAD ScreenshotVerifier (heavy: tesseract + sharp)
-// DO NOT require() at startup — it can OOM on free instances
 // ============================================================
 let _verifier = null;
 function getVerifier() {
@@ -264,7 +273,6 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 // ============================================================
 app.post('/auth/signup', async (req, res) => {
     try {
-        // Mask phone number in logs to avoid leaking PII
         console.log('📝 Signup request received:', { phone: req.body.phone?.slice(0, 8) + '***', username: req.body.username });
 
         let { phone, password, username } = req.body;
@@ -291,7 +299,6 @@ app.post('/auth/signup', async (req, res) => {
 
         if (error) {
             console.error('❌ Supabase auth error:', error.message);
-            // Don't leak internal error details
             return sendGenericError(res, 400, 'Signup failed. Please try again.', error);
         }
         console.log('✅ User created:', data.user?.id);
@@ -307,15 +314,17 @@ app.post('/auth/signup', async (req, res) => {
                 console.log('✅ Profile created');
 
                 console.log('💰 Creating wallet...');
+                // Use onConflict ignore to prevent duplicate wallets if signup is retried
                 const { error: walletError } = await supabaseAdmin
                     .from('wallets')
-                    .upsert([{ user_id: data.user.id, balance: 0 }]);
+                    .insert([{ user_id: data.user.id, balance: 0 }])
+                    .onConflict('user_id')
+                    .ignore();
 
                 if (walletError) throw walletError;
                 console.log('✅ Wallet created');
             } catch (dbErr) {
                 console.error('❌ Failed to create profile/wallet:', dbErr.message, dbErr.code);
-                // Rollback user creation
                 await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch((delErr) => {
                     console.error('❌ Failed to rollback user:', delErr);
                 });
@@ -359,7 +368,14 @@ app.get('/wallet/balance', async (req, res) => {
         const { data: { user }, error } = await supabase.auth.getUser(jwt);
         if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-        const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).single();
+        // Use maybeSingle to avoid errors if multiple rows exist (should not happen after fix)
+        const { data, error: dbErr } = await supabase
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (dbErr) throw dbErr;
         res.json({ balance: data ? data.balance : 0 });
     } catch (err) {
         console.error('Balance error:', err);
@@ -437,7 +453,10 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
         }
 
         const { data: wallet } = await supabase
-            .from('wallets').select('balance').eq('user_id', user.id).single();
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
         if (!wallet || wallet.balance < wagerAmount) {
             return res.status(400).json({ error: 'Insufficient balance' });
@@ -448,9 +467,12 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
             matchCode = generateMatchCode();
             attempts++;
             const { data: existing } = await supabaseAdmin
-                .from('friend_matches').select('id')
-                .eq('match_code', matchCode).eq('status', 'pending')
-                .gte('expires_at', new Date().toISOString()).maybeSingle();
+                .from('friend_matches')
+                .select('id')
+                .eq('match_code', matchCode)
+                .eq('status', 'pending')
+                .gte('expires_at', new Date().toISOString())
+                .maybeSingle();
             if (!existing) unique = true;
         }
         if (!unique) return res.status(500).json({ error: 'Failed to generate unique code' });
@@ -469,7 +491,9 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
                 winner_prize: winnerPrize,
                 expires_at: expiresAt,
                 status: 'pending'
-            }]).select().single();
+            }])
+            .select()
+            .single();
 
         if (matchErr) {
             console.error('Match creation error:', matchErr);
@@ -477,7 +501,8 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
         }
 
         const { error: deductErr } = await supabaseAdmin.rpc('deduct_wallet', {
-            p_user_id: user.id, p_amount: wagerAmount
+            p_user_id: user.id,
+            p_amount: wagerAmount
         });
 
         if (deductErr) {
@@ -486,7 +511,12 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
         }
 
         res.status(201).json({
-            matchId: match.id, matchCode, wagerAmount, winnerPrize, platformFee, expiresAt,
+            matchId: match.id,
+            matchCode,
+            wagerAmount,
+            winnerPrize,
+            platformFee,
+            expiresAt,
             message: 'Match created! Share this code with your friend.'
         });
     } catch (err) {
@@ -508,8 +538,10 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
         if (!matchCode) return res.status(400).json({ error: 'Match code is required' });
 
         const { data: match, error: matchErr } = await supabaseAdmin
-            .from('friend_matches').select('*')
-            .eq('match_code', matchCode.toUpperCase()).single();
+            .from('friend_matches')
+            .select('*')
+            .eq('match_code', matchCode.toUpperCase())
+            .single();
 
         if (matchErr || !match) return res.status(404).json({ error: 'Invalid match code' });
         if (match.status !== 'pending') return res.status(400).json({ error: 'Match already started or completed' });
@@ -523,14 +555,18 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
         if (match.joiner_id) return res.status(400).json({ error: 'Match already has two players' });
 
         const { data: wallet } = await supabase
-            .from('wallets').select('balance').eq('user_id', user.id).single();
+            .from('wallets')
+            .select('balance')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
         if (!wallet || wallet.balance < match.wager_amount) {
             return res.status(400).json({ error: 'Insufficient balance' });
         }
 
         const { error: deductErr } = await supabaseAdmin.rpc('deduct_wallet', {
-            p_user_id: user.id, p_amount: match.wager_amount
+            p_user_id: user.id,
+            p_amount: match.wager_amount
         });
 
         if (deductErr) return res.status(400).json({ error: 'Failed to deduct wager from wallet' });
@@ -538,7 +574,9 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
         const { data: updatedMatch, error: updateErr } = await supabaseAdmin
             .from('friend_matches')
             .update({ joiner_id: user.id, status: 'active', started_at: new Date().toISOString() })
-            .eq('id', match.id).select().single();
+            .eq('id', match.id)
+            .select()
+            .single();
 
         if (updateErr) {
             await supabaseAdmin.rpc('credit_wallet', { p_user_id: user.id, p_amount: match.wager_amount });
@@ -571,7 +609,10 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
         if (!matchId || !winnerId) return res.status(400).json({ error: 'Match ID and winner ID are required' });
 
         const { data: match, error: matchErr } = await supabaseAdmin
-            .from('friend_matches').select('*').eq('id', matchId).single();
+            .from('friend_matches')
+            .select('*')
+            .eq('id', matchId)
+            .single();
 
         if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
         if (match.creator_id !== user.id && match.joiner_id !== user.id)
@@ -580,15 +621,12 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
         if (winnerId !== match.creator_id && winnerId !== match.joiner_id)
             return res.status(400).json({ error: 'Invalid winner ID' });
 
-        // Prevent same user from reporting twice
         if (match.reported_by_id === user.id) {
             return res.status(400).json({ error: 'You have already reported this match' });
         }
 
-        // Lazy-load verifier only when actually needed
         let verificationResult = null;
         if (screenshotUrl) {
-            // Validate screenshot URL to prevent SSRF using isValidScreenshotUrl()
             if (!isValidScreenshotUrl(screenshotUrl)) {
                 return res.status(400).json({ error: 'Invalid screenshot URL' });
             }
@@ -596,14 +634,32 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
             const verifier = getVerifier();
             if (verifier) {
                 try {
+                    // Fetch opponent username for match-context check
+                    const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
+                    let opponentUsername = null;
+                    if (opponentId) {
+                        const { data: oppProfile } = await supabaseAdmin.from('profiles').select('username').eq('id', opponentId).maybeSingle();
+                        opponentUsername = oppProfile?.username || null;
+                    }
+
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    const timeout = setTimeout(() => controller.abort(), 10000);
                     const response = await fetch(screenshotUrl, { signal: controller.signal });
                     clearTimeout(timeout);
                     if (!response.ok) throw new Error('Failed to fetch screenshot');
                     const buffer = Buffer.from(await response.arrayBuffer());
+                    let selfUsername = null;
+                    {
+                        const { data: sp } = await supabaseAdmin.from('profiles').select('username').eq('id', user.id).maybeSingle();
+                        selfUsername = sp?.username || null;
+                    }
                     verificationResult = await verifier.verifyScreenshot(buffer, {
-                        userId: user.id, matchId, startedAt: match.started_at
+                        userId: user.id,
+                        matchId,
+                        startedAt: match.started_at,
+                        opponentUsername,
+                        uploaderUsername: selfUsername,
+                        matchCode: match.match_code
                     });
 
                     if (!verificationResult.isValid || verificationResult.fraudScore >= 50) {
@@ -652,9 +708,9 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
             });
         }
 
-        // Both reports match – payout winner
         const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', {
-            p_user_id: winnerId, p_amount: match.winner_prize
+            p_user_id: winnerId,
+            p_amount: match.winner_prize
         });
         if (payoutErr) {
             console.error('Payout error:', payoutErr);
@@ -679,7 +735,9 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
 
         res.status(200).json({
             message: 'Match completed! Winner has been paid.',
-            winnerId, prizePaid: match.winner_prize, verification: verificationResult
+            winnerId,
+            prizePaid: match.winner_prize,
+            verification: verificationResult
         });
     } catch (err) {
         console.error('Submit result error:', err);
@@ -688,7 +746,176 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
 });
 
 // ============================================================
-// MY MATCHES ENDPOINT (FIXED)
+// OCR AUTO-SETTLE: Requires BOTH players to upload screenshots
+// with matching scores before paying out.
+// Flow:
+//   Player A uploads → score stored as "first_ocr" on match
+//   Player B uploads → scores compared → if they match, pay winner
+// This prevents any single player from faking a result.
+// POST /friends/submit-ocr-result
+// ============================================================
+app.post('/friends/submit-ocr-result', sensitiveLimiter, async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchId, screenshotUrl, ocrResult, verificationResult } = req.body;
+        if (!matchId || !screenshotUrl) return res.status(400).json({ error: 'matchId and screenshotUrl are required' });
+        if (!isValidScreenshotUrl(screenshotUrl)) return res.status(400).json({ error: 'Invalid screenshot URL' });
+
+        const { data: match, error: matchErr } = await supabaseAdmin
+            .from('friend_matches').select('*').eq('id', matchId).single();
+        if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
+        if (match.creator_id !== user.id && match.joiner_id !== user.id)
+            return res.status(403).json({ error: 'You are not part of this match' });
+        if (match.status !== 'active') return res.status(400).json({ error: 'Match is not active' });
+        if (!match.creator_id || !match.joiner_id)
+            return res.status(400).json({ error: 'Match does not have two players yet' });
+
+        const confidence = ocrResult?.confidence ?? 0;
+        const fraudScore = verificationResult?.fraudScore ?? 999;
+        const score1 = ocrResult?.score1;
+        const score2 = ocrResult?.score2;
+        const autoWinnerReason = ocrResult?.autoWinnerReason;
+
+        // Server-side re-validation of OCR quality
+        if (confidence < 80) {
+            return res.status(422).json({ error: `OCR confidence too low (${confidence}%) — please report manually.`, confidence });
+        }
+        if (fraudScore >= 30) {
+            return res.status(422).json({ error: 'Screenshot has suspicious flags. Both players need to upload for corroboration.', fraudScore, warnings: verificationResult?.warnings });
+        }
+        if (!autoWinnerReason || autoWinnerReason === 'draw') {
+            return res.status(422).json({
+                error: score1 === score2
+                    ? 'It\'s a draw — no payout. Contact admin if this is wrong.'
+                    : 'Could not determine winner from screenshot. Please report manually.',
+                score1, score2
+            });
+        }
+
+        // Check that the uploading user's context check didn't fail
+        const contextCheck = verificationResult?.checks?.matchContext;
+        if (contextCheck && !contextCheck.passed) {
+            return res.status(422).json({
+                error: contextCheck.warning || 'Screenshot does not appear to be from this match.',
+                warnings: verificationResult?.warnings
+            });
+        }
+
+        const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
+        const uploaderWins = autoWinnerReason === 'home_wins';
+        const claimedWinnerId = uploaderWins ? user.id : opponentId;
+        const claimedScore = `${score1}-${score2}`;
+
+        // ── Two-upload corroboration ──────────────────────────────────────────
+        // If the opponent already submitted their OCR result, compare scores.
+        // If this is the first submission, store it and wait.
+        const existingOcr = match.first_ocr_data;
+
+        if (!existingOcr) {
+            // First upload — store the claimed result, wait for opponent
+            await supabaseAdmin.from('friend_matches').update({
+                first_ocr_data: {
+                    submitterId: user.id,
+                    claimedWinnerId,
+                    score: claimedScore,
+                    screenshotUrl,
+                    confidence,
+                    fraudScore,
+                    submittedAt: new Date().toISOString()
+                },
+                screenshot_url: screenshotUrl,
+                reported_winner_id: claimedWinnerId,
+                reported_by_id: user.id,
+                reported_at: new Date().toISOString()
+            }).eq('id', matchId);
+
+            console.log(`📸 OCR first submission: match=${matchId}, user=${user.id}, score=${claimedScore}, claimed winner=${claimedWinnerId}`);
+
+            return res.status(200).json({
+                message: 'Score recorded! Waiting for your opponent to upload their screenshot to confirm.',
+                waitingForOpponent: true,
+                claimedScore,
+                youWon: uploaderWins
+            });
+        }
+
+        // Prevent same user submitting twice
+        if (existingOcr.submitterId === user.id) {
+            return res.status(400).json({ error: 'You already submitted your screenshot. Waiting for opponent.' });
+        }
+
+        // ── Both uploaded — compare scores ────────────────────────────────────
+        const scoresMatch = existingOcr.score === claimedScore;
+        const winnersMatch = existingOcr.claimedWinnerId === claimedWinnerId;
+
+        if (!scoresMatch || !winnersMatch) {
+            // Scores don't agree — flag for admin
+            await supabaseAdmin.from('friend_matches').update({
+                status: 'disputed',
+                disputed_at: new Date().toISOString(),
+                dispute_reason: `OCR score mismatch: P1 claimed ${existingOcr.score} (winner: ${existingOcr.claimedWinnerId}), P2 claimed ${claimedScore} (winner: ${claimedWinnerId})`,
+                verification_data: { firstOcr: existingOcr, secondOcr: { submitterId: user.id, score: claimedScore, claimedWinnerId } }
+            }).eq('id', matchId);
+
+            return res.status(409).json({
+                error: 'Your screenshot shows a different score than your opponent\'s. Match sent for admin review.',
+                p1Score: existingOcr.score,
+                p2Score: claimedScore,
+                requiresAdminReview: true
+            });
+        }
+
+        // Scores match — pay out
+        const winnerId = claimedWinnerId;
+        const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', { p_user_id: winnerId, p_amount: match.winner_prize });
+        if (payoutErr) {
+            console.error('OCR payout error:', payoutErr);
+            return res.status(500).json({ error: 'Failed to process payout. Contact support.' });
+        }
+
+        await supabaseAdmin.from('friend_matches').update({
+            winner_id: winnerId,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            resolution_reason: `OCR corroborated: both players reported ${claimedScore} (confidence avg: ${Math.round((confidence + existingOcr.confidence) / 2)}%)`,
+            verification_data: { firstOcr: existingOcr, secondOcr: { submitterId: user.id, score: claimedScore, confidence, fraudScore } }
+        }).eq('id', matchId);
+
+        // Store hash and device for future checks
+        if (verificationResult?.checks?.duplicate?.details?.hash) {
+            await supabaseAdmin.from('screenshot_hashes')
+                .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: user.id, match_id: matchId }])
+                .onConflict('hash').ignore();
+        }
+        if (verificationResult?.checks?.device?.details?.device) {
+            await supabaseAdmin.from('user_screenshot_history')
+                .insert([{ user_id: user.id, device: verificationResult.checks.device.details.device, match_id: matchId }]);
+        }
+
+        console.log(`✅ OCR corroborated & settled: match=${matchId}, winner=${winnerId}, score=${claimedScore}`);
+
+        res.status(200).json({
+            message: 'Match settled! Both screenshots confirmed the same score.',
+            winnerId,
+            score: claimedScore.replace('-', ' – '),
+            prizePaid: match.winner_prize,
+            youWon: winnerId === user.id,
+            autoSettled: true,
+            corroborated: true
+        });
+    } catch (err) {
+        console.error('OCR auto-settle error:', err);
+        return sendGenericError(res, 500, 'Failed to process result', err);
+    }
+});
+
+// ============================================================
+// MY MATCHES ENDPOINT (FIXED - NO JOIN SYNTAX)
 // ============================================================
 app.get('/friends/my-matches', async (req, res) => {
     try {
@@ -699,26 +926,49 @@ app.get('/friends/my-matches', async (req, res) => {
         const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
         if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
 
+        // Fetch matches where user is creator or joiner
         const { data: matches, error } = await supabaseAdmin
-            .from('matches')
-            .select(`
-                *,
-                creator:profiles!matches_creator_id_fkey(username),
-                opponent:profiles!matches_opponent_id_fkey(username)
-            `)
-            .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
+            .from('friend_matches')
+            .select('*')
+            .or(`creator_id.eq.${user.id},joiner_id.eq.${user.id}`)
             .order('created_at', { ascending: false })
             .limit(50);
 
         if (error) {
             console.error('Fetch matches error:', error);
-            return res.json([]); // Return empty array instead of error
+            return res.json([]);
         }
 
-        res.json(matches || []);
+        // Fetch usernames for all unique user IDs in the matches
+        const userIds = new Set();
+        matches?.forEach(m => {
+            if (m.creator_id) userIds.add(m.creator_id);
+            if (m.joiner_id) userIds.add(m.joiner_id);
+        });
+        const userIdArray = Array.from(userIds);
+
+        let profileMap = {};
+        if (userIdArray.length > 0) {
+            const { data: profiles } = await supabaseAdmin
+                .from('profiles')
+                .select('id, username')
+                .in('id', userIdArray);
+            if (profiles) {
+                profileMap = Object.fromEntries(profiles.map(p => [p.id, p.username]));
+            }
+        }
+
+        // Attach usernames to matches
+        const enrichedMatches = matches?.map(m => ({
+            ...m,
+            creator: m.creator_id ? { username: profileMap[m.creator_id] || null } : null,
+            joiner: m.joiner_id ? { username: profileMap[m.joiner_id] || null } : null
+        })) || [];
+
+        res.json(enrichedMatches);
     } catch (err) {
         console.error('Fetch matches error:', err);
-        res.json([]); // Return empty array on exception
+        res.json([]);
     }
 });
 
@@ -732,24 +982,23 @@ app.post('/friends/cancel-match', sensitiveLimiter, async (req, res) => {
         if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
         const { matchId } = req.body;
-        
-        if (!matchId) {
-            return res.status(400).json({ error: 'Match ID is required' });
-        }
+        if (!matchId) return res.status(400).json({ error: 'Match ID is required' });
 
         const { data: match, error: matchErr } = await supabaseAdmin
-            .from('friend_matches').select('*').eq('id', matchId).single();
+            .from('friend_matches')
+            .select('*')
+            .eq('id', matchId)
+            .single();
 
         if (matchErr || !match) {
             console.error('Match not found:', matchId, matchErr);
             return res.status(404).json({ error: 'Match not found' });
         }
-        
+
         if (match.creator_id !== user.id) {
             return res.status(403).json({ error: 'Only match creator can cancel' });
         }
-        
-        // Better status checking with specific error messages
+
         if (match.status === 'cancelled') {
             return res.status(400).json({ error: 'Match already cancelled' });
         }
@@ -762,38 +1011,139 @@ app.post('/friends/cancel-match', sensitiveLimiter, async (req, res) => {
         if (match.status === 'disputed') {
             return res.status(400).json({ error: 'Cannot cancel disputed match - awaiting admin review' });
         }
-        
-        // Allow cancelling both pending and expired matches
         if (match.status !== 'pending' && match.status !== 'expired') {
             return res.status(400).json({ error: `Cannot cancel ${match.status} match` });
         }
 
-        // Refund the wager
-        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', { 
-            p_user_id: user.id, 
-            p_amount: match.wager_amount 
+        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', {
+            p_user_id: user.id,
+            p_amount: match.wager_amount
         });
-        
+
         if (refundErr) {
             console.error('Refund error:', refundErr);
             return res.status(500).json({ error: 'Failed to refund wager' });
         }
-        
-        // Update match status
+
         await supabaseAdmin.from('friend_matches').update({
-            status: 'cancelled', 
+            status: 'cancelled',
             cancelled_at: new Date().toISOString()
         }).eq('id', matchId);
 
-        res.status(200).json({ 
-            message: 'Match cancelled and wager refunded', 
-            refundedAmount: match.wager_amount 
+        res.status(200).json({
+            message: 'Match cancelled and wager refunded',
+            refundedAmount: match.wager_amount
         });
     } catch (err) {
         console.error('Cancel match error:', err);
         res.status(500).json({ error: 'Failed to cancel match' });
     }
 });
+
+// ============================================================
+// FRIEND MATCH STATUS CHECK (for real-time polling)
+// ============================================================
+app.get('/friends/match-status/:matchId', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchId } = req.params;
+
+        const { data: match, error: matchErr } = await supabaseAdmin
+            .from('friend_matches')
+            .select('*')
+            .eq('id', matchId)
+            .single();
+
+        if (matchErr || !match) {
+            return res.status(404).json({ error: 'Match not found' });
+        }
+
+        if (match.creator_id !== user.id && match.joiner_id !== user.id) {
+            return res.status(403).json({ error: 'Not authorized to view this match' });
+        }
+
+        // Fetch joiner username if exists
+        let joinerUsername = null;
+        if (match.joiner_id) {
+            const { data: profile } = await supabaseAdmin
+                .from('profiles')
+                .select('username')
+                .eq('id', match.joiner_id)
+                .maybeSingle();
+            joinerUsername = profile?.username;
+        }
+
+        res.json({
+            matchId: match.id,
+            matchCode: match.match_code,
+            status: match.status,
+            joinerUsername,
+            wagerAmount: match.wager_amount,
+            winnerPrize: match.winner_prize,
+            expiresAt: match.expires_at,
+            startedAt: match.started_at
+        });
+    } catch (err) {
+        console.error('Match status error:', err);
+        res.status(500).json({ error: 'Failed to get match status' });
+    }
+});
+
+// ============================================================
+// AUTO-RESOLVE ABANDONED MATCHES (Background Task)
+// ============================================================
+async function autoResolveAbandonedMatches() {
+    try {
+        console.log('🔍 Checking for abandoned matches...');
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+        const { data: abandonedMatches, error } = await supabaseAdmin
+            .from('friend_matches')
+            .select('*')
+            .eq('status', 'active')
+            .not('reported_by_id', 'is', null)
+            .lt('first_reported_at', twoHoursAgo);
+
+        if (error) {
+            console.error('Error fetching abandoned matches:', error);
+            return;
+        }
+
+        if (!abandonedMatches || abandonedMatches.length === 0) {
+            console.log('✅ No abandoned matches found');
+            return;
+        }
+
+        console.log(`⚠️  Found ${abandonedMatches.length} abandoned matches`);
+
+        for (const match of abandonedMatches) {
+            const winnerId = match.reported_winner_id;
+            await supabaseAdmin.rpc('credit_wallet', {
+                p_user_id: winnerId,
+                p_amount: match.winner_prize
+            });
+            await supabaseAdmin.from('friend_matches').update({
+                winner_id: winnerId,
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                auto_resolved: true,
+                resolution_reason: 'Opponent failed to report within 2 hours'
+            }).eq('id', match.id);
+            console.log(`✅ Auto-resolved match ${match.match_code} - Winner: ${winnerId}`);
+        }
+    } catch (err) {
+        console.error('Auto-resolve error:', err);
+    }
+}
+
+setInterval(autoResolveAbandonedMatches, 30 * 60 * 1000);
+setTimeout(autoResolveAbandonedMatches, 10000);
 
 // ============================================================
 // WALLET DEPOSIT / WITHDRAW
@@ -853,8 +1203,10 @@ app.get('/wallet/deposit/status', async (req, res) => {
         const { checkoutId } = req.query;
         if (!checkoutId) return res.status(400).json({ error: 'checkoutId is required' });
         const { data } = await supabaseAdmin
-            .from('transactions').select('status, mpesa_receipt')
-            .eq('checkout_request_id', checkoutId).single();
+            .from('transactions')
+            .select('status, mpesa_receipt')
+            .eq('checkout_request_id', checkoutId)
+            .maybeSingle();
         res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt || null });
     } catch (err) {
         console.error('Deposit status error:', err);
@@ -874,8 +1226,10 @@ app.post('/mpesa/callback', async (req, res) => {
             const receipt = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value || 'N/A';
 
             const { data: txn } = await supabaseAdmin
-                .from('transactions').select('user_id')
-                .eq('checkout_request_id', CheckoutRequestID).single();
+                .from('transactions')
+                .select('user_id')
+                .eq('checkout_request_id', CheckoutRequestID)
+                .single();
 
             if (txn?.user_id) {
                 await supabaseAdmin.rpc('credit_wallet', { p_user_id: txn.user_id, p_amount: amount });
@@ -902,7 +1256,8 @@ app.get('/mpesa/status', async (req, res) => {
     try {
         const { checkoutId } = req.query;
         const { data } = await supabase.from('transactions').select('status, mpesa_receipt')
-            .eq('checkout_request_id', checkoutId).single();
+            .eq('checkout_request_id', checkoutId)
+            .maybeSingle();
         res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt });
     } catch (err) {
         console.error('Mpesa status error:', err);
@@ -923,8 +1278,11 @@ app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
 
         const referenceId = 'WD-' + Date.now().toString(36).toUpperCase();
         const { error: rpcErr } = await supabase.rpc('request_withdrawal', {
-            p_user_id: user.id, p_amount: Math.floor(Number(amount)),
-            p_phone: phone, p_name: name, p_ref_id: referenceId
+            p_user_id: user.id,
+            p_amount: Math.floor(Number(amount)),
+            p_phone: phone,
+            p_name: name,
+            p_ref_id: referenceId
         });
         if (rpcErr) return res.status(400).json({ error: rpcErr.message });
         res.status(200).json({ message: 'Request received.', referenceId, amount });
@@ -1056,17 +1414,45 @@ app.delete('/admin/tournaments/:id', async (req, res) => {
     }
 });
 
+// FIXED: admin friend matches using separate profile fetch
 app.get('/admin/friend-matches', async (req, res) => {
     try {
         if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
         const { status } = req.query;
         let query = supabaseAdmin.from('friend_matches')
-            .select(`*, creator:profiles!friend_matches_creator_id_fkey(username), joiner:profiles!friend_matches_joiner_id_fkey(username), winner:profiles!friend_matches_winner_id_fkey(username)`)
+            .select('*')
             .order('created_at', { ascending: false });
         if (status && status !== 'all') query = query.eq('status', status);
         const { data, error } = await query;
         if (error) return res.status(500).json({ error: error.message });
-        res.json(data || []);
+
+        // Fetch profiles for all users involved
+        const userIds = new Set();
+        data?.forEach(m => {
+            if (m.creator_id) userIds.add(m.creator_id);
+            if (m.joiner_id) userIds.add(m.joiner_id);
+            if (m.winner_id) userIds.add(m.winner_id);
+        });
+        const userIdArray = Array.from(userIds);
+        let profileMap = {};
+        if (userIdArray.length > 0) {
+            const { data: profiles } = await supabaseAdmin
+                .from('profiles')
+                .select('id, username')
+                .in('id', userIdArray);
+            if (profiles) {
+                profileMap = Object.fromEntries(profiles.map(p => [p.id, p.username]));
+            }
+        }
+
+        const enriched = data?.map(m => ({
+            ...m,
+            creator: m.creator_id ? { username: profileMap[m.creator_id] } : null,
+            joiner: m.joiner_id ? { username: profileMap[m.joiner_id] } : null,
+            winner: m.winner_id ? { username: profileMap[m.winner_id] } : null
+        })) || [];
+
+        res.json(enriched);
     } catch (err) {
         console.error('Admin friend matches error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -1123,6 +1509,284 @@ app.get('/tournaments', async (req, res) => {
     } catch (err) {
         console.error('Error fetching tournaments:', err);
         res.status(500).json({ error: 'Failed to fetch tournaments' });
+    }
+});
+
+// ============================================================
+// SCREENSHOT UPLOAD + OCR VERIFICATION
+// POST /screenshots/upload-and-verify
+// ============================================================
+const screenshotUploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    message: { error: 'Too many screenshot uploads. Try again later.' }
+});
+
+app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, res) => {
+    const multer = getMulter();
+    const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (req, file, cb) => {
+            const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+            if (allowed.includes(file.mimetype)) cb(null, true);
+            else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+        }
+    }).single('screenshot');
+
+    await new Promise((resolve, reject) => {
+        upload(req, res, (err) => {
+            if (err) reject(err);
+            else resolve();
+        });
+    }).catch((err) => {
+        return res.status(400).json({ error: err.message || 'Invalid file upload' });
+    });
+
+    if (res.headersSent) return;
+
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        if (!req.file) return res.status(400).json({ error: 'No screenshot file provided' });
+
+        const { matchId } = req.body;
+        if (!matchId) return res.status(400).json({ error: 'matchId is required' });
+
+        const { data: match, error: matchErr } = await supabaseAdmin
+            .from('friend_matches')
+            .select('*')
+            .eq('id', matchId)
+            .single();
+        if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
+        if (match.creator_id !== user.id && match.joiner_id !== user.id) {
+            return res.status(403).json({ error: 'You are not part of this match' });
+        }
+        if (match.status !== 'active') {
+            return res.status(400).json({ error: 'Match is not active' });
+        }
+
+        const imageBuffer = req.file.buffer;
+
+        // ── Run fraud checks and OCR BEFORE storing ──────────────────────────
+        // We refuse to store obvious fakes — no point cluttering storage.
+        const verifier = getVerifier();
+        let verificationResult = null;
+        let ocrResult = null;
+
+        if (verifier) {
+            try {
+                // Fetch opponent's username so verifier can check it appears on screen
+                const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
+                let opponentUsername = null;
+                if (opponentId) {
+                    const { data: oppProfile } = await supabaseAdmin
+                        .from('profiles')
+                        .select('username')
+                        .eq('id', opponentId)
+                        .maybeSingle();
+                    opponentUsername = oppProfile?.username || null;
+                }
+
+                // Fetch uploader's own username for self-presence check
+                let uploaderUsername = null;
+                {
+                    const { data: uploaderProfile } = await supabaseAdmin
+                        .from('profiles').select('username').eq('id', user.id).maybeSingle();
+                    uploaderUsername = uploaderProfile?.username || null;
+                }
+
+                [verificationResult, ocrResult] = await Promise.all([
+                    verifier.verifyScreenshot(imageBuffer, {
+                        userId: user.id,
+                        matchId,
+                        startedAt: match.started_at,
+                        opponentUsername,
+                        uploaderUsername,           // NEW: uploader's own name checked too
+                        matchCode: match.match_code
+                    }),
+                    verifier.extractScoreWithConfidence(imageBuffer)
+                ]);
+            } catch (verifyErr) {
+                console.error('Verification error:', verifyErr.message);
+            }
+        }
+
+        // Hard reject: duplicate screenshot (someone already used this exact image)
+        const isDuplicate = verificationResult?.checks?.duplicate?.passed === false &&
+            verificationResult.checks.duplicate.details?.originalMatch;
+        if (isDuplicate) {
+            console.warn(`🚫 Duplicate screenshot rejected: match=${matchId}, user=${user.id}`);
+            return res.status(409).json({
+                error: verificationResult.checks.duplicate.warning || 'This screenshot has already been used in another match.',
+                fraudScore: verificationResult.fraudScore,
+                warnings: verificationResult.warnings
+            });
+        }
+
+        // Hard reject: taken before match started (impossible screenshot)
+        const takenBeforeMatch = verificationResult?.checks?.metadata?.details?.timeDiffMinutes < -5;
+        if (takenBeforeMatch) {
+            console.warn(`🚫 Pre-match screenshot rejected: match=${matchId}, user=${user.id}`);
+            return res.status(422).json({
+                error: verificationResult.checks.metadata.warning || 'Screenshot was taken before the match started.',
+                fraudScore: verificationResult.fraudScore,
+                warnings: verificationResult.warnings
+            });
+        }
+
+        // Hard reject: uploaded too early (impossible — match can't be over yet)
+        const tooEarly = verificationResult?.checks?.timestamp?.passed === false &&
+            verificationResult.checks.timestamp.details?.delayMinutes < 1;
+        if (tooEarly) {
+            console.warn(`🚫 Too-early upload rejected: match=${matchId}, user=${user.id}`);
+            return res.status(422).json({
+                error: 'Match cannot have finished yet — wait until the game ends.',
+                fraudScore: verificationResult.fraudScore,
+                warnings: verificationResult.warnings
+            });
+        }
+
+        // Hard reject: image contains no numbers at all — cannot be a game screenshot
+        const noNumbers = verificationResult?.checks?.ocrSanity?.passed === false &&
+            verificationResult.checks.ocrSanity.details?.hasNumbers === false;
+        if (noNumbers) {
+            console.warn(`🚫 Non-game image rejected (no numbers): match=${matchId}, user=${user.id}`);
+            return res.status(422).json({
+                error: 'This doesn\'t look like a game screenshot — no scores or numbers were found. Please upload the end-of-match result screen.',
+                fraudScore: verificationResult.fraudScore,
+                warnings: verificationResult.warnings
+            });
+        }
+
+        // Hard reject: opponent's username not found in image AND OCR confidence is low
+        // Both failing together = almost certainly not this match's screenshot.
+        // (We allow one to fail alone — OCR isn't perfect — but both together is a strong signal.)
+        const contextFailed = verificationResult?.checks?.matchContext?.passed === false &&
+            !verificationResult.checks.matchContext.details?.foundPartialUsername;
+        const ocrWeak = (ocrResult?.confidence ?? 0) < 40;
+        if (contextFailed && ocrWeak) {
+            console.warn(`🚫 Wrong-match screenshot rejected: match=${matchId}, user=${user.id}, ocr=${ocrResult?.confidence?.toFixed(0)}%`);
+            return res.status(422).json({
+                error: 'This screenshot doesn\'t appear to be from this match — your opponent\'s name wasn\'t found and the score couldn\'t be read. Please upload the final score screen from eFootball.',
+                fraudScore: verificationResult.fraudScore,
+                warnings: verificationResult.warnings
+            });
+        }
+
+        // ── Now store the screenshot (passed basic checks) ────────────────────
+        const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+        const storageKey = `match-screenshots/${matchId}/${user.id}-${Date.now()}.${ext}`;
+
+        const { error: uploadErr } = await supabaseAdmin
+            .storage
+            .from('screenshots')
+            .upload(storageKey, imageBuffer, { contentType: req.file.mimetype, upsert: false });
+
+        if (uploadErr) {
+            console.error('Storage upload error:', uploadErr);
+            return res.status(500).json({ error: 'Failed to store screenshot' });
+        }
+
+        const { data: { publicUrl } } = supabaseAdmin
+            .storage
+            .from('screenshots')
+            .getPublicUrl(storageKey);
+
+        // Determine auto-settle eligibility
+        let autoWinnerReason = null;
+        if (ocrResult?.isValid && ocrResult.confidence >= 80) {
+            const s1 = ocrResult.score1;
+            const s2 = ocrResult.score2;
+            if (s1 !== null && s2 !== null) {
+                autoWinnerReason = s1 > s2 ? 'home_wins' : s2 > s1 ? 'away_wins' : 'draw';
+            }
+        }
+
+        const fraudScore = verificationResult?.fraudScore ?? 0;
+        console.log(`📸 Screenshot accepted: match=${matchId}, user=${user.id}, fraud=${fraudScore}, ocr=${ocrResult?.confidence?.toFixed(0) ?? 'n/a'}%, autoSettle=${autoWinnerReason ?? 'no'}`);
+
+        // Store hash at upload time so near-duplicate checks on subsequent uploads work
+        // immediately — not just after match completion
+        const uploadHash = verificationResult?.checks?.duplicate?.details?.hash;
+        if (uploadHash) {
+            await supabaseAdmin.from('screenshot_hashes')
+                .insert([{ hash: uploadHash, user_id: user.id, match_id: matchId }])
+                .onConflict('hash').ignore();
+        }
+
+        res.status(200).json({
+            screenshotUrl: publicUrl,
+            ocrResult: ocrResult ? {
+                score1: ocrResult.score1,
+                score2: ocrResult.score2,
+                confidence: Math.round(ocrResult.confidence),
+                isValid: ocrResult.isValid,
+                rawText: ocrResult.rawText,
+                autoWinnerReason
+            } : null,
+            verificationResult: verificationResult ? {
+                fraudScore,
+                recommendation: verificationResult.recommendation,
+                warnings: verificationResult.warnings,
+                isValid: verificationResult.isValid,
+                checks: {
+                    metadata: verificationResult.checks.metadata?.passed,
+                    timestamp: verificationResult.checks.timestamp?.passed,
+                    manipulation: verificationResult.checks.manipulation?.passed,
+                    duplicate: verificationResult.checks.duplicate?.passed,
+                    ocrSanity: verificationResult.checks.ocrSanity?.passed,
+                }
+            } : null
+        });
+
+    } catch (err) {
+        console.error('Screenshot upload/verify error:', err);
+        return sendGenericError(res, 500, 'Screenshot processing failed', err);
+    }
+});
+
+// ============================================================
+// OCR-ONLY ENDPOINT (quick re-scan)
+// ============================================================
+app.post('/screenshots/extract-score', screenshotUploadLimiter, async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { screenshotUrl } = req.body;
+        if (!screenshotUrl) return res.status(400).json({ error: 'screenshotUrl required' });
+        if (!isValidScreenshotUrl(screenshotUrl)) return res.status(400).json({ error: 'Invalid screenshot URL' });
+
+        const verifier = getVerifier();
+        if (!verifier) return res.status(503).json({ error: 'OCR service unavailable' });
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch(screenshotUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!response.ok) return res.status(502).json({ error: 'Failed to fetch screenshot' });
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const ocrResult = await verifier.extractScoreWithConfidence(buffer);
+
+        res.json({
+            score1: ocrResult.score1,
+            score2: ocrResult.score2,
+            confidence: Math.round(ocrResult.confidence),
+            isValid: ocrResult.isValid,
+            rawText: ocrResult.rawText
+        });
+    } catch (err) {
+        console.error('Extract score error:', err);
+        return sendGenericError(res, 500, 'OCR extraction failed', err);
     }
 });
 
