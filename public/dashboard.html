@@ -937,12 +937,31 @@
         }
     }
 
-    async function refreshBalance() {
-        const res = await fetchWithAuth('/wallet/balance');
-        if (!res) return;
-        const data = await res.json();
-        currentBalance = data.balance || 0;
-        updateBalanceDisplay();
+    async function refreshBalance(retries = 3) {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const res = await fetchWithAuth('/wallet/balance');
+                if (!res) return; // auth failed, redirect handled by fetchWithAuth
+                if (!res.ok) {
+                    console.warn('refreshBalance: HTTP', res.status);
+                    return;
+                }
+                const data = await res.json();
+                if (typeof data.balance === 'number') {
+                    currentBalance = data.balance;
+                    updateBalanceDisplay();
+                    return; // success
+                }
+            } catch (err) {
+                if (attempt < retries) {
+                    // Server may still be starting — wait and retry
+                    await new Promise(r => setTimeout(r, 1500 * attempt));
+                } else {
+                    console.warn('refreshBalance failed after', retries, 'attempts:', err.message);
+                    // Don't reset balance to 0 — keep last known value
+                }
+            }
+        }
     }
 
     function updateBalanceDisplay() {

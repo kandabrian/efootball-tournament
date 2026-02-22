@@ -83,14 +83,19 @@
 
             <!-- Withdrawals Tab -->
             <div id="withdrawals-tab" class="tab-pane active">
-                <div class="table-container">
-                    <table id="withdrawals-table">
-                        <thead>
-                            <tr><th>ID</th><th>User</th><th>Amount</th><th>Phone</th><th>Name</th><th>Status</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                <div class="top-bar" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <select id="wd-status-filter" style="background:#1a1a20;border:1px solid #2a2a30;color:#fff;padding:8px 14px;border-radius:10px;font-size:0.85rem;" onchange="loadWithdrawals()">
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                        <button onclick="loadWithdrawals()" class="btn btn-blue" style="padding:8px 16px;">&#8635; Refresh</button>
+                    </div>
+                    <div id="wd-summary" style="font-size:0.85rem;color:#888;"></div>
                 </div>
+                <div id="withdrawal-cards" style="display:grid;gap:14px;"></div>
+                <table id="withdrawals-table" style="display:none"><thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Phone</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
             </div>
 
             <!-- Tournaments Tab -->
@@ -309,41 +314,90 @@
         }
 
         async function loadWithdrawals() {
-            const data = await fetchWithdrawals('pending');
-            if (data) renderWithdrawals(data);
+            const status = document.getElementById('wd-status-filter')?.value || 'pending';
+            const data = await fetchWithdrawals(status);
+            if (data) renderWithdrawals(data, status);
         }
 
-        function renderWithdrawals(withdrawals) {
-            const tbody = document.querySelector('#withdrawals-table tbody');
-            tbody.innerHTML = '';
+        function renderWithdrawals(withdrawals, status = 'pending') {
+            const container = document.getElementById('withdrawal-cards');
+            container.innerHTML = '';
             if (!withdrawals || withdrawals.length === 0) {
-                const row = document.createElement('tr');
-                const td = createElementSafe('td', { colspan: '7', style: 'text-align:center; color:#888;' }, 'No pending withdrawals');
-                row.appendChild(td);
-                tbody.appendChild(row);
+                container.innerHTML = '<div style="text-align:center;padding:40px;color:#555;background:#111116;border:1px solid #1a1a20;border-radius:16px;"><div style="font-size:2rem;margin-bottom:8px;">📭</div><div>No ' + status + ' withdrawals</div></div>';
+                document.getElementById('wd-summary').textContent = '';
                 return;
             }
+            const total = withdrawals.reduce((s, w) => s + parseFloat(w.amount), 0);
+            document.getElementById('wd-summary').textContent = withdrawals.length + ' request' + (withdrawals.length !== 1 ? 's' : '') + ' · Total: KES ' + total.toLocaleString();
             withdrawals.forEach(w => {
-                const row = document.createElement('tr');
-                row.appendChild(createElementSafe('td', {}, w.id.substring(0,8) + '...'));
-                row.appendChild(createElementSafe('td', {}, w.user_id.substring(0,8) + '...'));
-                row.appendChild(createElementSafe('td', {}, `KES ${w.amount}`));
-                row.appendChild(createElementSafe('td', {}, w.phone));
-                row.appendChild(createElementSafe('td', {}, w.name));
-                const statusTd = document.createElement('td');
-                const badge = createElementSafe('span', { class: 'status-badge status-pending' }, 'Pending');
-                statusTd.appendChild(badge);
-                row.appendChild(statusTd);
-                const actionsTd = document.createElement('td');
-                actionsTd.className = 'actions';
-                const paidBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Paid');
-                paidBtn.addEventListener('click', () => openPaidModal(w.id));
-                actionsTd.appendChild(paidBtn);
-                const rejectBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Reject');
-                rejectBtn.addEventListener('click', () => openRejectModal(w.id));
-                actionsTd.appendChild(rejectBtn);
-                row.appendChild(actionsTd);
-                tbody.appendChild(row);
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:20px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;';
+                const info = document.createElement('div');
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;';
+                const nameEl = document.createElement('span');
+                nameEl.style.cssText = 'font-family:"Bebas Neue",sans-serif;font-size:1.4rem;letter-spacing:2px;color:#f0f0f0;';
+                nameEl.textContent = w.name || 'Unknown';
+                const amountEl = document.createElement('span');
+                amountEl.style.cssText = 'font-family:"Bebas Neue",sans-serif;font-size:1.6rem;color:#00ff41;letter-spacing:1px;';
+                amountEl.textContent = 'KES ' + parseFloat(w.amount).toLocaleString();
+                topRow.appendChild(nameEl);
+                topRow.appendChild(amountEl);
+                info.appendChild(topRow);
+                const phoneRow = document.createElement('div');
+                phoneRow.style.cssText = 'display:flex;align-items:center;gap:16px;flex-wrap:wrap;';
+                const phoneCopy = document.createElement('span');
+                phoneCopy.style.cssText = 'font-size:1.1rem;font-weight:700;color:#fff;background:#1a1a20;padding:6px 14px;border-radius:8px;letter-spacing:1px;cursor:pointer;';
+                phoneCopy.textContent = w.phone;
+                phoneCopy.title = 'Click to copy';
+                phoneCopy.addEventListener('click', () => {
+                    navigator.clipboard.writeText(w.phone);
+                    phoneCopy.style.background = 'rgba(0,255,65,0.2)';
+                    setTimeout(() => phoneCopy.style.background = '#1a1a20', 1000);
+                });
+                phoneRow.appendChild(phoneCopy);
+                const timeEl = document.createElement('span');
+                timeEl.style.cssText = 'font-size:0.75rem;color:#555;';
+                timeEl.textContent = new Date(w.created_at).toLocaleString('en-KE');
+                phoneRow.appendChild(timeEl);
+                info.appendChild(phoneRow);
+                card.appendChild(info);
+                const actions = document.createElement('div');
+                actions.style.cssText = 'display:flex;flex-direction:column;gap:8px;align-items:flex-end;';
+                if (status === 'pending') {
+                    const waBtn = document.createElement('a');
+                    const msg = encodeURIComponent('Vumbua withdrawal: KES ' + w.amount + ' to ' + w.phone + ' for ' + w.name);
+                    waBtn.href = 'https://wa.me/?text=' + msg;
+                    waBtn.target = '_blank';
+                    waBtn.style.cssText = 'background:#25d366;color:#000;padding:8px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;text-decoration:none;text-align:center;';
+                    waBtn.textContent = '📲 WhatsApp Note';
+                    actions.appendChild(waBtn);
+                    const paidBtn = document.createElement('button');
+                    paidBtn.className = 'btn btn-green';
+                    paidBtn.style.cssText = 'padding:8px 20px;font-size:0.85rem;';
+                    paidBtn.textContent = '✅ Mark Paid';
+                    paidBtn.addEventListener('click', () => openPaidModal(w.id));
+                    actions.appendChild(paidBtn);
+                    const rejectBtn = document.createElement('button');
+                    rejectBtn.className = 'btn btn-red';
+                    rejectBtn.style.cssText = 'padding:8px 20px;font-size:0.85rem;';
+                    rejectBtn.textContent = '✗ Reject';
+                    rejectBtn.addEventListener('click', () => openRejectModal(w.id));
+                    actions.appendChild(rejectBtn);
+                } else {
+                    const statusBadge = document.createElement('span');
+                    statusBadge.className = 'status-badge status-' + status;
+                    statusBadge.textContent = status;
+                    actions.appendChild(statusBadge);
+                    if (w.mpesa_code) {
+                        const codeEl = document.createElement('div');
+                        codeEl.style.cssText = 'font-size:0.75rem;color:#555;';
+                        codeEl.textContent = 'Code: ' + w.mpesa_code;
+                        actions.appendChild(codeEl);
+                    }
+                }
+                card.appendChild(actions);
+                container.appendChild(card);
             });
         }
 

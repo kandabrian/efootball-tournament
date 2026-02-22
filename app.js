@@ -28,7 +28,7 @@ const path = require('path');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
-const { Readable } = require('stream');
+const { createClient } = require('@supabase/supabase-js');
 console.log("✅ Core modules loaded.");
 
 // Multer — lazy-loaded only when screenshot route is first hit
@@ -70,7 +70,6 @@ console.log("   PORT:", process.env.PORT || "3000 (default)");
 // STEP 4: Load Supabase (network client, usually safe)
 // ============================================================
 console.log("📦 Loading Supabase client...");
-const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 console.log("✅ Supabase clients created.");
@@ -173,6 +172,13 @@ function isValidScreenshotUrl(url) {
         return false;
     }
 }
+
+// Middleware to attach Supabase clients to request
+app.use((req, res, next) => {
+    req.supabase = supabase;
+    req.supabaseAdmin = supabaseAdmin;
+    next();
+});
 
 // ============================================================
 // STEP 7: Middleware
@@ -314,12 +320,20 @@ app.post('/auth/signup', async (req, res) => {
                 console.log('✅ Profile created');
 
                 console.log('💰 Creating wallet...');
-                // Use onConflict ignore to prevent duplicate wallets if signup is retried
-                const { error: walletError } = await supabaseAdmin
+                // Check if wallet already exists first
+                const { data: existingWallet } = await supabaseAdmin
                     .from('wallets')
-                    .insert([{ user_id: data.user.id, balance: 0 }])
-                    .onConflict('user_id')
-                    .ignore();
+                    .select('user_id')
+                    .eq('user_id', data.user.id)
+                    .maybeSingle();
+
+                let walletError = null;
+                if (!existingWallet) {
+                    const { error } = await supabaseAdmin
+                        .from('wallets')
+                        .insert([{ user_id: data.user.id, balance: 0 }]);
+                    walletError = error;
+                }
 
                 if (walletError) throw walletError;
                 console.log('✅ Wallet created');
@@ -368,7 +382,6 @@ app.get('/wallet/balance', async (req, res) => {
         const { data: { user }, error } = await supabase.auth.getUser(jwt);
         if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-        // Use maybeSingle to avoid errors if multiple rows exist (should not happen after fix)
         const { data, error: dbErr } = await supabase
             .from('wallets')
             .select('balance')
@@ -380,6 +393,102 @@ app.get('/wallet/balance', async (req, res) => {
     } catch (err) {
         console.error('Balance error:', err);
         return sendGenericError(res, 500, 'Failed to fetch balance', err);
+    }
+});
+
+// ============================================================
+// WITHDRAWAL ROUTES (Enhanced)
+// ============================================================
+const { router: withdrawalRouter, processMpesaWithdrawal } = require('./routes/withdrawals');
+app.use('/wallet/withdrawals', withdrawalRouter); // For history and cancellation
+app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
+    // This endpoint now calls the enhanced withdrawal logic via the withdrawals module
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { amount, phone } = req.body;
+        if (!amount || !phone) {
+            return res.status(400).json({ error: 'Amount and phone are required' });
+        }
+
+        const { WITHDRAWAL_CONFIG } = require('./routes/withdrawals');
+        const withdrawAmount = parseFloat(amount);
+        if (isNaN(withdrawAmount) || withdrawAmount < WITHDRAWAL_CONFIG.MIN_AMOUNT) {
+            return res.status(400).json({ error: 'Minimum withdrawal is KES ' + WITHDRAWAL_CONFIG.MIN_AMOUNT });
+        }
+        if (withdrawAmount > WITHDRAWAL_CONFIG.MAX_AMOUNT) {
+            return res.status(400).json({ error: 'Maximum withdrawal is KES ' + WITHDRAWAL_CONFIG.MAX_AMOUNT });
+        }
+
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '254' + cleanPhone.substring(1);
+        else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) cleanPhone = '254' + cleanPhone;
+        if (!/^254[17]\d{8}$/.test(cleanPhone)) {
+            return res.status(400).json({ error: 'Invalid phone number format' });
+        }
+        cleanPhone = '+' + cleanPhone;
+
+        // ── Atomic deduction via RPC — prevents race condition ──────────────
+        // deduct_wallet checks balance and deducts in a single DB transaction,
+        // so two simultaneous requests cannot both pass the balance check.
+        const { error: deductErr } = await supabaseAdmin.rpc('deduct_wallet', {
+            p_user_id: user.id,
+            p_amount: withdrawAmount
+        });
+        if (deductErr) {
+            // RPC raises an exception if balance is insufficient
+            const msg = deductErr.message?.toLowerCase().includes('insufficient')
+                ? 'Insufficient balance'
+                : 'Failed to process withdrawal';
+            return res.status(400).json({ error: msg });
+        }
+
+        // Balance deducted — now record the withdrawal request
+        const { data: profileData } = await supabaseAdmin
+            .from('profiles').select('username').eq('id', user.id).single();
+
+        const { data: withdrawal, error: insertError } = await supabaseAdmin
+            .from('withdrawals').insert([{
+                user_id: user.id,
+                amount: withdrawAmount,
+                phone: cleanPhone,
+                name: profileData?.username || 'User',
+                reference_id: 'WD-' + Date.now(),
+                status: 'pending'
+            }]).select().single();
+
+        if (insertError) {
+            // Refund if insert fails
+            await supabaseAdmin.rpc('credit_wallet', { p_user_id: user.id, p_amount: withdrawAmount });
+            throw insertError;
+        }
+
+        await supabaseAdmin.from('transactions').insert([{
+            user_id: user.id, type: 'withdrawal', amount: -withdrawAmount,
+            description: 'Withdrawal request: KES ' + withdrawAmount.toFixed(2),
+            status: 'completed', reference: 'WD-' + withdrawal.id.substring(0, 8)
+        }]);
+
+        console.log('💸 Withdrawal requested: user=' + user.id + ', amount=' + withdrawAmount);
+
+        return res.status(201).json({
+            message: 'Withdrawal request submitted for review',
+            withdrawal: {
+                id: withdrawal.id,
+                amount: withdrawAmount,
+                status: withdrawal.status,
+                phone: cleanPhone,
+                estimatedTime: '1-2 hours'
+            }
+        });
+    } catch (err) {
+        console.error('Withdrawal error:', err);
+        res.status(500).json({ error: 'Failed to process withdrawal' });
     }
 });
 
@@ -724,9 +833,15 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
         }).eq('id', matchId);
 
         if (verificationResult?.checks?.duplicate?.details?.hash) {
-            await supabaseAdmin.from('screenshot_hashes')
-                .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: winnerId, match_id: matchId }])
-                .onConflict('hash').ignore();
+            try {
+                await supabaseAdmin.from('screenshot_hashes')
+                    .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: winnerId, match_id: matchId }]);
+            } catch (err) {
+                // Ignore duplicate hash errors (hash is unique constraint)
+                if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
+                    console.error('Error storing hash:', err);
+                }
+            }
         }
         if (verificationResult?.checks?.device?.details?.device) {
             await supabaseAdmin.from('user_screenshot_history')
@@ -888,9 +1003,15 @@ app.post('/friends/submit-ocr-result', sensitiveLimiter, async (req, res) => {
 
         // Store hash and device for future checks
         if (verificationResult?.checks?.duplicate?.details?.hash) {
-            await supabaseAdmin.from('screenshot_hashes')
-                .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: user.id, match_id: matchId }])
-                .onConflict('hash').ignore();
+            try {
+                await supabaseAdmin.from('screenshot_hashes')
+                    .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: user.id, match_id: matchId }]);
+            } catch (err) {
+                // Ignore duplicate hash errors (hash is unique constraint)
+                if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
+                    console.error('Error storing hash:', err);
+                }
+            }
         }
         if (verificationResult?.checks?.device?.details?.device) {
             await supabaseAdmin.from('user_screenshot_history')
@@ -1053,6 +1174,11 @@ app.get('/friends/match-status/:matchId', async (req, res) => {
         if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
         const { matchId } = req.params;
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(matchId)) {
+            return res.status(400).json({ error: 'Invalid match ID format' });
+        }
 
         const { data: match, error: matchErr } = await supabaseAdmin
             .from('friend_matches')
@@ -1108,7 +1234,7 @@ async function autoResolveAbandonedMatches() {
             .select('*')
             .eq('status', 'active')
             .not('reported_by_id', 'is', null)
-            .lt('first_reported_at', twoHoursAgo);
+            .lt('reported_at', twoHoursAgo);  // Fixed: use reported_at
 
         if (error) {
             console.error('Error fetching abandoned matches:', error);
@@ -1146,7 +1272,7 @@ setInterval(autoResolveAbandonedMatches, 30 * 60 * 1000);
 setTimeout(autoResolveAbandonedMatches, 10000);
 
 // ============================================================
-// WALLET DEPOSIT / WITHDRAW
+// WALLET DEPOSIT
 // ============================================================
 async function handleDeposit(req, res) {
     try {
@@ -1229,7 +1355,7 @@ app.post('/mpesa/callback', async (req, res) => {
                 .from('transactions')
                 .select('user_id')
                 .eq('checkout_request_id', CheckoutRequestID)
-                .single();
+                .maybeSingle();
 
             if (txn?.user_id) {
                 await supabaseAdmin.rpc('credit_wallet', { p_user_id: txn.user_id, p_amount: amount });
@@ -1262,33 +1388,6 @@ app.get('/mpesa/status', async (req, res) => {
     } catch (err) {
         console.error('Mpesa status error:', err);
         res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
-    try {
-        const jwt = req.headers['authorization']?.replace('Bearer ', '');
-        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-        if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
-
-        let { amount, phone, name } = req.body;
-        if (!amount || !phone || !name || isNaN(amount) || amount < 100)
-            return res.status(400).json({ error: 'Invalid details.' });
-        phone = normalizePhone(phone);
-
-        const referenceId = 'WD-' + Date.now().toString(36).toUpperCase();
-        const { error: rpcErr } = await supabase.rpc('request_withdrawal', {
-            p_user_id: user.id,
-            p_amount: Math.floor(Number(amount)),
-            p_phone: phone,
-            p_name: name,
-            p_ref_id: referenceId
-        });
-        if (rpcErr) return res.status(400).json({ error: rpcErr.message });
-        res.status(200).json({ message: 'Request received.', referenceId, amount });
-    } catch (err) {
-        console.error('Withdraw error:', err);
-        res.status(500).json({ error: 'System error. Try again.' });
     }
 });
 
@@ -1714,9 +1813,15 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
         // immediately — not just after match completion
         const uploadHash = verificationResult?.checks?.duplicate?.details?.hash;
         if (uploadHash) {
-            await supabaseAdmin.from('screenshot_hashes')
-                .insert([{ hash: uploadHash, user_id: user.id, match_id: matchId }])
-                .onConflict('hash').ignore();
+            try {
+                await supabaseAdmin.from('screenshot_hashes')
+                    .insert([{ hash: uploadHash, user_id: user.id, match_id: matchId }]);
+            } catch (err) {
+                // Ignore duplicate hash errors (hash is unique constraint)
+                if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
+                    console.error('Error storing hash:', err);
+                }
+            }
         }
 
         res.status(200).json({
