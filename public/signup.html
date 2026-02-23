@@ -251,6 +251,11 @@
                 <label for="username">Username</label>
                 <input type="text" id="username" placeholder="eFootball_King254" required>
             </div>
+            <!-- NEW: Team Name Field -->
+            <div class="form-group">
+                <label for="team">Your eFootball Team Name</label>
+                <input type="text" id="team" placeholder="e.g., Manchester United" required>
+            </div>
             
             <div class="form-row">
                 <div class="form-group">
@@ -311,12 +316,11 @@
         ? 'http://localhost:3000' 
         : 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
     
-    // Debug: Log API URL to console
     console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
     console.log('🔍 API URL:', API);
 
     // Redirect if already logged in
-    if (localStorage.getItem('supabaseToken')) {
+    if (sessionStorage.getItem('supabaseToken')) {
         window.location.href = '/dashboard';
     }
 
@@ -343,13 +347,16 @@
 
         const rawPhone = document.getElementById('phone').value;
         const username = document.getElementById('username').value.trim();
+        const teamName = document.getElementById('team').value.trim();  // NEW
         const password = document.getElementById('password').value;
         const confirm = document.getElementById('confirm-password').value;
 
         if (password !== confirm) return showError("Passwords do not match. Tafadhali rudia.");
         if (password.length < 6) return showError("Password must be at least 6 characters.");
+        if (!teamName) return showError("Team name is required.");  // NEW validation
+        if (teamName.length < 3) return showError("Team name must be at least 3 characters.");  // NEW
 
-        // Improved phone formatting for Kenya
+        // Phone formatting
         let cleanPhone = rawPhone.replace(/\s+/g, '');
         if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.startsWith('0')) {
@@ -357,11 +364,10 @@
         } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
             cleanPhone = '254' + cleanPhone;
         }
-        // Ensure it starts with 254 and has 9 digits after
         if (!/^254[17]\d{8}$/.test(cleanPhone)) {
             return showError("Weka namba ya simu sahihi (e.g., 0712345678).");
         }
-        cleanPhone = '+' + cleanPhone; // final format +254...
+        cleanPhone = '+' + cleanPhone;
 
         btn.disabled = true; 
         btn.textContent = 'Inaload...';
@@ -370,15 +376,20 @@
             const res = await fetch(`${API}/auth/signup`, {
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: cleanPhone, password, username })
+                body: JSON.stringify({ 
+                    phone: cleanPhone, 
+                    password, 
+                    username,
+                    teamName  // NEW: send team name
+                })
             });
 
             const result = await res.json();
 
             if (res.ok) {
                 if (result.session) {
-                    localStorage.setItem('supabaseToken', result.session.access_token);
-                    localStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
+                    sessionStorage.setItem('supabaseToken', result.session.access_token);
+                    sessionStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
                     window.location.href = '/dashboard';
                 } else {
                     window.location.href = '/login';

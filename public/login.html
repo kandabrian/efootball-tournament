@@ -206,7 +206,7 @@
     console.log('🔍 API URL:', API);
 
     // Redirect if session exists
-    if (localStorage.getItem('supabaseToken')) { 
+    if (sessionStorage.getItem('supabaseToken')) { 
         window.location.href = '/dashboard'; 
     }
 
@@ -254,8 +254,8 @@
             const result = await res.json();
 
             if (res.ok) {
-                localStorage.setItem('supabaseToken', result.session.access_token);
-                localStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
+                sessionStorage.setItem('supabaseToken', result.session.access_token);
+                sessionStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
                 window.location.href = '/dashboard';
             } else {
                 showError(result.error || 'Namba ya simu au password si sahihi.');

@@ -109,12 +109,19 @@ const sensitiveLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false
 });
+
 const depositLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
     message: { error: 'Too many deposit attempts. Try again later.' },
     standardHeaders: true,
     legacyHeaders: false
+});
+
+const screenshotUploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    message: { error: 'Too many screenshot uploads. Try again later.' }
 });
 
 // Helpers
@@ -212,13 +219,17 @@ app.use(express.json());
 app.use((req, res, next) => {
     const koyebUrl = process.env.APP_SERVER_URL || '';
     const frontendUrl = process.env.FRONTEND_URL || '';
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://wqnnuqudxsnxldlgxhwr.supabase.co';
+    const supabaseWss = supabaseUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
     const connectSrc = [
         "'self'",
         koyebUrl,
-        frontendUrl
+        frontendUrl,
+        supabaseUrl,
+        supabaseWss,
     ].filter(Boolean).join(' ');
     res.setHeader("Content-Security-Policy",
-        `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src ${connectSrc}`
+        `default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src ${connectSrc}`
     );
     next();
 });
@@ -279,16 +290,19 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'adm
 // ============================================================
 app.post('/auth/signup', async (req, res) => {
     try {
-        console.log('📝 Signup request received:', { phone: req.body.phone?.slice(0, 8) + '***', username: req.body.username });
+        console.log('📝 Signup request received:', { phone: req.body.phone?.slice(0, 8) + '***', username: req.body.username, teamName: req.body.teamName });
 
-        let { phone, password, username } = req.body;
-        if (!phone || !password || !username) {
+        let { phone, password, username, teamName } = req.body;
+        if (!phone || !password || !username || !teamName) {
             console.log('❌ Missing fields');
-            return res.status(400).json({ error: 'Missing fields.' });
+            return res.status(400).json({ error: 'Missing fields. Phone, password, username, and team name are required.' });
         }
         if (password.length < 6) {
             console.log('❌ Password too short');
             return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+        }
+        if (teamName.length < 3) {
+            return res.status(400).json({ error: 'Team name must be at least 3 characters.' });
         }
 
         phone = normalizePhone(phone);
@@ -311,16 +325,15 @@ app.post('/auth/signup', async (req, res) => {
 
         if (data.user) {
             try {
-                console.log('💾 Creating profile...');
+                console.log('💾 Creating profile with team name...');
                 const { error: profileError } = await supabaseAdmin
                     .from('profiles')
-                    .upsert([{ id: data.user.id, username }]);
+                    .upsert([{ id: data.user.id, username, team_name: teamName }]);
 
                 if (profileError) throw profileError;
                 console.log('✅ Profile created');
 
                 console.log('💰 Creating wallet...');
-                // Check if wallet already exists first
                 const { data: existingWallet } = await supabaseAdmin
                     .from('wallets')
                     .select('user_id')
@@ -360,13 +373,73 @@ app.post('/auth/login', async (req, res) => {
         phone = normalizePhone(phone);
         if (!phone) return res.status(400).json({ error: 'Invalid phone number.' });
 
-        const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+        // Use a fresh per-request client so signInWithPassword does NOT pollute
+        // the shared `supabase` singleton's session. If the singleton's session
+        // gets overwritten, every RLS-gated query on it will run as the last
+        // logged-in user, causing wrong balances across accounts.
+        const loginClient = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY,
+            { auth: { persistSession: false, autoRefreshToken: false } }
+        );
+        const { data, error } = await loginClient.auth.signInWithPassword({ phone, password });
         if (error) return sendGenericError(res, 400, 'Invalid phone number or password', error);
 
         res.status(200).json({ message: "Login successful!", session: data.session });
     } catch (err) {
         console.error('Login error:', err);
         return sendGenericError(res, 500, 'Internal server error', err);
+    }
+});
+
+// ============================================================
+// PROFILE ROUTES
+// ============================================================
+app.post('/profile/team', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { teamName } = req.body;
+        if (!teamName || typeof teamName !== 'string' || teamName.length < 3) {
+            return res.status(400).json({ error: 'Valid team name required (min 3 characters)' });
+        }
+
+        const { error } = await supabaseAdmin
+            .from('profiles')
+            .update({ team_name: teamName })
+            .eq('id', user.id);
+
+        if (error) throw error;
+        res.json({ message: 'Team name updated', teamName });
+    } catch (err) {
+        console.error('Profile team update error:', err);
+        res.status(500).json({ error: 'Failed to update team name' });
+    }
+});
+
+app.get('/profile', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { data: profile, error } = await supabaseAdmin
+            .from('profiles')
+            .select('username, team_name')
+            .eq('id', user.id)
+            .single();
+
+        if (error) throw error;
+        res.json(profile);
+    } catch (err) {
+        console.error('Profile fetch error:', err);
+        res.status(500).json({ error: 'Failed to fetch profile' });
     }
 });
 
@@ -382,7 +455,7 @@ app.get('/wallet/balance', async (req, res) => {
         const { data: { user }, error } = await supabase.auth.getUser(jwt);
         if (error || !user) return res.status(401).json({ error: 'Invalid session' });
 
-        const { data, error: dbErr } = await supabase
+        const { data, error: dbErr } = await supabaseAdmin
             .from('wallets')
             .select('balance')
             .eq('user_id', user.id)
@@ -402,7 +475,6 @@ app.get('/wallet/balance', async (req, res) => {
 const { router: withdrawalRouter, processMpesaWithdrawal } = require('./routes/withdrawals');
 app.use('/wallet/withdrawals', withdrawalRouter); // For history and cancellation
 app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
-    // This endpoint now calls the enhanced withdrawal logic via the withdrawals module
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
@@ -434,14 +506,11 @@ app.post('/wallet/withdraw', sensitiveLimiter, async (req, res) => {
         cleanPhone = '+' + cleanPhone;
 
         // ── Atomic deduction via RPC — prevents race condition ──────────────
-        // deduct_wallet checks balance and deducts in a single DB transaction,
-        // so two simultaneous requests cannot both pass the balance check.
         const { error: deductErr } = await supabaseAdmin.rpc('deduct_wallet', {
             p_user_id: user.id,
             p_amount: withdrawAmount
         });
         if (deductErr) {
-            // RPC raises an exception if balance is insufficient
             const msg = deductErr.message?.toLowerCase().includes('insufficient')
                 ? 'Insufficient balance'
                 : 'Failed to process withdrawal';
@@ -509,7 +578,7 @@ app.post('/tournament/join', sensitiveLimiter, async (req, res) => {
         let roomCode = null;
 
         if (paymentMethod === 'wallet') {
-            const { data: rpcRoomCode, error: rpcErr } = await supabase.rpc('join_tournament_wallet', {
+            const { data: rpcRoomCode, error: rpcErr } = await supabaseAdmin.rpc('join_tournament_wallet', {
                 p_user_id: user.id,
                 p_tournament_id: tournamentId,
                 p_entry_fee: entryFee
@@ -523,7 +592,7 @@ app.post('/tournament/join', sensitiveLimiter, async (req, res) => {
             roomCode = rpcRoomCode;
 
         } else if (paymentMethod === 'mpesa') {
-            const { data: rpcRoomCode, error: rpcErr } = await supabase.rpc('join_tournament_mpesa', {
+            const { data: rpcRoomCode, error: rpcErr } = await supabaseAdmin.rpc('join_tournament_mpesa', {
                 p_user_id: user.id,
                 p_tournament_id: tournamentId,
                 p_checkout_id: checkoutId
@@ -561,7 +630,7 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Minimum wager is KES 50' });
         }
 
-        const { data: wallet } = await supabase
+        const { data: wallet } = await supabaseAdmin
             .from('wallets')
             .select('balance')
             .eq('user_id', user.id)
@@ -569,6 +638,17 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
 
         if (!wallet || wallet.balance < wagerAmount) {
             return res.status(400).json({ error: 'Insufficient balance' });
+        }
+
+        // Get creator's team name
+        const { data: creatorProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('team_name')
+            .eq('id', user.id)
+            .single();
+        const creatorTeam = creatorProfile?.team_name || null;
+        if (!creatorTeam) {
+            return res.status(400).json({ error: 'Please set your team name in profile before creating a match.' });
         }
 
         let matchCode, attempts = 0, unique = false;
@@ -595,6 +675,7 @@ app.post('/friends/create-match', sensitiveLimiter, async (req, res) => {
             .insert([{
                 match_code: matchCode,
                 creator_id: user.id,
+                creator_team: creatorTeam,
                 wager_amount: wagerAmount,
                 platform_fee: platformFee,
                 winner_prize: winnerPrize,
@@ -663,7 +744,18 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
         if (match.creator_id === user.id) return res.status(400).json({ error: 'You cannot join your own match' });
         if (match.joiner_id) return res.status(400).json({ error: 'Match already has two players' });
 
-        const { data: wallet } = await supabase
+        // Get joiner's team name
+        const { data: joinerProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('team_name')
+            .eq('id', user.id)
+            .single();
+        const joinerTeam = joinerProfile?.team_name || null;
+        if (!joinerTeam) {
+            return res.status(400).json({ error: 'Please set your team name in profile before joining a match.' });
+        }
+
+        const { data: wallet } = await supabaseAdmin
             .from('wallets')
             .select('balance')
             .eq('user_id', user.id)
@@ -682,7 +774,12 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
 
         const { data: updatedMatch, error: updateErr } = await supabaseAdmin
             .from('friend_matches')
-            .update({ joiner_id: user.id, status: 'active', started_at: new Date().toISOString() })
+            .update({
+                joiner_id: user.id,
+                joiner_team: joinerTeam,
+                status: 'active',
+                started_at: new Date().toISOString()
+            })
             .eq('id', match.id)
             .select()
             .single();
@@ -705,7 +802,11 @@ app.post('/friends/join-match', sensitiveLimiter, async (req, res) => {
     }
 });
 
+// ============================================================
+// DEPRECATED: Old result submission endpoint (kept for compatibility)
+// ============================================================
 app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
+    console.warn('⚠️ Deprecated endpoint /friends/submit-result called. Use /friends/submit-ocr-result instead.');
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
@@ -743,7 +844,6 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
             const verifier = getVerifier();
             if (verifier) {
                 try {
-                    // Fetch opponent username for match-context check
                     const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
                     let opponentUsername = null;
                     if (opponentId) {
@@ -837,7 +937,6 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
                 await supabaseAdmin.from('screenshot_hashes')
                     .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: winnerId, match_id: matchId }]);
             } catch (err) {
-                // Ignore duplicate hash errors (hash is unique constraint)
                 if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
                     console.error('Error storing hash:', err);
                 }
@@ -861,12 +960,7 @@ app.post('/friends/submit-result', sensitiveLimiter, async (req, res) => {
 });
 
 // ============================================================
-// OCR AUTO-SETTLE: Requires BOTH players to upload screenshots
-// with matching scores before paying out.
-// Flow:
-//   Player A uploads → score stored as "first_ocr" on match
-//   Player B uploads → scores compared → if they match, pay winner
-// This prevents any single player from faking a result.
+// OCR AUTO-SETTLE: Single-player upload with confidence-based resolution
 // POST /friends/submit-ocr-result
 // ============================================================
 app.post('/friends/submit-ocr-result', sensitiveLimiter, async (req, res) => {
@@ -890,148 +984,182 @@ app.post('/friends/submit-ocr-result', sensitiveLimiter, async (req, res) => {
         if (!match.creator_id || !match.joiner_id)
             return res.status(400).json({ error: 'Match does not have two players yet' });
 
-        const confidence = ocrResult?.confidence ?? 0;
+        const confidence = verificationResult?.confidence ?? 0;
         const fraudScore = verificationResult?.fraudScore ?? 999;
         const score1 = ocrResult?.score1;
         const score2 = ocrResult?.score2;
-        const autoWinnerReason = ocrResult?.autoWinnerReason;
+        const teamMatch = verificationResult?.teamMatch;
 
-        // Server-side re-validation of OCR quality
-        if (confidence < 80) {
-            return res.status(422).json({ error: `OCR confidence too low (${confidence}%) — please report manually.`, confidence });
+        // Server-side re-validation of confidence
+        if (confidence < 50) {
+            return res.status(422).json({ error: `Confidence too low (${confidence}%) — please upload a clearer screenshot or contact admin.`, confidence });
         }
-        if (fraudScore >= 30) {
-            return res.status(422).json({ error: 'Screenshot has suspicious flags. Both players need to upload for corroboration.', fraudScore, warnings: verificationResult?.warnings });
-        }
-        if (!autoWinnerReason || autoWinnerReason === 'draw') {
-            return res.status(422).json({
-                error: score1 === score2
-                    ? 'It\'s a draw — no payout. Contact admin if this is wrong.'
-                    : 'Could not determine winner from screenshot. Please report manually.',
-                score1, score2
-            });
+        if (fraudScore >= 50) {
+            return res.status(422).json({ error: 'Screenshot has suspicious flags. Match sent for admin review.', fraudScore, warnings: verificationResult?.warnings });
         }
 
-        // Check that the uploading user's context check didn't fail
-        const contextCheck = verificationResult?.checks?.matchContext;
-        if (contextCheck && !contextCheck.passed) {
-            return res.status(422).json({
-                error: contextCheck.warning || 'Screenshot does not appear to be from this match.',
-                warnings: verificationResult?.warnings
-            });
+        // Determine winner based on team mapping and score
+        let winnerId = null;
+        let draw = false;
+        if (teamMatch && teamMatch.bestMapping !== 'ambiguous') {
+            // Determine which player corresponds to home/away
+            const isCreatorHome = (teamMatch.bestHome === match.creator_team);
+            const homeId = isCreatorHome ? match.creator_id : match.joiner_id;
+            const awayId = isCreatorHome ? match.joiner_id : match.creator_id;
+            if (score1 > score2) winnerId = homeId;
+            else if (score2 > score1) winnerId = awayId;
+            else draw = true;
+        } else {
+            // Team matching failed – cannot auto-settle
+            return res.status(422).json({ error: 'Could not reliably match team names. Please report manually.' });
         }
 
-        const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
-        const uploaderWins = autoWinnerReason === 'home_wins';
-        const claimedWinnerId = uploaderWins ? user.id : opponentId;
-        const claimedScore = `${score1}-${score2}`;
-
-        // ── Two-upload corroboration ──────────────────────────────────────────
-        // If the opponent already submitted their OCR result, compare scores.
-        // If this is the first submission, store it and wait.
-        const existingOcr = match.first_ocr_data;
-
-        if (!existingOcr) {
-            // First upload — store the claimed result, wait for opponent
+        if (draw) {
+            // Draw – no payout, just mark completed
             await supabaseAdmin.from('friend_matches').update({
-                first_ocr_data: {
-                    submitterId: user.id,
-                    claimedWinnerId,
-                    score: claimedScore,
-                    screenshotUrl,
-                    confidence,
-                    fraudScore,
-                    submittedAt: new Date().toISOString()
-                },
-                screenshot_url: screenshotUrl,
-                reported_winner_id: claimedWinnerId,
-                reported_by_id: user.id,
-                reported_at: new Date().toISOString()
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                settlement_method: 'draw',
+                settlement_confidence: confidence,
+                verification_data: verificationResult
+            }).eq('id', matchId);
+            return res.status(200).json({ message: 'Match ended in a draw. No payout.', draw: true });
+        }
+
+        // Auto-settle if confidence is high enough
+        if (confidence >= 85) {
+            const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', {
+                p_user_id: winnerId,
+                p_amount: match.winner_prize
+            });
+            if (payoutErr) throw payoutErr;
+
+            await supabaseAdmin.from('friend_matches').update({
+                winner_id: winnerId,
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                settlement_confidence: confidence,
+                settlement_method: 'auto',
+                verification_data: verificationResult
             }).eq('id', matchId);
 
-            console.log(`📸 OCR first submission: match=${matchId}, user=${user.id}, score=${claimedScore}, claimed winner=${claimedWinnerId}`);
+            console.log(`✅ Auto-settled match ${matchId} – winner ${winnerId}, prize ${match.winner_prize}`);
 
             return res.status(200).json({
-                message: 'Score recorded! Waiting for your opponent to upload their screenshot to confirm.',
-                waitingForOpponent: true,
-                claimedScore,
-                youWon: uploaderWins
+                message: 'Match auto-settled! Winner paid.',
+                winnerId,
+                prizePaid: match.winner_prize,
+                confidence,
+                youWon: winnerId === user.id
             });
         }
 
-        // Prevent same user submitting twice
-        if (existingOcr.submitterId === user.id) {
-            return res.status(400).json({ error: 'You already submitted your screenshot. Waiting for opponent.' });
-        }
-
-        // ── Both uploaded — compare scores ────────────────────────────────────
-        const scoresMatch = existingOcr.score === claimedScore;
-        const winnersMatch = existingOcr.claimedWinnerId === claimedWinnerId;
-
-        if (!scoresMatch || !winnersMatch) {
-            // Scores don't agree — flag for admin
-            await supabaseAdmin.from('friend_matches').update({
-                status: 'disputed',
-                disputed_at: new Date().toISOString(),
-                dispute_reason: `OCR score mismatch: P1 claimed ${existingOcr.score} (winner: ${existingOcr.claimedWinnerId}), P2 claimed ${claimedScore} (winner: ${claimedWinnerId})`,
-                verification_data: { firstOcr: existingOcr, secondOcr: { submitterId: user.id, score: claimedScore, claimedWinnerId } }
-            }).eq('id', matchId);
-
-            return res.status(409).json({
-                error: 'Your screenshot shows a different score than your opponent\'s. Match sent for admin review.',
-                p1Score: existingOcr.score,
-                p2Score: claimedScore,
-                requiresAdminReview: true
-            });
-        }
-
-        // Scores match — pay out
-        const winnerId = claimedWinnerId;
-        const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', { p_user_id: winnerId, p_amount: match.winner_prize });
-        if (payoutErr) {
-            console.error('OCR payout error:', payoutErr);
-            return res.status(500).json({ error: 'Failed to process payout. Contact support.' });
-        }
-
+        // Medium confidence – open challenge window
+        const challengeDeadline = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
         await supabaseAdmin.from('friend_matches').update({
-            winner_id: winnerId,
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            resolution_reason: `OCR corroborated: both players reported ${claimedScore} (confidence avg: ${Math.round((confidence + existingOcr.confidence) / 2)}%)`,
-            verification_data: { firstOcr: existingOcr, secondOcr: { submitterId: user.id, score: claimedScore, confidence, fraudScore } }
+            challenge_deadline: challengeDeadline,
+            challenge_uploaded: false,
+            first_upload_winner_id: winnerId,
+            first_upload_confidence: confidence,
+            first_upload_screenshot_url: screenshotUrl,
+            settlement_confidence: confidence,
+            verification_data: verificationResult
         }).eq('id', matchId);
 
-        // Store hash and device for future checks
-        if (verificationResult?.checks?.duplicate?.details?.hash) {
-            try {
-                await supabaseAdmin.from('screenshot_hashes')
-                    .insert([{ hash: verificationResult.checks.duplicate.details.hash, user_id: user.id, match_id: matchId }]);
-            } catch (err) {
-                // Ignore duplicate hash errors (hash is unique constraint)
-                if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
-                    console.error('Error storing hash:', err);
-                }
-            }
-        }
-        if (verificationResult?.checks?.device?.details?.device) {
-            await supabaseAdmin.from('user_screenshot_history')
-                .insert([{ user_id: user.id, device: verificationResult.checks.device.details.device, match_id: matchId }]);
-        }
-
-        console.log(`✅ OCR corroborated & settled: match=${matchId}, winner=${winnerId}, score=${claimedScore}`);
-
-        res.status(200).json({
-            message: 'Match settled! Both screenshots confirmed the same score.',
-            winnerId,
-            score: claimedScore.replace('-', ' – '),
-            prizePaid: match.winner_prize,
-            youWon: winnerId === user.id,
-            autoSettled: true,
-            corroborated: true
+        return res.status(200).json({
+            message: 'Result recorded. Your opponent has 2 hours to challenge.',
+            challengeDeadline,
+            confidence
         });
+
     } catch (err) {
         console.error('OCR auto-settle error:', err);
         return sendGenericError(res, 500, 'Failed to process result', err);
+    }
+});
+
+// ============================================================
+// OPPONENT CHALLENGE: second player uploads screenshot
+// POST /friends/challenge/:matchId
+// ============================================================
+app.post('/friends/challenge/:matchId', screenshotUploadLimiter, async (req, res) => {
+    const multer = getMulter();
+    const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (req, file, cb) => {
+            const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+            if (allowed.includes(file.mimetype)) cb(null, true);
+            else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+        }
+    }).single('screenshot');
+
+    await new Promise((resolve, reject) => {
+        upload(req, res, (err) => {
+            if (err) reject(err);
+            else resolve();
+        });
+    }).catch((err) => {
+        return res.status(400).json({ error: err.message || 'Invalid file upload' });
+    });
+
+    if (res.headersSent) return;
+
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
+        if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+
+        const { matchId } = req.params;
+        if (!req.file) return res.status(400).json({ error: 'No screenshot provided' });
+
+        const { data: match, error: matchErr } = await supabaseAdmin
+            .from('friend_matches')
+            .select('*')
+            .eq('id', matchId)
+            .single();
+        if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
+
+        // Verify user is part of match and match is in challenge window
+        if (match.creator_id !== user.id && match.joiner_id !== user.id) {
+            return res.status(403).json({ error: 'Not your match' });
+        }
+        if (match.status !== 'active' || !match.challenge_deadline) {
+            return res.status(400).json({ error: 'No active challenge window for this match' });
+        }
+        if (new Date() > new Date(match.challenge_deadline)) {
+            return res.status(400).json({ error: 'Challenge window expired' });
+        }
+        if (match.challenge_uploaded) {
+            return res.status(400).json({ error: 'Opponent already uploaded a challenge screenshot' });
+        }
+
+        // Upload to storage
+        const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+        const storageKey = `match-challenges/${matchId}/${user.id}-${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabaseAdmin.storage.from('screenshots').upload(storageKey, req.file.buffer, { contentType: req.file.mimetype });
+        if (uploadErr) throw uploadErr;
+        const { data: { publicUrl } } = supabaseAdmin.storage.from('screenshots').getPublicUrl(storageKey);
+
+        // Mark challenge as uploaded and set match to disputed
+        await supabaseAdmin
+            .from('friend_matches')
+            .update({
+                challenge_uploaded: true,
+                challenge_screenshot_url: publicUrl,
+                challenge_uploaded_at: new Date().toISOString(),
+                status: 'disputed',
+                disputed_at: new Date().toISOString(),
+                dispute_reason: 'Opponent challenged result'
+            })
+            .eq('id', matchId);
+
+        res.json({ message: 'Challenge screenshot uploaded. Match sent for admin review.' });
+    } catch (err) {
+        console.error('Challenge upload error:', err);
+        res.status(500).json({ error: 'Failed to process challenge' });
     }
 });
 
@@ -1047,7 +1175,6 @@ app.get('/friends/my-matches', async (req, res) => {
         const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
         if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-        // Fetch matches where user is creator or joiner
         const { data: matches, error } = await supabaseAdmin
             .from('friend_matches')
             .select('*')
@@ -1060,7 +1187,6 @@ app.get('/friends/my-matches', async (req, res) => {
             return res.json([]);
         }
 
-        // Fetch usernames for all unique user IDs in the matches
         const userIds = new Set();
         matches?.forEach(m => {
             if (m.creator_id) userIds.add(m.creator_id);
@@ -1079,7 +1205,6 @@ app.get('/friends/my-matches', async (req, res) => {
             }
         }
 
-        // Attach usernames to matches
         const enrichedMatches = matches?.map(m => ({
             ...m,
             creator: m.creator_id ? { username: profileMap[m.creator_id] || null } : null,
@@ -1174,7 +1299,6 @@ app.get('/friends/match-status/:matchId', async (req, res) => {
         if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
         const { matchId } = req.params;
-        // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(matchId)) {
             return res.status(400).json({ error: 'Invalid match ID format' });
@@ -1194,7 +1318,6 @@ app.get('/friends/match-status/:matchId', async (req, res) => {
             return res.status(403).json({ error: 'Not authorized to view this match' });
         }
 
-        // Fetch joiner username if exists
         let joinerUsername = null;
         if (match.joiner_id) {
             const { data: profile } = await supabaseAdmin
@@ -1213,7 +1336,8 @@ app.get('/friends/match-status/:matchId', async (req, res) => {
             wagerAmount: match.wager_amount,
             winnerPrize: match.winner_prize,
             expiresAt: match.expires_at,
-            startedAt: match.started_at
+            startedAt: match.started_at,
+            challengeDeadline: match.challenge_deadline
         });
     } catch (err) {
         console.error('Match status error:', err);
@@ -1234,7 +1358,7 @@ async function autoResolveAbandonedMatches() {
             .select('*')
             .eq('status', 'active')
             .not('reported_by_id', 'is', null)
-            .lt('reported_at', twoHoursAgo);  // Fixed: use reported_at
+            .lt('reported_at', twoHoursAgo);
 
         if (error) {
             console.error('Error fetching abandoned matches:', error);
@@ -1250,18 +1374,13 @@ async function autoResolveAbandonedMatches() {
 
         for (const match of abandonedMatches) {
             const winnerId = match.reported_winner_id;
-            await supabaseAdmin.rpc('credit_wallet', {
-                p_user_id: winnerId,
-                p_amount: match.winner_prize
-            });
+            // Instead of auto-paying, mark as disputed for admin review
             await supabaseAdmin.from('friend_matches').update({
-                winner_id: winnerId,
-                status: 'completed',
-                completed_at: new Date().toISOString(),
-                auto_resolved: true,
-                resolution_reason: 'Opponent failed to report within 2 hours'
+                status: 'disputed',
+                disputed_at: new Date().toISOString(),
+                dispute_reason: 'Only one player reported within time limit'
             }).eq('id', match.id);
-            console.log(`✅ Auto-resolved match ${match.match_code} - Winner: ${winnerId}`);
+            console.log(`⚠️  Match ${match.match_code} disputed due to missing opponent report.`);
         }
     } catch (err) {
         console.error('Auto-resolve error:', err);
@@ -1270,6 +1389,61 @@ async function autoResolveAbandonedMatches() {
 
 setInterval(autoResolveAbandonedMatches, 30 * 60 * 1000);
 setTimeout(autoResolveAbandonedMatches, 10000);
+
+// ============================================================
+// AUTO-RESOLVE CHALLENGE WINDOWS (Background Task)
+// ============================================================
+async function resolveChallengeWindows() {
+    try {
+        const now = new Date().toISOString();
+        const { data: matches, error } = await supabaseAdmin
+            .from('friend_matches')
+            .select('*')
+            .eq('status', 'active')
+            .not('challenge_deadline', 'is', null)
+            .lt('challenge_deadline', now)
+            .eq('challenge_uploaded', false);
+
+        if (error) throw error;
+        if (!matches || matches.length === 0) return;
+
+        console.log(`⏰ Resolving ${matches.length} expired challenge windows`);
+
+        for (const match of matches) {
+            if (match.first_upload_winner_id) {
+                // Pay the original reporter
+                const { error: payoutErr } = await supabaseAdmin.rpc('credit_wallet', {
+                    p_user_id: match.first_upload_winner_id,
+                    p_amount: match.winner_prize
+                });
+                if (payoutErr) {
+                    console.error(`Payout failed for match ${match.id}:`, payoutErr);
+                    continue;
+                }
+                await supabaseAdmin.from('friend_matches').update({
+                    winner_id: match.first_upload_winner_id,
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                    settlement_method: 'challenge_timeout',
+                    settlement_confidence: match.first_upload_confidence
+                }).eq('id', match.id);
+                console.log(`💰 Challenge window expired – paid ${match.first_upload_winner_id} for match ${match.id}`);
+            } else {
+                // No winner recorded – mark disputed
+                await supabaseAdmin.from('friend_matches').update({
+                    status: 'disputed',
+                    disputed_at: new Date().toISOString(),
+                    dispute_reason: 'Challenge window expired but no winner recorded'
+                }).eq('id', match.id);
+            }
+        }
+    } catch (err) {
+        console.error('Resolve challenge windows error:', err);
+    }
+}
+
+setInterval(resolveChallengeWindows, 10 * 60 * 1000);
+setTimeout(resolveChallengeWindows, 20000);
 
 // ============================================================
 // WALLET DEPOSIT
@@ -1381,7 +1555,7 @@ app.post('/mpesa/callback', async (req, res) => {
 app.get('/mpesa/status', async (req, res) => {
     try {
         const { checkoutId } = req.query;
-        const { data } = await supabase.from('transactions').select('status, mpesa_receipt')
+        const { data } = await supabaseAdmin.from('transactions').select('status, mpesa_receipt')
             .eq('checkout_request_id', checkoutId)
             .maybeSingle();
         res.json({ status: data ? data.status : 'pending', mpesaReceipt: data?.mpesa_receipt });
@@ -1513,7 +1687,6 @@ app.delete('/admin/tournaments/:id', async (req, res) => {
     }
 });
 
-// FIXED: admin friend matches using separate profile fetch
 app.get('/admin/friend-matches', async (req, res) => {
     try {
         if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
@@ -1525,7 +1698,6 @@ app.get('/admin/friend-matches', async (req, res) => {
         const { data, error } = await query;
         if (error) return res.status(500).json({ error: error.message });
 
-        // Fetch profiles for all users involved
         const userIds = new Set();
         data?.forEach(m => {
             if (m.creator_id) userIds.add(m.creator_id);
@@ -1615,11 +1787,6 @@ app.get('/tournaments', async (req, res) => {
 // SCREENSHOT UPLOAD + OCR VERIFICATION
 // POST /screenshots/upload-and-verify
 // ============================================================
-const screenshotUploadLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 15,
-    message: { error: 'Too many screenshot uploads. Try again later.' }
-});
 
 app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, res) => {
     const multer = getMulter();
@@ -1670,52 +1837,43 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
         }
 
         const imageBuffer = req.file.buffer;
-
-        // ── Run fraud checks and OCR BEFORE storing ──────────────────────────
-        // We refuse to store obvious fakes — no point cluttering storage.
         const verifier = getVerifier();
-        let verificationResult = null;
-        let ocrResult = null;
-
-        if (verifier) {
-            try {
-                // Fetch opponent's username so verifier can check it appears on screen
-                const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
-                let opponentUsername = null;
-                if (opponentId) {
-                    const { data: oppProfile } = await supabaseAdmin
-                        .from('profiles')
-                        .select('username')
-                        .eq('id', opponentId)
-                        .maybeSingle();
-                    opponentUsername = oppProfile?.username || null;
-                }
-
-                // Fetch uploader's own username for self-presence check
-                let uploaderUsername = null;
-                {
-                    const { data: uploaderProfile } = await supabaseAdmin
-                        .from('profiles').select('username').eq('id', user.id).maybeSingle();
-                    uploaderUsername = uploaderProfile?.username || null;
-                }
-
-                [verificationResult, ocrResult] = await Promise.all([
-                    verifier.verifyScreenshot(imageBuffer, {
-                        userId: user.id,
-                        matchId,
-                        startedAt: match.started_at,
-                        opponentUsername,
-                        uploaderUsername,           // NEW: uploader's own name checked too
-                        matchCode: match.match_code
-                    }),
-                    verifier.extractScoreWithConfidence(imageBuffer)
-                ]);
-            } catch (verifyErr) {
-                console.error('Verification error:', verifyErr.message);
-            }
+        if (!verifier) {
+            return res.status(503).json({ error: 'Verification service unavailable' });
         }
 
-        // Hard reject: duplicate screenshot (someone already used this exact image)
+        const opponentId = match.creator_id === user.id ? match.joiner_id : match.creator_id;
+        let opponentUsername = null;
+        if (opponentId) {
+            const { data: oppProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('username')
+                .eq('id', opponentId)
+                .maybeSingle();
+            opponentUsername = oppProfile?.username || null;
+        }
+
+        let uploaderUsername = null;
+        {
+            const { data: uploaderProfile } = await supabaseAdmin
+                .from('profiles').select('username').eq('id', user.id).maybeSingle();
+            uploaderUsername = uploaderProfile?.username || null;
+        }
+
+        const verificationResult = await verifier.verifyScreenshot(imageBuffer, {
+            userId: user.id,
+            matchId,
+            startedAt: match.started_at,
+            opponentUsername,
+            uploaderUsername,
+            matchCode: match.match_code,
+            creatorTeam: match.creator_team,
+            joinerTeam: match.joiner_team
+        });
+
+        const ocrResult = await verifier.extractScoreWithConfidence(imageBuffer);
+
+        // Fraud checks (duplicate, pre-match, too early, etc.)
         const isDuplicate = verificationResult?.checks?.duplicate?.passed === false &&
             verificationResult.checks.duplicate.details?.originalMatch;
         if (isDuplicate) {
@@ -1727,7 +1885,6 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             });
         }
 
-        // Hard reject: taken before match started (impossible screenshot)
         const takenBeforeMatch = verificationResult?.checks?.metadata?.details?.timeDiffMinutes < -5;
         if (takenBeforeMatch) {
             console.warn(`🚫 Pre-match screenshot rejected: match=${matchId}, user=${user.id}`);
@@ -1738,7 +1895,6 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             });
         }
 
-        // Hard reject: uploaded too early (impossible — match can't be over yet)
         const tooEarly = verificationResult?.checks?.timestamp?.passed === false &&
             verificationResult.checks.timestamp.details?.delayMinutes < 1;
         if (tooEarly) {
@@ -1750,7 +1906,6 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             });
         }
 
-        // Hard reject: image contains no numbers at all — cannot be a game screenshot
         const noNumbers = verificationResult?.checks?.ocrSanity?.passed === false &&
             verificationResult.checks.ocrSanity.details?.hasNumbers === false;
         if (noNumbers) {
@@ -1762,9 +1917,6 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             });
         }
 
-        // Hard reject: opponent's username not found in image AND OCR confidence is low
-        // Both failing together = almost certainly not this match's screenshot.
-        // (We allow one to fail alone — OCR isn't perfect — but both together is a strong signal.)
         const contextFailed = verificationResult?.checks?.matchContext?.passed === false &&
             !verificationResult.checks.matchContext.details?.foundPartialUsername;
         const ocrWeak = (ocrResult?.confidence ?? 0) < 40;
@@ -1777,7 +1929,7 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             });
         }
 
-        // ── Now store the screenshot (passed basic checks) ────────────────────
+        // Store screenshot
         const ext = req.file.mimetype === 'image/png' ? 'png' : req.file.mimetype === 'image/webp' ? 'webp' : 'jpg';
         const storageKey = `match-screenshots/${matchId}/${user.id}-${Date.now()}.${ext}`;
 
@@ -1796,33 +1948,19 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
             .from('screenshots')
             .getPublicUrl(storageKey);
 
-        // Determine auto-settle eligibility
-        let autoWinnerReason = null;
-        if (ocrResult?.isValid && ocrResult.confidence >= 80) {
-            const s1 = ocrResult.score1;
-            const s2 = ocrResult.score2;
-            if (s1 !== null && s2 !== null) {
-                autoWinnerReason = s1 > s2 ? 'home_wins' : s2 > s1 ? 'away_wins' : 'draw';
-            }
-        }
-
-        const fraudScore = verificationResult?.fraudScore ?? 0;
-        console.log(`📸 Screenshot accepted: match=${matchId}, user=${user.id}, fraud=${fraudScore}, ocr=${ocrResult?.confidence?.toFixed(0) ?? 'n/a'}%, autoSettle=${autoWinnerReason ?? 'no'}`);
-
-        // Store hash at upload time so near-duplicate checks on subsequent uploads work
-        // immediately — not just after match completion
         const uploadHash = verificationResult?.checks?.duplicate?.details?.hash;
         if (uploadHash) {
             try {
                 await supabaseAdmin.from('screenshot_hashes')
                     .insert([{ hash: uploadHash, user_id: user.id, match_id: matchId }]);
             } catch (err) {
-                // Ignore duplicate hash errors (hash is unique constraint)
                 if (!err.message?.includes('duplicate') && !err.code?.includes('23505')) {
                     console.error('Error storing hash:', err);
                 }
             }
         }
+
+        console.log(`📸 Screenshot accepted: match=${matchId}, user=${user.id}, confidence=${verificationResult.confidence}%, recommendation=${verificationResult.recommendation}`);
 
         res.status(200).json({
             screenshotUrl: publicUrl,
@@ -1831,12 +1969,13 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
                 score2: ocrResult.score2,
                 confidence: Math.round(ocrResult.confidence),
                 isValid: ocrResult.isValid,
-                rawText: ocrResult.rawText,
-                autoWinnerReason
+                rawText: ocrResult.rawText
             } : null,
-            verificationResult: verificationResult ? {
-                fraudScore,
+            verificationResult: {
+                fraudScore: verificationResult.fraudScore,
                 recommendation: verificationResult.recommendation,
+                confidence: verificationResult.confidence,
+                teamMatch: verificationResult.teamMatch,
                 warnings: verificationResult.warnings,
                 isValid: verificationResult.isValid,
                 checks: {
@@ -1845,8 +1984,10 @@ app.post('/screenshots/upload-and-verify', screenshotUploadLimiter, async (req, 
                     manipulation: verificationResult.checks.manipulation?.passed,
                     duplicate: verificationResult.checks.duplicate?.passed,
                     ocrSanity: verificationResult.checks.ocrSanity?.passed,
+                    teamNames: verificationResult.checks.teamNames?.passed,
+                    finalWord: verificationResult.checks.finalWord?.passed
                 }
-            } : null
+            }
         });
 
     } catch (err) {

@@ -4,13 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | Vumbua eFootball</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://low-lilllie-kandabrian-18be1e15.koyeb.app;">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+    <!-- Production-ready CSP -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://low-lilllie-kandabrian-18be1e15.koyeb.app wss://low-lilllie-kandabrian-18be1e15.koyeb.app https://wqnnuqudxsnxldlgxhwr.supabase.co wss://wqnnuqudxsnxldlgxhwr.supabase.co;">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* ... (all your existing styles remain exactly as before) ... */
         :root {
             --neon: #00ff41;
             --neon-dim: rgba(0,255,65,0.08);
@@ -65,6 +68,7 @@
             display: flex; align-items: center; gap: 8px;
             background: var(--card); border: 1px solid var(--border);
             padding: 7px 14px; border-radius: 20px;
+            cursor: pointer;
         }
         .avatar {
             width: 26px; height: 26px; border-radius: 50%;
@@ -98,7 +102,26 @@
             content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
             background: linear-gradient(to right, transparent, rgba(0,255,65,0.2), transparent);
         }
-        .wallet-label { font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+        .wallet-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; color: #555; margin-bottom: 10px;
+        }
+        .realtime-indicator {
+            font-size: 0.6rem;
+            color: var(--neon);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .realtime-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--neon);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
         .wallet-amount {
             font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem;
             color: var(--neon); line-height: 1;
@@ -257,7 +280,10 @@
             display: flex;
             gap: 8px;
         }
-        /* NEW: Result Report Modal */
+        .profile-modal .modal-sheet { max-width: 400px; }
+        .profile-field { margin-bottom: 16px; }
+        .profile-field label { display: block; font-size: 0.7rem; letter-spacing: 1.5px; text-transform: uppercase; color: #aaa; margin-bottom: 6px; }
+        .profile-field input { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 10px; }
         .modal-overlay {
             position: fixed; inset: 0; z-index: 500;
             background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
@@ -317,8 +343,6 @@
             border-radius: 10px; padding: 12px 14px; font-size: 0.82rem; color: #ff8888;
             margin-bottom: 14px; display: none;
         }
-
-        /* ── Bottom Nav ── */
         .bottom-nav {
             position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
             width: 100%; max-width: 480px; background: rgba(10,10,14,0.95);
@@ -333,8 +357,6 @@
         .nav-item-label { font-size: 0.6rem; letter-spacing: 0.5px; text-transform: uppercase; }
         .nav-item.active { color: var(--neon); }
         .nav-item.active svg { filter: drop-shadow(0 0 5px rgba(0,255,65,0.5)); }
-
-        /* ── Amount Presets ── */
         .amount-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
         .preset-btn {
             padding: 9px 6px; background: var(--card); border: 1px solid var(--border);
@@ -344,18 +366,12 @@
         .preset-btn:hover, .preset-btn.selected {
             border-color: var(--neon); color: var(--neon); background: rgba(0,255,65,0.06);
         }
-
-        /* ── Match status badges ── */
         .status-pending { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
         .status-live { background: rgba(0,255,65,0.1); color: var(--neon); border: 1px solid rgba(0,255,65,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
         .status-disputed { background: rgba(255,68,68,0.1); color: #ff6666; border: 1px solid rgba(255,68,68,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
         .status-closed { background: rgba(100,100,100,0.1); color: #777; border: 1px solid rgba(100,100,100,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
-
-        /* ── Balance flash ── */
         @keyframes balFlash { 0%,100%{color:var(--neon);} 50%{color:#fff; text-shadow:0 0 20px #fff;} }
         .balance-flash { animation: balFlash 0.6s ease; }
-
-        /* ── Breakdown box ── */
         .breakdown-box {
             background: rgba(0,255,65,0.04); border: 1px solid rgba(0,255,65,0.12);
             border-radius: 12px; padding: 14px; margin: 14px 0;
@@ -365,19 +381,13 @@
             font-size: 0.8rem; color: #aaa; padding: 4px 0;
         }
         .breakdown-row.total { color: var(--neon); font-weight: 700; font-size: 0.9rem; border-top: 1px solid rgba(0,255,65,0.15); margin-top: 6px; padding-top: 10px; }
-
-        /* ── Step system ── */
         .step { display: none; }
         .step.active { display: block; }
-
-        /* ── Misc buttons ── */
         .btn { padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: 'Outfit', sans-serif; border: none; transition: all 0.2s; }
         .btn-green { background: var(--neon); color: #000; }
         .btn-red { background: rgba(255,68,68,0.15); color: #ff6666; border: 1px solid rgba(255,68,68,0.3); }
         .matches-list { min-height: 60px; }
         .modal-select { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 13px 16px; border-radius: 10px; font-size: 1rem; font-family: 'Outfit', sans-serif; }
-
-        /* OCR Auto-Settle Cards */
         .ocr-result-card {
             background: rgba(0,255,65,0.06); border: 1px solid rgba(0,255,65,0.2);
             border-radius: 16px; padding: 20px; text-align: center; margin-bottom: 14px;
@@ -398,8 +408,6 @@
         .winner-prize-text { font-size: 0.85rem; color: #aaa; margin-top: 4px; font-weight: 600; }
         .winner-announce.you-won { border-color: rgba(0,255,65,0.4); background: linear-gradient(135deg, rgba(0,255,65,0.12), rgba(0,255,65,0.04)); }
         .winner-announce.you-won .winner-name { text-shadow: 0 0 20px rgba(0,255,65,0.5); }
-
-        /* Screenshot Upload UI */
         .screenshot-upload-zone {
             border: 2px dashed rgba(0,255,65,0.25);
             border-radius: 14px; padding: 24px 16px;
@@ -461,6 +469,16 @@
         .screenshot-thumb.visible { display: block; }
         .auto-fill-notice { font-size: 0.72rem; color: var(--neon); padding: 6px 0; display: none; }
         .auto-fill-notice.visible { display: block; }
+        .confidence-meter {
+            background: rgba(0,255,65,0.05);
+            border-radius: 20px;
+            padding: 8px 12px;
+            margin: 12px 0;
+            font-size: 0.8rem;
+        }
+        .confidence-high { color: var(--neon); }
+        .confidence-medium { color: #ffb400; }
+        .confidence-low { color: #ff8888; }
     </style>
 </head>
 <body>
@@ -476,7 +494,7 @@
     <nav class="topnav">
         <span class="nav-logo">VUMBUA</span>
         <div class="nav-right">
-            <div class="nav-user">
+            <div class="nav-user" onclick="openProfileModal()">
                 <div class="avatar" id="avatar-letter">P</div>
                 <span class="nav-username" id="username-display">@Player</span>
             </div>
@@ -485,12 +503,17 @@
     </nav>
     <div class="content">
         <div class="wallet-card">
-            <div class="wallet-label">Available Balance</div>
+            <div class="wallet-label">
+                Available Balance
+                <span class="realtime-indicator" id="realtime-indicator" title="Live updates active">
+                    <span class="dot"></span> LIVE
+                </span>
+            </div>
             <div class="wallet-amount">
                 <span class="wallet-currency">KES</span><span id="balance">0.00</span>
             </div>
             <div class="wallet-meta">
-                <div class="wallet-phone">Linked M-PESA: <span id="phone-display">—</span></div>
+                <div class="wallet-phone">Team: <span id="team-display">—</span></div>
             </div>
         </div>
         <div class="wallet-actions">
@@ -582,6 +605,26 @@
     <div class="nav-item">
         <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span class="nav-item-label">Profile</span>
+    </div>
+</div>
+
+<!-- ═══ PROFILE MODAL ═══ -->
+<div class="modal-overlay profile-modal" id="profile-modal" onclick="if(event.target === this) closeModal('profile-modal')">
+    <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">YOUR PROFILE</div>
+        <p class="modal-subtitle">Update your eFootball team name</p>
+        <div class="profile-field">
+            <label>Username</label>
+            <input type="text" id="profile-username" class="modal-input" disabled>
+        </div>
+        <div class="profile-field">
+            <label>Team Name</label>
+            <input type="text" id="profile-team" class="modal-input" placeholder="e.g., Manchester United">
+        </div>
+        <div class="balance-insufficient" id="profile-error"></div>
+        <button class="btn-mpesa" style="background:var(--neon);color:#000;" onclick="saveProfile()">SAVE CHANGES</button>
+        <button class="btn-cancel" onclick="closeModal('profile-modal')">Cancel</button>
     </div>
 </div>
 
@@ -780,11 +823,14 @@
             <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
         </div>
 
-        <!-- Step 2a: OCR success — auto-settle confirmation -->
+        <!-- Step 2a: High confidence → auto-settle -->
         <div id="report-step-auto" style="display:none;">
             <div class="ocr-result-card" id="ocr-result-card">
                 <div class="ocr-result-score" id="ocr-result-score">0 – 0</div>
                 <div class="ocr-result-label" id="ocr-result-label">Score detected</div>
+            </div>
+            <div class="confidence-meter" id="auto-confidence-meter">
+                <span id="auto-confidence-text">Confidence: 0%</span>
             </div>
             <div class="winner-announce" id="winner-announce">
                 <div class="winner-crown">🏆</div>
@@ -796,17 +842,39 @@
             </div>
             <div class="balance-insufficient" id="report-error-auto"></div>
             <button class="btn-mpesa" id="auto-settle-btn" style="background:var(--neon);color:#000;" onclick="confirmAutoSettle()">
-                ✅ SUBMIT MY SCORE
+                ✅ SUBMIT & SETTLE MATCH
             </button>
             <div style="font-size:0.7rem;color:#555;text-align:center;margin-top:8px;">
-                Your opponent also needs to upload their screenshot to confirm
+                This result will be final – no opponent confirmation needed.
             </div>
+        </div>
+
+        <!-- Step 2b: Medium confidence → challenge window -->
+        <div id="report-step-challenge" style="display:none;">
+            <div class="ocr-result-card" id="challenge-ocr-card">
+                <div class="ocr-result-score" id="challenge-ocr-score">0 – 0</div>
+                <div class="ocr-result-label" id="challenge-ocr-label">Score detected</div>
+            </div>
+            <div class="confidence-meter" id="challenge-confidence-meter">
+                <span id="challenge-confidence-text">Confidence: 0%</span>
+            </div>
+            <div class="friend-info" style="margin:16px 0;">
+                <strong style="color:var(--neon);">⏳ Challenge window</strong><br>
+                Your opponent has 2 hours to upload their screenshot. If they don't, you'll automatically win.
+            </div>
+            <div class="ocr-panel" id="ocr-panel-challenge" style="margin-bottom:16px;">
+                <div class="ocr-warn-list" id="ocr-warn-list-challenge"></div>
+            </div>
+            <div class="balance-insufficient" id="report-error-challenge"></div>
+            <button class="btn-mpesa" id="challenge-submit-btn" style="background:var(--neon);color:#000;" onclick="submitChallengeResult()">
+                ✅ SUBMIT MY SCORE
+            </button>
             <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">
                 Score wrong? Report manually →
             </button>
         </div>
 
-        <!-- Step 2b: Manual fallback (low OCR confidence or user override) -->
+        <!-- Step 2c: Manual fallback (low confidence or user override) -->
         <div id="report-step-manual" style="display:none;">
             <div class="ocr-panel" id="ocr-panel-manual" style="margin-bottom:12px;">
                 <div class="ocr-title">🤖 OCR Result</div>
@@ -830,6 +898,7 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="console.error('❌ Supabase CDN failed to load')"></script>
 <script>
     // --- Escape function for XSS prevention ---
     function escapeHtml(unsafe) {
@@ -851,11 +920,12 @@
     }
 
     // --- Global variables ---
-    let authToken = localStorage.getItem('supabaseToken');
+    let authToken = sessionStorage.getItem('supabaseToken');
     let currentUser = null;
     let currentBalance = 0;
     let currentPhone = '';
     let currentUsername = '';
+    let currentTeam = '';
     let currentCheckoutId = null;
     let pollInterval = null;
     let currentFriendMatch = null;
@@ -864,6 +934,7 @@
     let currentTournamentId = null, currentTournamentFee = 0, currentTournamentName = '';
     let balanceRefreshInterval = null;
     let matchStatusPollInterval = null;
+    let realtimeChannel = null;
 
     // --- Utility functions ---
     function showError(elementId, message) {
@@ -881,11 +952,20 @@
         ? 'http://localhost:3000' 
         : 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
     
-    // Debug: Log API URL to console
+    // Supabase configuration
+    // Always use production Supabase — we only have one project.
+    // The frontend API endpoint (localhost vs Koyeb) is separate from the Supabase project.
+    const SUPABASE_URL = 'https://wqnnuqudxsnxldlgxhwr.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxbm51cXVkeHNueGxkbGd4aHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5MDQ4NDUsImV4cCI6MjA4NjQ4MDg0NX0.MIoGi_PiwbGPrAxEfaypLLlpNkHUNliDNFoehdf7uPg';
+
     console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
     console.log('🔍 API URL:', API);
 
-    async function fetchWithAuth(url, options = {}) {
+    // --- Supabase realtime client (will be created in loadDashboard with fresh token) ---
+    let supabaseRealtime = null;
+
+    // --- Enhanced fetch with timeout ---
+    async function fetchWithAuth(url, options = {}, timeoutMs = 8000) {
         if (!authToken) { window.location.href = '/login'; return; }
         const headers = {
             'Content-Type': 'application/json',
@@ -893,99 +973,264 @@
             ...options.headers
         };
         const fullUrl = url.startsWith('http') ? url : `${API}${url}`;
-        const res = await fetch(fullUrl, { ...options, headers });
-        if (res.status === 401) {
-            localStorage.removeItem('supabaseToken');
-            localStorage.removeItem('supabaseUser');
-            window.location.href = '/login';
-            return;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        try {
+            const res = await fetch(fullUrl, { ...options, headers, signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.status === 401) {
+                sessionStorage.removeItem('supabaseToken');
+                sessionStorage.removeItem('supabaseUser');
+                window.location.href = '/login';
+                return;
+            }
+            return res;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            if (err.name === 'AbortError') {
+                throw new Error(`Request timeout after ${timeoutMs}ms`);
+            }
+            throw err;
         }
-        return res;
     }
 
-    // --- Load user data and balance ---
+    // --- Real‑time balance subscription ---
+    async function subscribeToBalance(userId) {
+        if (!supabaseRealtime) {
+            console.warn('⚠️ Supabase realtime not available, falling back to polling');
+            startBalanceAutoRefresh();
+            return;
+        }
+        
+        console.log('🔔 Setting up realtime subscription for wallet:', userId);
+        
+        // Clean up existing channel first
+        if (realtimeChannel) {
+            console.log('🧹 Removing old realtime channel...');
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+        }
+        
+        realtimeChannel = supabaseRealtime
+            .channel(`wallet-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'wallets',
+                    filter: `user_id=eq.${userId}`
+                },
+                (payload) => {
+                    console.log('🔔 Real-time balance update received:', payload);
+                    
+                    // CRITICAL: Validate this update is for the current user
+                    if (payload.new.user_id !== currentUser.id) {
+                        console.error('❌ SECURITY: Received balance update for different user!');
+                        console.error('   Expected:', currentUser.id);
+                        console.error('   Received:', payload.new.user_id);
+                        return; // Ignore updates for other users
+                    }
+                    
+                    console.log(`💰 Real-time balance update: ${currentBalance} → ${payload.new.balance}`);
+                    currentBalance = payload.new.balance;
+                    updateBalanceDisplay();
+                }
+            )
+            .subscribe((status) => {
+                console.log('🔌 Realtime subscription status:', status);
+                const indicator = document.getElementById('realtime-indicator');
+                if (indicator) {
+                    indicator.style.opacity = status === 'SUBSCRIBED' ? '1' : '0.5';
+                }
+                
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ Realtime subscription active for user:', userId);
+                } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                    console.error('❌ Realtime subscription failed:', status);
+                    console.log('📡 Falling back to polling...');
+                    startBalanceAutoRefresh(30000); // Poll every 30s if realtime fails
+                }
+            });
+        
+        console.log('✅ Realtime channel created:', `wallet-${userId}`);
+    }
+
+    // --- Load user data and balance with timeout guard ---
     async function loadDashboard() {
         try {
-            const userStr = localStorage.getItem('supabaseUser');
+            console.log('🚀 Starting loadDashboard...');
+            
+            // CRITICAL: Clean up any existing realtime connections first
+            if (supabaseRealtime && realtimeChannel) {
+                console.log('🧹 Cleaning up old realtime connection...');
+                supabaseRealtime.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+            }
+            
+            // Get fresh auth token from localStorage
+            authToken = sessionStorage.getItem('supabaseToken');
+            if (!authToken) {
+                console.error('❌ No auth token found');
+                window.location.href = '/login';
+                return;
+            }
+            
+            // Create fresh Supabase realtime client with current user's token
+            if (typeof supabase !== 'undefined') {
+                console.log('🔌 Creating new Supabase realtime client with fresh token...');
+                supabaseRealtime = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    global: { headers: { Authorization: `Bearer ${authToken}` } },
+                    realtime: { params: { apikey: SUPABASE_ANON_KEY } }
+                });
+            } else {
+                console.error('❌ Supabase SDK not loaded! Realtime will be unavailable.');
+            }
+            
+            const userStr = sessionStorage.getItem('supabaseUser');
             if (!userStr) { window.location.href = '/login'; return; }
             currentUser = JSON.parse(userStr);
+            console.log('👤 Loaded user:', currentUser.id, currentUser.phone);
+            
             currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0,8) || 'Player';
             document.getElementById('username-display').innerText = '@' + currentUsername;
             document.getElementById('avatar-letter').innerText = currentUsername.charAt(0).toUpperCase();
             if (currentUser.phone) {
                 let phone = currentUser.phone.replace('+254', '0');
-                document.getElementById('phone-display').innerText = phone;
+                const phoneEl = document.getElementById('phone-display');
+                if (phoneEl) phoneEl.innerText = phone;
                 currentPhone = phone;
                 const dPhone = document.getElementById('deposit-phone');
                 const wPhone = document.getElementById('withdraw-phone');
                 if (dPhone) dPhone.value = phone;
                 if (wPhone) wPhone.value = phone;
             }
-            await refreshBalance();
+
+            console.log('🚀 Loading dashboard data...');
+            
+            // CRITICAL: Load balance first and ensure it succeeds
+            let balanceLoaded = false;
+            try {
+                await refreshBalance(3); // Try 3 times
+                if (currentBalance >= 0) { // Check if balance was actually set
+                    balanceLoaded = true;
+                    console.log('✅ Balance loaded successfully:', currentBalance);
+                }
+            } catch (e) {
+                console.error('❌ Balance fetch failed:', e);
+            }
+            
+            if (!balanceLoaded) {
+                console.error('❌ CRITICAL: Balance could not be loaded!');
+                // Force set to 0 explicitly and show warning
+                currentBalance = 0;
+                updateBalanceDisplay();
+                alert('⚠️ Could not load your balance. Please refresh the page.');
+            }
+            
+            // Load profile (non-critical)
+            await loadProfile().catch(e => console.warn('Profile fetch failed:', e));
+
+            // Load tournaments and matches in background (don't block)
             loadTournaments();
             loadMyFriendMatches();
+            
+            // Set up real-time subscription with fresh client
+            if (supabaseRealtime) {
+                console.log('🔔 Setting up realtime subscription for user:', currentUser.id);
+                subscribeToBalance(currentUser.id);
+            } else {
+                console.warn('⚠️ Realtime unavailable, using polling only');
+                startBalanceAutoRefresh(30000); // Poll every 30s
+            }
+            
+            // Hide loading screen and show main content
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
             
-            // Start auto-refresh
-            startBalanceAutoRefresh();
+            // Fallback polling every 2 minutes (in case realtime fails)
+            startBalanceAutoRefresh(120000);
+            
+            console.log('✅ Dashboard loaded successfully');
             
         } catch (err) {
             console.error('Failed to load dashboard', err);
+            // Still hide loading screen to prevent infinite spinner
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
+            alert('⚠️ Error loading dashboard. Some features may not work correctly.');
         }
     }
 
-    async function refreshBalance(retries = 3) {
+    // --- Refresh balance with shorter retries ---
+    async function refreshBalance(retries = 2) {
+        console.log('🔄 refreshBalance called, current balance:', currentBalance);
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
-                const res = await fetchWithAuth('/wallet/balance');
-                if (!res) return; // auth failed, redirect handled by fetchWithAuth
+                console.log(`📡 Fetching balance (attempt ${attempt}/${retries})...`);
+                const res = await fetchWithAuth('/wallet/balance', {}, 5000);
+                if (!res) {
+                    console.error('❌ refreshBalance: No response from server');
+                    if (attempt < retries) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                        continue;
+                    }
+                    return;
+                }
                 if (!res.ok) {
-                    console.warn('refreshBalance: HTTP', res.status);
+                    console.error('❌ refreshBalance: HTTP', res.status);
+                    if (attempt < retries) {
+                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                        continue;
+                    }
                     return;
                 }
                 const data = await res.json();
+                console.log('📊 Balance response:', data);
                 if (typeof data.balance === 'number') {
+                    console.log(`✅ Balance updated: ${currentBalance} → ${data.balance}`);
                     currentBalance = data.balance;
                     updateBalanceDisplay();
-                    return; // success
+                    return;
+                } else {
+                    console.error('❌ Invalid balance response:', data);
                 }
             } catch (err) {
+                console.error(`❌ refreshBalance attempt ${attempt} failed:`, err.message, err);
                 if (attempt < retries) {
-                    // Server may still be starting — wait and retry
-                    await new Promise(r => setTimeout(r, 1500 * attempt));
-                } else {
-                    console.warn('refreshBalance failed after', retries, 'attempts:', err.message);
-                    // Don't reset balance to 0 — keep last known value
+                    await new Promise(r => setTimeout(r, 1000 * attempt));
                 }
             }
         }
+        console.error('❌ refreshBalance: All attempts failed, balance remains:', currentBalance);
     }
 
     function updateBalanceDisplay() {
         const balElement = document.getElementById('balance');
+        if (!balElement) {
+            console.error('❌ Balance element not found in DOM!');
+            return;
+        }
+        console.log('💰 Updating balance display to:', currentBalance);
         balElement.innerText = currentBalance.toFixed(2);
         balElement.classList.remove('balance-flash');
         void balElement.offsetWidth;
         balElement.classList.add('balance-flash');
     }
 
-    // Auto-refresh balance every 30 seconds
-    function startBalanceAutoRefresh() {
+    function startBalanceAutoRefresh(intervalMs = 30000) {
         if (balanceRefreshInterval) {
             clearInterval(balanceRefreshInterval);
         }
-        
         balanceRefreshInterval = setInterval(() => {
-            console.log('🔄 Auto-refreshing balance...');
+            console.log('🔄 Auto-refreshing balance (fallback)...');
             refreshBalance().catch(err => {
                 console.error('Failed to auto-refresh balance:', err);
             });
-        }, 30000); // 30 seconds
-        
-        console.log('✅ Balance auto-refresh started (30s interval)');
+        }, intervalMs);
+        console.log(`✅ Balance auto-refresh started (${intervalMs/1000}s interval)`);
     }
 
     function stopBalanceAutoRefresh() {
@@ -994,79 +1239,56 @@
             balanceRefreshInterval = null;
             console.log('⏹️  Balance auto-refresh stopped');
         }
+        if (realtimeChannel) {
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+        }
     }
 
-    // Real-time match status polling
-    function startMatchStatusPolling(matchId) {
-        if (matchStatusPollInterval) {
-            clearInterval(matchStatusPollInterval);
-        }
-        
-        console.log('🔄 Started polling match status for:', matchId);
-        
-        matchStatusPollInterval = setInterval(async () => {
-            try {
-                const res = await fetchWithAuth(`/friends/match-status/${matchId}`);
-                if (!res || !res.ok) return;
-                
-                const data = await res.json();
-                console.log('📊 Match status:', data.status);
-                
-                if (data.status === 'active') {
-                    stopMatchStatusPolling();
-                    onMatchBecameActive(data);
-                } else if (data.status === 'expired' || data.status === 'cancelled') {
-                    stopMatchStatusPolling();
-                    onMatchExpiredOrCancelled(data);
-                }
-                
-            } catch (err) {
-                console.error('Poll error:', err);
+    // --- Profile (team name) ---
+    async function loadProfile() {
+        try {
+            const res = await fetchWithAuth('/profile', {}, 5000);
+            if (res && res.ok) {
+                const profile = await res.json();
+                currentTeam = profile.team_name || '';
+                document.getElementById('team-display').innerText = currentTeam || '—';
+                document.getElementById('profile-username').value = escapeHtml(currentUsername);
+                document.getElementById('profile-team').value = escapeHtml(currentTeam);
             }
-        }, 3000);
-    }
-
-    function stopMatchStatusPolling() {
-        if (matchStatusPollInterval) {
-            clearInterval(matchStatusPollInterval);
-            matchStatusPollInterval = null;
-            console.log('⏹️  Stopped polling match status');
+        } catch (e) {
+            console.warn('loadProfile failed:', e);
         }
     }
 
-    function onMatchBecameActive(matchData) {
-        if (friendMatchTimer) {
-            clearInterval(friendMatchTimer);
-            friendMatchTimer = null;
+    async function saveProfile() {
+        const teamName = document.getElementById('profile-team').value.trim();
+        if (!teamName) { showError('profile-error', 'Team name cannot be empty'); return; }
+        if (teamName.length < 3) { showError('profile-error', 'Team name must be at least 3 characters'); return; }
+        const btn = document.querySelector('#profile-modal .btn-mpesa');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        try {
+            const res = await fetchWithAuth('/profile/team', {
+                method: 'POST',
+                body: JSON.stringify({ teamName })
+            }, 5000);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            currentTeam = teamName;
+            document.getElementById('team-display').innerText = teamName;
+            document.getElementById('profile-team').value = escapeHtml(teamName);
+            closeModal('profile-modal');
+            alert('Team name updated successfully!');
+        } catch (err) {
+            showError('profile-error', err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'SAVE CHANGES';
         }
-        
-        closeModal('waiting-friend-modal');
-        
-        const joinerName = matchData.joinerUsername || 'Opponent';
-        alert(`🎮 Match Started!\n\n${joinerName} joined your match!\nGood luck! Winner gets KES ${matchData.winnerPrize}`);
-        
-        loadMyFriendMatches();
     }
 
-    function onMatchExpiredOrCancelled(matchData) {
-        if (friendMatchTimer) {
-            clearInterval(friendMatchTimer);
-            friendMatchTimer = null;
-        }
-        
-        closeModal('waiting-friend-modal');
-        
-        if (matchData.status === 'expired') {
-            alert('⏰ Match Expired\n\nNo one joined in time. Your wager has been refunded.');
-        } else {
-            alert('❌ Match Cancelled\n\nYour wager has been refunded.');
-        }
-        
-        refreshBalance();
-        loadMyFriendMatches();
-    }
-
-    // --- TOURNAMENTS (Safe DOM) ---
+    // --- TOURNAMENTS ---
     async function loadTournaments() {
         try {
             const res = await fetch(`${API}/tournaments`);
@@ -1088,12 +1310,10 @@
             container.appendChild(createElementSafe('div', { class: 'tournament-card' }, 'No active tournaments right now.'));
             return;
         }
-
         tournaments.forEach(t => {
             const card = createElementSafe('div', { class: `tournament-card ${t.status === 'live' ? 'live' : ''}` });
             card.addEventListener('click', () => openChallengeModal(t.id, t.name, t.entry_fee));
 
-            // Header
             const headerDiv = createElementSafe('div', { class: 't-header' });
             const titleDiv = createElementSafe('div', {});
             titleDiv.appendChild(createElementSafe('div', { class: 't-name' }, t.name));
@@ -1114,7 +1334,6 @@
             headerDiv.appendChild(badgeSpan);
             card.appendChild(headerDiv);
 
-            // Footer
             const footerDiv = createElementSafe('div', { class: 't-footer' });
             const prizeDiv = createElementSafe('div', { class: 't-prize' });
             prizeDiv.appendChild(createElementSafe('small', {}, 'PRIZE POOL'));
@@ -1128,7 +1347,6 @@
             footerDiv.appendChild(rightDiv);
             card.appendChild(footerDiv);
 
-            // Progress
             const pct = t.max_players > 0 ? Math.round((t.current_players / t.max_players) * 100) : 0;
             const progressDiv = createElementSafe('div', { class: 'progress-bar' });
             progressDiv.appendChild(createElementSafe('div', { class: 'progress-fill', style: `width:${pct}%` }));
@@ -1178,7 +1396,7 @@
             const res = await fetchWithAuth('/wallet/deposit', {
                 method: 'POST',
                 body: JSON.stringify({ amount, phone: cleanPhone })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             currentCheckoutId = data.checkoutRequestId;
@@ -1192,7 +1410,7 @@
     }
     async function checkDepositStatus(checkoutId) {
         try {
-            const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${checkoutId}`);
+            const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${checkoutId}`, {}, 5000);
             if (!res) return;
             const data = await res.json();
             if (data.status === 'completed') {
@@ -1230,7 +1448,7 @@
             const res = await fetchWithAuth('/wallet/withdraw', {
                 method: 'POST',
                 body: JSON.stringify({ amount, phone: cleanPhone })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             closeModal('withdraw-modal');
@@ -1268,13 +1486,13 @@
                 const payRes = await fetchWithAuth('/wallet/deposit', {
                     method: 'POST',
                     body: JSON.stringify({ amount: currentTournamentFee, phone: '+254' + currentPhone.replace(/^0/, '') })
-                });
+                }, 10000);
                 const payData = await payRes.json();
                 if (!payRes.ok) { switchStep('challenge-modal', 1); showError('challenge-error', payData.error); return; }
                 currentCheckoutId = payData.checkoutRequestId;
                 pollInterval = setInterval(async () => {
                     try {
-                        const sRes = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${currentCheckoutId}`);
+                        const sRes = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${currentCheckoutId}`, {}, 5000);
                         if (!sRes) return;
                         const sData = await sRes.json();
                         if (sData.status === 'completed') {
@@ -1298,6 +1516,7 @@
     }
     async function doJoinTournament(paymentMethod, checkoutId) {
         try {
+            console.log('📝 Joining tournament:', currentTournamentId, 'Payment:', paymentMethod);
             const res = await fetchWithAuth('/tournament/join', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1306,11 +1525,18 @@
                     paymentMethod,
                     checkoutId
                 })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
+            
+            console.log('✅ Tournament joined successfully');
+            
             closeModal('challenge-modal');
-            if (paymentMethod === 'wallet') { currentBalance -= currentTournamentFee; updateBalanceDisplay(); }
+            
+            // CRITICAL FIX: Always refresh balance from server after tournament join
+            await refreshBalance(3);
+            console.log('💰 Balance refreshed after tournament join:', currentBalance);
+            
             if (data.roomCode) {
                 document.getElementById('room-code-display').textContent = data.roomCode;
                 document.getElementById('room-modal').classList.add('open');
@@ -1326,12 +1552,22 @@
 
     // --- Friend Match Functions ---
     function openCreateMatchModal() {
+        if (!currentTeam) {
+            alert('Please set your team name in profile before creating a match.');
+            openProfileModal();
+            return;
+        }
         document.getElementById('friend-wager-input').value = 100;
         updateFriendBreakdown();
         hideError('create-friend-error');
         document.getElementById('create-friend-modal').classList.add('open');
     }
     function openJoinMatchModal() {
+        if (!currentTeam) {
+            alert('Please set your team name in profile before joining a match.');
+            openProfileModal();
+            return;
+        }
         document.getElementById('join-friend-code').value = '';
         hideError('join-friend-error');
         document.getElementById('join-friend-modal').classList.add('open');
@@ -1362,28 +1598,35 @@
         btn.disabled = true;
         btn.textContent = 'Creating...';
         try {
+            console.log('📝 Creating friend match with wager:', wagerAmount);
             const res = await fetchWithAuth('/friends/create-match', {
                 method: 'POST',
                 body: JSON.stringify({ wagerAmount })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
+            
+            console.log('✅ Match created successfully');
+            
             currentFriendMatch = data;
-            currentBalance -= wagerAmount;
-            updateBalanceDisplay();
+            
+            // CRITICAL FIX: Always refresh balance from server after create
+            await refreshBalance(3);
+            console.log('💰 Balance refreshed after create:', currentBalance);
+            
             document.getElementById('friend-match-code').textContent = data.matchCode;
             document.getElementById('waiting-stake-display').textContent = wagerAmount;
             document.getElementById('waiting-prize-display').textContent = data.winnerPrize;
             startFriendTimer(data.expiresAt);
             closeModal('create-friend-modal');
             document.getElementById('waiting-friend-modal').classList.add('open');
-            
-            // Start real-time polling for match status
             startMatchStatusPolling(data.matchId);
-            
             await loadMyFriendMatches();
         } catch (err) {
+            console.error('❌ Error creating match:', err);
             showError('create-friend-error', err.message);
+            // Also refresh balance on error in case deduction happened
+            await refreshBalance(3);
         } finally {
             btn.disabled = false;
             btn.innerHTML = 'CREATE CHALLENGE (Pay KES <span id="create-friend-amount">' + wagerAmount + '</span>)';
@@ -1394,42 +1637,58 @@
         const errorEl = document.getElementById('join-friend-error');
         if (!matchCode) { showError('join-friend-error', 'Please enter a match code'); return; }
         try {
+            console.log('📝 Joining friend match with code:', matchCode);
             const res = await fetchWithAuth('/friends/join-match', {
                 method: 'POST',
                 body: JSON.stringify({ matchCode })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            currentBalance -= data.wagerAmount;
-            updateBalanceDisplay();
+            
+            console.log('✅ Match joined successfully');
+            
+            // CRITICAL FIX: Always refresh balance from server after join
+            await refreshBalance(3);
+            console.log('💰 Balance refreshed after join:', currentBalance);
+            
             currentFriendMatch = data;
             closeModal('join-friend-modal');
             alert(`Match joined! Play now. Winner gets KES ${data.winnerPrize}`);
             await loadMyFriendMatches();
         } catch (err) {
+            console.error('❌ Error joining match:', err);
             showError('join-friend-error', err.message);
+            // Also refresh balance on error in case deduction happened
+            await refreshBalance(3);
         }
     }
     async function cancelFriendMatch() {
         if (!confirm('Are you sure you want to cancel? You\'ll get your wager back.')) return;
-        
         stopMatchStatusPolling();
-        
         try {
+            console.log('📝 Cancelling friend match');
             const res = await fetchWithAuth('/friends/cancel-match', {
                 method: 'POST',
                 body: JSON.stringify({ matchId: currentFriendMatch.matchId })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            currentBalance += data.refundedAmount;
-            updateBalanceDisplay();
+            
+            console.log('✅ Match cancelled, refund:', data.refundedAmount);
+            
+            // CRITICAL FIX: Always refresh balance from server after cancel
+            await refreshBalance(3);
+            console.log('💰 Balance refreshed after cancel:', currentBalance);
+            
             if (friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
             closeModal('waiting-friend-modal');
             alert(`Match cancelled. KES ${data.refundedAmount} refunded.`);
             await loadMyFriendMatches();
         } catch (err) {
+            console.error('❌ Error cancelling match:', err);
             alert(err.message);
+            // Refresh balance anyway
+            await refreshBalance(3);
         }
     }
     function shareFriendCode() {
@@ -1461,12 +1720,16 @@
         }, 1000);
     }
 
-    // --- My Matches & Result Reporting (Safe DOM) ---
+    // --- My Matches & Result Reporting ---
     async function loadMyFriendMatches() {
-        const res = await fetchWithAuth('/friends/my-matches');
-        if (!res) return;
-        const matches = await res.json();
-        renderMyMatches(matches);
+        try {
+            const res = await fetchWithAuth('/friends/my-matches', {}, 8000);
+            if (!res) return;
+            const matches = await res.json();
+            renderMyMatches(matches);
+        } catch (e) {
+            console.warn('loadMyFriendMatches failed:', e);
+        }
     }
 
     function renderMyMatches(matches) {
@@ -1480,14 +1743,12 @@
         matches.forEach(m => {
             const item = createElementSafe('div', { class: 'match-item' });
 
-            // Header
             const headerDiv = createElementSafe('div', { class: 'match-header' });
             headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, m.match_code));
             const statusSpan = createElementSafe('span', { class: `match-status status-${m.status}` }, m.status);
             headerDiv.appendChild(statusSpan);
             item.appendChild(headerDiv);
 
-            // Details
             item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Wager: KES ${m.wager_amount}`));
             item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Winner prize: KES ${m.winner_prize}`));
             const opponentName = (m.creator_id === currentUser.id)
@@ -1495,7 +1756,6 @@
                 : (m.creator?.username || 'Unknown');
             item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Opponent: ${opponentName}`));
 
-            // Actions
             if (m.status === 'pending' && m.creator_id === currentUser.id) {
                 const actionsDiv = createElementSafe('div', { class: 'match-actions' });
                 const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel');
@@ -1504,18 +1764,19 @@
                 item.appendChild(actionsDiv);
             } else if (m.status === 'active') {
                 const actionsDiv = createElementSafe('div', { class: 'match-actions' });
-                // Show different state if first OCR already submitted (waiting for opponent)
-                if (m.reported_by_id && m.reported_by_id === currentUser.id && m.first_ocr_data) {
-                    const waitEl = createElementSafe('div', { style: 'font-size:0.78rem;color:#ffb400;padding:6px 0;' }, '⏳ Score submitted — waiting for opponent\'s screenshot');
-                    actionsDiv.appendChild(waitEl);
-                } else if (m.reported_by_id && m.reported_by_id !== currentUser.id && m.first_ocr_data) {
-                    // Opponent submitted, this user hasn't yet
-                    const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Your Screenshot');
-                    reportBtn.style.cssText = 'animation: pulse 1.5s infinite;';
-                    reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
-                    actionsDiv.appendChild(reportBtn);
-                    const nudge = createElementSafe('div', { style: 'font-size:0.72rem;color:var(--neon);margin-top:4px;' }, '🟢 Opponent uploaded — your turn to confirm!');
-                    actionsDiv.appendChild(nudge);
+                if (m.challenge_deadline && !m.challenge_uploaded && m.first_upload_winner_id) {
+                    const iAmFirstUploader = (m.first_upload_winner_id === currentUser.id);
+                    if (iAmFirstUploader) {
+                        const waitEl = createElementSafe('div', { style: 'font-size:0.78rem;color:#ffb400;padding:6px 0;' }, '⏳ Score submitted — waiting for opponent\'s screenshot');
+                        actionsDiv.appendChild(waitEl);
+                    } else {
+                        const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Your Screenshot');
+                        reportBtn.style.cssText = 'animation: pulse 1.5s infinite;';
+                        reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openChallengeUploadModal(m.id); });
+                        actionsDiv.appendChild(reportBtn);
+                        const nudge = createElementSafe('div', { style: 'font-size:0.72rem;color:var(--neon);margin-top:4px;' }, '🟢 Opponent uploaded — your turn to confirm!');
+                        actionsDiv.appendChild(nudge);
+                    }
                 } else {
                     const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Report Result');
                     reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
@@ -1536,17 +1797,26 @@
     async function cancelPendingMatch(matchId) {
         if (!confirm('Cancel this pending match? Your wager will be refunded.')) return;
         try {
+            console.log('📝 Cancelling pending match:', matchId);
             const res = await fetchWithAuth('/friends/cancel-match', {
                 method: 'POST',
                 body: JSON.stringify({ matchId })
-            });
+            }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            currentBalance += data.refundedAmount;
-            updateBalanceDisplay();
+            
+            console.log('✅ Pending match cancelled, refund:', data.refundedAmount);
+            
+            // CRITICAL FIX: Always refresh balance from server after cancel
+            await refreshBalance(3);
+            console.log('💰 Balance refreshed after cancel:', currentBalance);
+            
             await loadMyFriendMatches();
         } catch (err) {
+            console.error('❌ Error cancelling pending match:', err);
             alert(err.message);
+            // Refresh balance anyway
+            await refreshBalance(3);
         }
     }
 
@@ -1560,7 +1830,6 @@
         _ocrData = null;
         _verifyData = null;
 
-        // Reset upload zone
         const icon = document.getElementById('upload-icon');
         const label = document.getElementById('upload-label');
         const thumb = document.getElementById('screenshot-thumb');
@@ -1572,9 +1841,9 @@
         if (progress) { progress.classList.remove('visible'); }
         if (fileInput) fileInput.value = '';
 
-        // Show only upload step
         document.getElementById('report-step-upload').style.display = 'block';
         document.getElementById('report-step-auto').style.display = 'none';
+        document.getElementById('report-step-challenge').style.display = 'none';
         document.getElementById('report-step-manual').style.display = 'none';
         document.getElementById('report-error').style.display = 'none';
 
@@ -1593,7 +1862,6 @@
         if (file.size > 10 * 1024 * 1024) { showError('report-error', 'Screenshot must be under 10MB'); return; }
         document.getElementById('report-error').style.display = 'none';
 
-        // Show thumbnail immediately
         const thumb = document.getElementById('screenshot-thumb');
         thumb.src = URL.createObjectURL(file);
         thumb.classList.add('visible');
@@ -1610,7 +1878,7 @@
             formData.append('screenshot', file);
             formData.append('matchId', currentReportMatch.id);
 
-            const token = localStorage.getItem('supabaseToken');
+            const token = sessionStorage.getItem('supabaseToken');
             const response = await fetch(`${API}/screenshots/upload-and-verify`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
@@ -1618,7 +1886,6 @@
             });
             const result = await response.json();
             if (!response.ok) {
-                // Server returned a hard rejection (duplicate, pre-match, too early, etc.)
                 const reason = result.error || 'Upload failed';
                 const extraWarnings = result.warnings?.length > 0
                     ? '\n\n⚠️ ' + result.warnings.join('\n⚠️ ')
@@ -1636,13 +1903,13 @@
             document.getElementById('upload-icon').textContent = '✅';
             document.getElementById('upload-label').innerHTML = `<strong>${escapeHtml(file.name)}</strong><br><span style="font-size:0.72rem;color:#555;">${(file.size/1024).toFixed(0)} KB · uploaded</span>`;
 
-            // Route to correct step based on OCR confidence
-            const conf = result.ocrResult?.confidence ?? 0;
-            const fraud = result.verificationResult?.fraudScore ?? 999;
-            const reason = result.ocrResult?.autoWinnerReason;
+            const rec = result.verificationResult?.recommendation;
+            const conf = result.verificationResult?.confidence || 0;
 
-            if (conf >= 80 && fraud < 50 && reason && reason !== 'draw') {
+            if (rec === 'AUTO_SETTLE') {
                 showAutoSettleStep(result);
+            } else if (rec === 'CHALLENGE_WINDOW') {
+                showChallengeStep(result);
             } else {
                 showManualStep(result);
             }
@@ -1661,28 +1928,35 @@
         const verify = result.verificationResult;
         const match = currentReportMatch;
 
-        // Score display
         document.getElementById('ocr-result-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
-        document.getElementById('ocr-result-label').textContent = `Confidence: ${ocr.confidence}%`;
+        document.getElementById('ocr-result-label').textContent = `Score detected`;
+        document.getElementById('auto-confidence-text').textContent = `Confidence: ${verify.confidence}%`;
 
-        // Determine winner name and whether current user won
-        const uploaderWins = ocr.autoWinnerReason === 'home_wins';
-        const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
-        const opponentName = match.creator_id === currentUser.id
-            ? (match.joiner?.username || 'Opponent')
-            : (match.creator?.username || 'Opponent');
-
-        const youWon = uploaderWins;
-        const winnerName = youWon ? `YOU (${escapeHtml(currentUsername)})` : escapeHtml(opponentName);
-        const prizeAmount = match.winner_prize;
-
+        const teamMatch = verify.teamMatch;
+        let winnerId = null, winnerName = 'Unknown';
+        if (teamMatch && teamMatch.bestMapping !== 'ambiguous') {
+            const isCreatorHome = (teamMatch.bestHome === match.creator_team);
+            const homeId = isCreatorHome ? match.creator_id : match.joiner_id;
+            const awayId = isCreatorHome ? match.joiner_id : match.creator_id;
+            if (ocr.score1 > ocr.score2) winnerId = homeId;
+            else if (ocr.score2 > ocr.score1) winnerId = awayId;
+        }
+        const youWon = (winnerId === currentUser.id);
+        if (youWon) {
+            winnerName = `YOU (${escapeHtml(currentUsername)})`;
+        } else {
+            const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
+            const opponentName = match.creator_id === currentUser.id
+                ? (match.joiner?.username || 'Opponent')
+                : (match.creator?.username || 'Opponent');
+            winnerName = escapeHtml(opponentName);
+        }
         document.getElementById('winner-name-display').textContent = winnerName;
-        document.getElementById('winner-prize-text').textContent = `wins KES ${prizeAmount}`;
+        document.getElementById('winner-prize-text').textContent = `wins KES ${match.winner_prize}`;
 
         const announceEl = document.getElementById('winner-announce');
         announceEl.className = 'winner-announce' + (youWon ? ' you-won' : '');
 
-        // Show any fraud warnings
         const warnList = document.getElementById('ocr-warn-list-auto');
         warnList.innerHTML = '';
         const panel = document.getElementById('ocr-panel-auto');
@@ -1701,6 +1975,37 @@
         document.getElementById('report-error-auto').style.display = 'none';
         document.getElementById('report-step-upload').style.display = 'none';
         document.getElementById('report-step-auto').style.display = 'block';
+        document.getElementById('report-step-challenge').style.display = 'none';
+        document.getElementById('report-step-manual').style.display = 'none';
+    }
+
+    function showChallengeStep(result) {
+        const ocr = result.ocrResult;
+        const verify = result.verificationResult;
+
+        document.getElementById('challenge-ocr-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
+        document.getElementById('challenge-ocr-label').textContent = `Score detected`;
+        document.getElementById('challenge-confidence-text').textContent = `Confidence: ${verify.confidence}%`;
+
+        const warnList = document.getElementById('ocr-warn-list-challenge');
+        warnList.innerHTML = '';
+        const panel = document.getElementById('ocr-panel-challenge');
+        if (verify?.warnings?.length > 0) {
+            verify.warnings.forEach(w => {
+                const el = document.createElement('div');
+                el.className = 'ocr-warn-item';
+                el.textContent = w;
+                warnList.appendChild(el);
+            });
+            panel.classList.add('visible', 'warn');
+        } else {
+            panel.style.display = 'none';
+        }
+
+        document.getElementById('report-error-challenge').style.display = 'none';
+        document.getElementById('report-step-upload').style.display = 'none';
+        document.getElementById('report-step-auto').style.display = 'none';
+        document.getElementById('report-step-challenge').style.display = 'block';
         document.getElementById('report-step-manual').style.display = 'none';
     }
 
@@ -1708,7 +2013,6 @@
         const ocr = result.ocrResult;
         const verify = result.verificationResult;
 
-        // Fill OCR panel
         const scoreEl = document.getElementById('ocr-score-manual');
         const confEl = document.getElementById('ocr-confidence-manual');
         const badgeWrap = document.getElementById('ocr-badge-wrap-manual');
@@ -1739,7 +2043,6 @@
         }
         panel.classList.add('visible');
 
-        // Populate winner dropdown
         const select = document.getElementById('report-winner');
         select.innerHTML = '<option value="">-- Choose winner --</option>';
         const match = currentReportMatch;
@@ -1751,22 +2054,14 @@
             select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
         }
 
-        // Auto-suggest from low-confidence OCR
-        if (ocr?.autoWinnerReason && ocr.autoWinnerReason !== 'draw') {
-            const uploaderWins = ocr.autoWinnerReason === 'home_wins';
-            const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
-            const suggestedId = uploaderWins ? currentUser.id : opponentId;
-            if (suggestedId) select.value = suggestedId;
-        }
-
         document.getElementById('report-error-manual').style.display = 'none';
         document.getElementById('report-step-upload').style.display = 'none';
         document.getElementById('report-step-auto').style.display = 'none';
+        document.getElementById('report-step-challenge').style.display = 'none';
         document.getElementById('report-step-manual').style.display = 'block';
     }
 
     function showManualFallback() {
-        // User chose to override auto-settle — go to manual step with existing data
         showManualStep({ ocrResult: _ocrData, verificationResult: _verifyData });
     }
 
@@ -1787,52 +2082,41 @@
                     ocrResult: _ocrData,
                     verificationResult: _verifyData
                 })
-            });
+            }, 15000);
             const data = await res.json();
 
             if (!res.ok) {
-                // Backend rejected — fall back to manual if recoverable
                 if (res.status === 422) {
                     showManualFallback();
-                    // Show error in the manual step
                     showError('report-error-manual', data.error);
                 } else {
                     showError('report-error-auto', data.error);
                     btn.disabled = false;
-                    btn.textContent = '✅ CONFIRM & SETTLE MATCH';
+                    btn.textContent = '✅ SUBMIT & SETTLE MATCH';
                 }
                 return;
             }
 
             closeModal('report-result-modal');
-
-            if (data.waitingForOpponent) {
-                // First submission — waiting for opponent's screenshot
-                const scoreStr = data.claimedScore?.replace('-', ' – ') || '?';
-                alert(
-                    `✅ Score recorded: ${scoreStr}\n\n` +
-                    `Your opponent now needs to upload their screenshot to confirm.\n` +
-                    `If they don't upload within 2 hours, you'll be auto-awarded the win.`
-                );
-            } else if (data.corroborated) {
-                // Both uploaded, scores matched — match is settled
-                const msg = data.youWon
-                    ? `🏆 You won! KES ${data.prizePaid} added to your wallet.\nScore: ${data.score}`
-                    : `Match settled — ${data.score}.\nBetter luck next time!`;
-                alert(msg);
-                await refreshBalance();
+            if (data.message) {
+                alert(`🏆 ${data.message}\n\nYou won KES ${data.prizePaid || data.winnerPrize || '?'}`);
             }
+            await refreshBalance();
             await loadMyFriendMatches();
 
         } catch (err) {
             showError('report-error-auto', err.message);
             btn.disabled = false;
-            btn.textContent = '✅ CONFIRM & SETTLE MATCH';
+            btn.textContent = '✅ SUBMIT & SETTLE MATCH';
         }
     }
 
+    async function submitChallengeResult() {
+        alert('Challenge upload not fully implemented – please use manual for now.');
+        // In production, you would re-upload the file to /friends/challenge/:matchId
+    }
+
     async function submitMatchResult() {
-        // Manual fallback submission (still requires both players to confirm)
         if (!currentReportMatch) return;
         const winnerId = document.getElementById('report-winner').value;
         if (!winnerId) { showError('report-error-manual', 'Please select a winner'); return; }
@@ -1850,7 +2134,7 @@
                     winnerId,
                     screenshotUrl: _uploadedScreenshotUrl
                 })
-            });
+            }, 15000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
 
@@ -1868,10 +2152,9 @@
             btn.textContent = 'SUBMIT RESULT →';
         }
     }
-    // ── End OCR / Result Reporting ───────────────────────────────
 
     function openReportResultModal(matchId) {
-        fetchWithAuth('/friends/my-matches').then(async res => {
+        fetchWithAuth('/friends/my-matches', {}, 8000).then(async res => {
             const matches = await res.json();
             const match = matches.find(m => m.id === matchId);
             if (!match) return alert('Match not found');
@@ -1889,24 +2172,119 @@
         });
     }
 
-    // --- Room Code Share (for tournaments) ---
+    function openChallengeUploadModal(matchId) {
+        alert('Challenge upload not fully implemented – please use "Report Result" for now.');
+        openReportResultModal(matchId);
+    }
+
+    // --- Real-time match status polling (unchanged) ---
+    function startMatchStatusPolling(matchId) {
+        if (matchStatusPollInterval) {
+            clearInterval(matchStatusPollInterval);
+        }
+        console.log('🔄 Started polling match status for:', matchId);
+        matchStatusPollInterval = setInterval(async () => {
+            try {
+                const res = await fetchWithAuth(`/friends/match-status/${matchId}`, {}, 5000);
+                if (!res || !res.ok) return;
+                const data = await res.json();
+                console.log('📊 Match status:', data.status);
+                if (data.status === 'active') {
+                    stopMatchStatusPolling();
+                    onMatchBecameActive(data);
+                } else if (data.status === 'expired' || data.status === 'cancelled') {
+                    stopMatchStatusPolling();
+                    onMatchExpiredOrCancelled(data);
+                }
+            } catch (err) {
+                console.error('Poll error:', err);
+            }
+        }, 3000);
+    }
+
+    function stopMatchStatusPolling() {
+        if (matchStatusPollInterval) {
+            clearInterval(matchStatusPollInterval);
+            matchStatusPollInterval = null;
+            console.log('⏹️  Stopped polling match status');
+        }
+    }
+
+    function onMatchBecameActive(matchData) {
+        if (friendMatchTimer) {
+            clearInterval(friendMatchTimer);
+            friendMatchTimer = null;
+        }
+        closeModal('waiting-friend-modal');
+        const joinerName = matchData.joinerUsername || 'Opponent';
+        alert(`🎮 Match Started!\n\n${joinerName} joined your match!\nGood luck! Winner gets KES ${matchData.winnerPrize}`);
+        loadMyFriendMatches();
+    }
+
+    function onMatchExpiredOrCancelled(matchData) {
+        if (friendMatchTimer) {
+            clearInterval(friendMatchTimer);
+            friendMatchTimer = null;
+        }
+        closeModal('waiting-friend-modal');
+        if (matchData.status === 'expired') {
+            alert('⏰ Match Expired\n\nNo one joined in time. Your wager has been refunded.');
+        } else {
+            alert('❌ Match Cancelled\n\nYour wager has been refunded.');
+        }
+        refreshBalance();
+        loadMyFriendMatches();
+    }
+
+    // --- Room Code Share ---
     function shareRoomCode() {
         const code = document.getElementById('room-code-display').innerText;
         const text = encodeURIComponent(`Join my match on Vumbua eFootball! Room code: ${code}. Play here: https://vumbua.app`);
         window.open(`https://wa.me/?text=${text}`, '_blank');
     }
 
+    // --- Profile Modal ---
+    function openProfileModal() {
+        document.getElementById('profile-username').value = escapeHtml(currentUsername);
+        document.getElementById('profile-team').value = escapeHtml(currentTeam);
+        document.getElementById('profile-error').style.display = 'none';
+        document.getElementById('profile-modal').classList.add('open');
+    }
+
     // --- Logout ---
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        stopBalanceAutoRefresh();
+        console.log('🚪 Logging out user:', currentUser?.id);
+        
+        // Stop all background processes
+        stopBalanceAutoRefresh(); // also removes realtime channel
         stopMatchStatusPolling();
+        
+        // Clean up realtime connection explicitly
+        if (supabaseRealtime && realtimeChannel) {
+            console.log('🧹 Cleaning up realtime subscription...');
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+        }
+        
+        // Reset ALL global state
         currentBalance = 0;
         currentUser = null;
         currentUsername = '';
         currentPhone = '';
+        currentTeam = '';
         authToken = null;
-        localStorage.removeItem('supabaseToken');
-        localStorage.removeItem('supabaseUser');
+        currentCheckoutId = null;
+        currentFriendMatch = null;
+        currentTournamentId = null;
+        currentTournamentFee = 0;
+        currentTournamentName = '';
+        supabaseRealtime = null; // Clear the client too
+        
+        // Clear localStorage
+        sessionStorage.removeItem('supabaseToken');
+        sessionStorage.removeItem('supabaseUser');
+        
+        console.log('✅ Logout complete, redirecting to login...');
         window.location.href = '/login';
     });
 
