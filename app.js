@@ -251,8 +251,9 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Diagnostic endpoint - check all configurations
+// Diagnostic endpoint - check all configurations (admin only)
 app.get('/debug/config', (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
     res.json({
         environment: {
             NODE_ENV: process.env.NODE_ENV || 'not set',
@@ -284,6 +285,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.h
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/war-room', (req, res) => res.sendFile(path.join(__dirname, 'public', 'war-room.html')));
 
 // ============================================================
 // AUTH ROUTES
@@ -2039,12 +2041,13 @@ app.post('/screenshots/extract-score', screenshotUploadLimiter, async (req, res)
 // ============================================================
 // SERVER START
 // ============================================================
-app.listen(port, '0.0.0.0', () => {
+const host = '::'; // Required by Alwaysdata
+const finalPort = process.env.PORT || 8100;
+
+app.listen(finalPort, host, () => {
     const memMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
     console.log("========================================");
-    console.log(`✅ Vumbua Game running on port ${port}`);
-    console.log(`   Memory after start: ${memMB}MB`);
-    console.log(`   Uptime: ${Math.round(process.uptime())}s`);
-    console.log(`   Health check: http://localhost:${port}/health`);
+    console.log(`✅ Vumbua Game running on ${host}:${finalPort}`);
+    console.log(`   Memory: ${memMB}MB`);
     console.log("========================================");
 });

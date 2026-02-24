@@ -408,9 +408,115 @@
         .winner-prize-text { font-size: 0.85rem; color: #aaa; margin-top: 4px; font-weight: 600; }
         .winner-announce.you-won { border-color: rgba(0,255,65,0.4); background: linear-gradient(135deg, rgba(0,255,65,0.12), rgba(0,255,65,0.04)); }
         .winner-announce.you-won .winner-name { text-shadow: 0 0 20px rgba(0,255,65,0.5); }
+        /* ── Screenshot guide ── */
+        .screenshot-guide {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(0,255,65,0.15);
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .guide-header {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase;
+            color: var(--neon); font-weight: 700; margin-bottom: 12px;
+            cursor: pointer;
+        }
+        .guide-header .guide-toggle { margin-left: auto; color: #555; font-size: 0.8rem; transition: transform 0.2s; }
+        .guide-header.open .guide-toggle { transform: rotate(180deg); }
+        .guide-body { display: none; }
+        .guide-body.open { display: block; }
+        /* Mock eFootball end-screen */
+        .mock-screenshot {
+            background: linear-gradient(160deg, #0a0a1a 0%, #12103a 50%, #0a0a1a 100%);
+            border-radius: 10px;
+            padding: 16px 12px 12px;
+            margin-bottom: 10px;
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .mock-screenshot::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 50% 40%, rgba(80,60,200,0.15) 0%, transparent 70%);
+        }
+        .mock-match-header {
+            text-align: center;
+            font-size: 0.55rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 10px;
+            font-family: 'Outfit', sans-serif;
+        }
+        .mock-scoreboard {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 6px;
+        }
+        .mock-team {
+            flex: 1; text-align: center;
+        }
+        .mock-team-logo {
+            width: 28px; height: 28px; border-radius: 50%;
+            margin: 0 auto 5px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem;
+        }
+        .mock-team-logo.home { background: rgba(0,100,255,0.3); border: 1px solid rgba(0,100,255,0.5); }
+        .mock-team-logo.away { background: rgba(255,50,50,0.3); border: 1px solid rgba(255,50,50,0.5); }
+        .mock-team-name {
+            font-size: 0.52rem; color: rgba(255,255,255,0.7);
+            font-family: 'Outfit', sans-serif; font-weight: 600; letter-spacing: 0.5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .mock-score-center {
+            display: flex; align-items: center; gap: 4px;
+        }
+        .mock-score-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.6rem; color: #fff; line-height: 1;
+            text-shadow: 0 0 20px rgba(255,255,255,0.4);
+        }
+        .mock-score-sep { color: rgba(255,255,255,0.25); font-size: 1.2rem; font-family: 'Bebas Neue', sans-serif; }
+        .mock-ft-badge {
+            text-align: center;
+            font-size: 0.5rem; letter-spacing: 2px; color: rgba(255,255,255,0.3);
+            margin-top: 8px; font-family: 'Outfit', sans-serif; font-weight: 700;
+        }
+        /* Annotation callouts */
+        .mock-annotations {
+            display: flex; flex-direction: column; gap: 5px;
+            margin-top: 10px;
+        }
+        .annotation {
+            display: flex; align-items: flex-start; gap: 7px;
+            font-size: 0.7rem; color: #aaa; line-height: 1.4;
+        }
+        .annotation-dot {
+            width: 16px; height: 16px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.6rem; font-weight: 800; flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .annotation-dot.green { background: rgba(0,255,65,0.2); color: var(--neon); border: 1px solid rgba(0,255,65,0.4); }
+        .annotation-dot.yellow { background: rgba(255,180,0,0.2); color: #ffb400; border: 1px solid rgba(255,180,0,0.4); }
+        .annotation strong { color: #ccc; }
+        /* Tips list */
+        .guide-tips { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .guide-tip {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 0.72rem; color: #888; background: rgba(255,255,255,0.03);
+            border-radius: 8px; padding: 7px 10px;
+        }
+        .guide-tip.good { border-left: 2px solid rgba(0,255,65,0.5); }
+        .guide-tip.bad { border-left: 2px solid rgba(255,68,68,0.5); }
+        .guide-tip .tip-icon { font-size: 0.85rem; flex-shrink: 0; }
+
+        /* ── Upload zone ── */
         .screenshot-upload-zone {
             border: 2px dashed rgba(0,255,65,0.25);
-            border-radius: 14px; padding: 24px 16px;
+            border-radius: 14px; padding: 28px 16px;
             text-align: center; cursor: pointer;
             transition: border-color 0.2s, background 0.2s;
             background: rgba(0,255,65,0.02);
@@ -423,9 +529,84 @@
         .screenshot-upload-zone input[type=file] {
             position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
         }
-        .upload-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+        .upload-icon { font-size: 2.4rem; margin-bottom: 10px; display: block; }
         .upload-label { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
         .upload-label strong { color: var(--neon); }
+        .upload-hint {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            margin-top: 12px; padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.65rem; color: #444;
+        }
+        .upload-hint span { display: flex; align-items: center; gap: 4px; }
+
+        /* ── In-modal toast ── */
+        .modal-toast {
+            position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-100%);
+            background: #111116; border: 1px solid var(--border);
+            border-radius: 0 0 16px 16px; padding: 12px 20px;
+            font-size: 0.82rem; font-weight: 600;
+            z-index: 9999; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+            display: flex; align-items: center; gap: 10px;
+            max-width: 420px; width: 90%; text-align: left;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .modal-toast.show { transform: translateX(-50%) translateY(0); }
+        .modal-toast.success { border-color: rgba(0,255,65,0.4); }
+        .modal-toast.success .toast-icon { color: var(--neon); }
+        .modal-toast.error { border-color: rgba(255,68,68,0.4); }
+        .modal-toast.error .toast-icon { color: #ff6666; }
+        .modal-toast.info { border-color: rgba(255,180,0,0.4); }
+        .modal-toast.info .toast-icon { color: #ffb400; }
+        .toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+        .toast-body { flex: 1; }
+        .toast-title { font-weight: 800; font-size: 0.82rem; margin-bottom: 1px; }
+        .toast-msg { font-size: 0.74rem; color: #aaa; font-weight: 400; }
+
+        /* ── Improved winner banner ── */
+        .winner-banner {
+            border-radius: 16px; padding: 22px; text-align: center; margin-bottom: 16px;
+            position: relative; overflow: hidden;
+        }
+        .winner-banner.you-won {
+            background: linear-gradient(135deg, rgba(0,255,65,0.1), rgba(0,255,65,0.04));
+            border: 1px solid rgba(0,255,65,0.35);
+        }
+        .winner-banner.opp-won {
+            background: linear-gradient(135deg, rgba(255,68,68,0.07), rgba(255,68,68,0.02));
+            border: 1px solid rgba(255,68,68,0.25);
+        }
+        .winner-banner-emoji { font-size: 2.4rem; margin-bottom: 6px; display: block; }
+        .winner-banner-label {
+            font-size: 0.6rem; letter-spacing: 3px; text-transform: uppercase;
+            color: #555; margin-bottom: 4px;
+        }
+        .winner-banner-name {
+            font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem;
+            letter-spacing: 3px; line-height: 1.1;
+        }
+        .winner-banner.you-won .winner-banner-name { color: var(--neon); text-shadow: 0 0 20px rgba(0,255,65,0.4); }
+        .winner-banner.opp-won .winner-banner-name { color: #ff7777; }
+        .winner-banner-prize {
+            margin-top: 8px; font-size: 0.82rem; font-weight: 600; color: #aaa;
+        }
+        .winner-banner.you-won .winner-banner-prize { color: var(--neon); font-size: 0.9rem; }
+
+        /* ── Confidence badge strip ── */
+        .conf-strip {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.03); border-radius: 10px;
+            padding: 9px 14px; margin: 10px 0;
+        }
+        .conf-bar-wrap { flex: 1; background: rgba(255,255,255,0.06); border-radius: 6px; height: 6px; }
+        .conf-bar-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
+        .conf-bar-fill.high { background: var(--neon); box-shadow: 0 0 6px rgba(0,255,65,0.5); }
+        .conf-bar-fill.medium { background: #ffb400; }
+        .conf-bar-fill.low { background: #ff6666; }
+        .conf-pct { font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+        .conf-pct.high { color: var(--neon); }
+        .conf-pct.medium { color: #ffb400; }
+        .conf-pct.low { color: #ff6666; }
         .ocr-panel {
             background: rgba(0,255,65,0.05); border: 1px solid rgba(0,255,65,0.2);
             border-radius: 12px; padding: 14px 16px; margin: 12px 0; display: none;
@@ -790,28 +971,92 @@
     </div>
 </div>
 
+<!-- ── Global Toast ── -->
+<div class="modal-toast" id="global-toast">
+    <span class="toast-icon" id="toast-icon">✅</span>
+    <div class="toast-body">
+        <div class="toast-title" id="toast-title"></div>
+        <div class="toast-msg" id="toast-msg"></div>
+    </div>
+</div>
+
 <!-- Report Result Modal -->
 <div class="modal-overlay" id="report-result-modal" onclick="if(event.target === this) closeModal('report-result-modal')">
-    <div class="modal-sheet">
+    <div class="modal-sheet" style="max-height:92vh;overflow-y:auto;">
         <div class="modal-handle"></div>
         <div class="modal-title">PIGA PICHA 📸</div>
-        <p class="modal-subtitle">Upload your end-of-match screenshot — we'll read the score automatically.</p>
+        <p class="modal-subtitle">Upload your end-of-match screenshot — we'll detect the score automatically.</p>
         <div class="match-details-box" id="report-match-details"></div>
 
-        <!-- Step 1: Upload zone (always shown first) -->
+        <!-- Step 1: Upload zone -->
         <div id="report-step-upload">
+
+            <!-- Screenshot guide (collapsible) -->
+            <div class="screenshot-guide">
+                <div class="guide-header" id="guide-toggle-btn" onclick="toggleScreenshotGuide()">
+                    <span>📖</span> How to take the right screenshot
+                    <span class="guide-toggle" id="guide-chevron">▼</span>
+                </div>
+                <div class="guide-body" id="guide-body">
+                    <!-- Mock eFootball end-of-match screen -->
+                    <div class="mock-screenshot">
+                        <div class="mock-match-header">FULL TIME · MATCH RESULT</div>
+                        <div class="mock-scoreboard">
+                            <div class="mock-team">
+                                <div class="mock-team-logo home">🔵</div>
+                                <div class="mock-team-name">Man City</div>
+                            </div>
+                            <div class="mock-score-center">
+                                <span class="mock-score-num" style="color:#4fc3f7;">3</span>
+                                <span class="mock-score-sep">–</span>
+                                <span class="mock-score-num" style="color:#ef9a9a;">1</span>
+                            </div>
+                            <div class="mock-team">
+                                <div class="mock-team-logo away">🔴</div>
+                                <div class="mock-team-name">Arsenal</div>
+                            </div>
+                        </div>
+                        <div class="mock-ft-badge">FT · FULL TIME</div>
+                    </div>
+                    <div class="mock-annotations">
+                        <div class="annotation">
+                            <div class="annotation-dot green">✓</div>
+                            <div><strong>Team names</strong> must be visible on both sides — our AI reads them to map who is who.</div>
+                        </div>
+                        <div class="annotation">
+                            <div class="annotation-dot green">✓</div>
+                            <div><strong>Both scores</strong> must be clear and large — crop the screen to include the scoreboard.</div>
+                        </div>
+                        <div class="annotation">
+                            <div class="annotation-dot yellow">!</div>
+                            <div><strong>"Full Time" or "FT"</strong> label helps us confirm the match is over, not half-time.</div>
+                        </div>
+                    </div>
+                    <div class="guide-tips">
+                        <div class="guide-tip good"><span class="tip-icon">✅</span> Screenshot the <strong style="color:#ccc;">End of Match Results</strong> screen in eFootball</div>
+                        <div class="guide-tip good"><span class="tip-icon">✅</span> Make sure the screen is bright — no dark filter or low brightness</div>
+                        <div class="guide-tip bad"><span class="tip-icon">❌</span> Don't upload a photo of your TV/screen — take a <strong style="color:#ccc;">screenshot directly</strong></div>
+                        <div class="guide-tip bad"><span class="tip-icon">❌</span> Don't crop out the team names or the score</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload zone -->
             <div class="modal-input-group">
-                <label>Match Screenshot <span style="color:var(--neon)">*</span></label>
+                <label>Your Match Screenshot <span style="color:var(--neon)">*</span></label>
                 <div class="screenshot-upload-zone" id="upload-zone">
                     <input type="file" id="screenshot-file-input" accept="image/jpeg,image/png,image/webp"
                         onchange="handleScreenshotSelected(this.files[0])"
                         ondragover="event.preventDefault();this.parentElement.classList.add('drag-over')"
                         ondragleave="this.parentElement.classList.remove('drag-over')"
                         ondrop="this.parentElement.classList.remove('drag-over')">
-                    <span class="upload-icon" id="upload-icon">📸</span>
+                    <span class="upload-icon" id="upload-icon">📲</span>
                     <div class="upload-label" id="upload-label">
-                        <strong>Tap to upload</strong> or drag &amp; drop<br>
-                        <span style="font-size:0.72rem;color:#555;">JPEG / PNG / WebP · Max 10MB</span>
+                        <strong>Tap to upload screenshot</strong><br>
+                        <span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Take it directly from eFootball — not a photo of your screen</span>
+                    </div>
+                    <div class="upload-hint">
+                        <span>📷 JPEG</span><span>·</span><span>🖼 PNG</span><span>·</span><span>🗜 WebP</span><span>·</span><span>Max 10MB</span>
                     </div>
                     <img class="screenshot-thumb" id="screenshot-thumb" alt="preview">
                 </div>
@@ -825,42 +1070,54 @@
 
         <!-- Step 2a: High confidence → auto-settle -->
         <div id="report-step-auto" style="display:none;">
+            <!-- Screenshot preview strip -->
+            <img id="auto-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
+            <!-- Detected score -->
             <div class="ocr-result-card" id="ocr-result-card">
+                <div class="ocr-result-label" style="margin-bottom:6px;">Score detected from your screenshot</div>
                 <div class="ocr-result-score" id="ocr-result-score">0 – 0</div>
-                <div class="ocr-result-label" id="ocr-result-label">Score detected</div>
             </div>
-            <div class="confidence-meter" id="auto-confidence-meter">
-                <span id="auto-confidence-text">Confidence: 0%</span>
+            <!-- Confidence strip -->
+            <div class="conf-strip" id="auto-conf-strip">
+                <span style="font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;color:#555;">Confidence</span>
+                <div class="conf-bar-wrap"><div class="conf-bar-fill high" id="auto-conf-bar" style="width:0%"></div></div>
+                <span class="conf-pct high" id="auto-conf-pct">0%</span>
             </div>
-            <div class="winner-announce" id="winner-announce">
-                <div class="winner-crown">🏆</div>
-                <div class="winner-name" id="winner-name-display">—</div>
-                <div class="winner-prize-text" id="winner-prize-text">wins KES 0</div>
+            <!-- Winner announcement -->
+            <div class="winner-banner" id="winner-announce">
+                <span class="winner-banner-emoji" id="winner-banner-emoji">🏆</span>
+                <div class="winner-banner-label">WINNER</div>
+                <div class="winner-banner-name" id="winner-name-display">—</div>
+                <div class="winner-banner-prize" id="winner-prize-text">wins KES 0</div>
             </div>
             <div class="ocr-panel" id="ocr-panel-auto" style="margin-bottom:16px;">
                 <div class="ocr-warn-list" id="ocr-warn-list-auto"></div>
             </div>
             <div class="balance-insufficient" id="report-error-auto"></div>
             <button class="btn-mpesa" id="auto-settle-btn" style="background:var(--neon);color:#000;" onclick="confirmAutoSettle()">
-                ✅ SUBMIT & SETTLE MATCH
+                ✅ CONFIRM & SETTLE MATCH
             </button>
             <div style="font-size:0.7rem;color:#555;text-align:center;margin-top:8px;">
-                This result will be final – no opponent confirmation needed.
+                High confidence result — no opponent confirmation needed.
             </div>
+            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">Score looks wrong? Fix manually →</button>
         </div>
 
         <!-- Step 2b: Medium confidence → challenge window -->
         <div id="report-step-challenge" style="display:none;">
+            <img id="challenge-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
             <div class="ocr-result-card" id="challenge-ocr-card">
+                <div class="ocr-result-label" style="margin-bottom:6px;">Score detected from your screenshot</div>
                 <div class="ocr-result-score" id="challenge-ocr-score">0 – 0</div>
-                <div class="ocr-result-label" id="challenge-ocr-label">Score detected</div>
             </div>
-            <div class="confidence-meter" id="challenge-confidence-meter">
-                <span id="challenge-confidence-text">Confidence: 0%</span>
+            <div class="conf-strip" id="challenge-conf-strip">
+                <span style="font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;color:#555;">Confidence</span>
+                <div class="conf-bar-wrap"><div class="conf-bar-fill medium" id="challenge-conf-bar" style="width:0%"></div></div>
+                <span class="conf-pct medium" id="challenge-conf-pct">0%</span>
             </div>
-            <div class="friend-info" style="margin:16px 0;">
-                <strong style="color:var(--neon);">⏳ Challenge window</strong><br>
-                Your opponent has 2 hours to upload their screenshot. If they don't, you'll automatically win.
+            <div style="background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);border-radius:12px;padding:14px;margin:14px 0;font-size:0.8rem;line-height:1.6;">
+                <strong style="color:#ffb400;">⏳ Challenge Window Open</strong><br>
+                <span style="color:#aaa;">Score was detected but confidence is moderate. Your opponent has <strong style="color:#ccc;">2 hours</strong> to upload their screenshot. If they don't, you automatically win.</span>
             </div>
             <div class="ocr-panel" id="ocr-panel-challenge" style="margin-bottom:16px;">
                 <div class="ocr-warn-list" id="ocr-warn-list-challenge"></div>
@@ -869,24 +1126,27 @@
             <button class="btn-mpesa" id="challenge-submit-btn" style="background:var(--neon);color:#000;" onclick="submitChallengeResult()">
                 ✅ SUBMIT MY SCORE
             </button>
-            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">
-                Score wrong? Report manually →
-            </button>
+            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">Score wrong? Report manually →</button>
         </div>
 
-        <!-- Step 2c: Manual fallback (low confidence or user override) -->
+        <!-- Step 2c: Manual fallback -->
         <div id="report-step-manual" style="display:none;">
+            <img id="manual-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
             <div class="ocr-panel" id="ocr-panel-manual" style="margin-bottom:12px;">
-                <div class="ocr-title">🤖 OCR Result</div>
-                <div class="ocr-score-display" id="ocr-score-manual">–  –</div>
+                <div class="ocr-title">🤖 AI Reading Result</div>
+                <div class="ocr-score-display" id="ocr-score-manual">?  –  ?</div>
                 <div class="ocr-confidence" id="ocr-confidence-manual"></div>
                 <div id="ocr-badge-wrap-manual"></div>
                 <div class="ocr-warn-list" id="ocr-warn-list-manual"></div>
             </div>
+            <div style="background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.2);border-radius:12px;padding:12px 14px;font-size:0.78rem;color:#aaa;margin-bottom:14px;line-height:1.6;">
+                <strong style="color:#ff7777;">⚠️ Could not read score clearly.</strong><br>
+                Please select the winner manually. This will go to admin review — make sure your screenshot is uploaded.
+            </div>
             <div class="modal-input-group">
-                <label>Select Winner Manually</label>
-                <select id="report-winner" class="modal-input">
-                    <option value="">-- Choose winner --</option>
+                <label>Who Won? <span style="color:var(--neon)">*</span></label>
+                <select id="report-winner" class="modal-input" style="font-size:1rem;">
+                    <option value="">-- Select the winner --</option>
                 </select>
             </div>
             <div class="balance-insufficient" id="report-error-manual"></div>
@@ -1653,8 +1913,20 @@
             
             currentFriendMatch = data;
             closeModal('join-friend-modal');
-            alert(`Match joined! Play now. Winner gets KES ${data.winnerPrize}`);
-            await loadMyFriendMatches();
+            openWarRoom({
+                matchId:         data.matchId,
+                matchCode:       data.matchCode,
+                creatorTeam:     data.creatorTeam,
+                creatorUsername: data.creatorUsername,
+                joinerTeam:      currentTeam,
+                joinerUsername:  currentUsername,
+                wagerAmount:     data.wagerAmount,
+                winnerPrize:     data.winnerPrize,
+                startedAt:       new Date().toISOString(),
+                currentUserId:   currentUser.id,
+                creatorId:       data.creatorId
+            });
+            // loadMyFriendMatches called on dashboard return
         } catch (err) {
             console.error('❌ Error joining match:', err);
             showError('join-friend-error', err.message);
@@ -1682,11 +1954,11 @@
             
             if (friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
             closeModal('waiting-friend-modal');
-            alert(`Match cancelled. KES ${data.refundedAmount} refunded.`);
+            showToast('info', 'Match Cancelled', `KES ${data.refundedAmount} refunded to your wallet.`, 5000);
             await loadMyFriendMatches();
         } catch (err) {
             console.error('❌ Error cancelling match:', err);
-            alert(err.message);
+            showToast('error', 'Cancellation Failed', err.message, 5000);
             // Refresh balance anyway
             await refreshBalance(3);
         }
@@ -1713,7 +1985,7 @@
             if (diff === 0) {
                 clearInterval(friendMatchTimer);
                 closeModal('waiting-friend-modal');
-                alert('Match expired. Your wager has been refunded.');
+                showToast('info', 'Match Expired', 'No one joined in time. Your wager has been refunded.', 6000);
                 refreshBalance();
                 loadMyFriendMatches();
             }
@@ -1740,7 +2012,13 @@
             return;
         }
 
-        matches.forEach(m => {
+        // Show only the 3 most recent matches
+        const displayMatches = matches.slice(0, 3);
+        if (matches.length > 3) {
+            const moreEl = createElementSafe('div', { class: 'friend-info', style: 'text-align:center;font-size:0.75rem;margin-bottom:8px;' }, `Showing 3 of ${matches.length} matches`);
+            container.appendChild(moreEl);
+        }
+        displayMatches.forEach(m => {
             const item = createElementSafe('div', { class: 'match-item' });
 
             const headerDiv = createElementSafe('div', { class: 'match-header' });
@@ -1820,26 +2098,61 @@
         }
     }
 
+    // ── Toast notification system ──────────────────────────────
+    let _toastTimeout = null;
+    function showToast(type, title, msg, duration = 4000) {
+        const toast = document.getElementById('global-toast');
+        const iconEl = document.getElementById('toast-icon');
+        const titleEl = document.getElementById('toast-title');
+        const msgEl = document.getElementById('toast-msg');
+        const icons = { success: '✅', error: '❌', info: '⏳' };
+        toast.className = `modal-toast ${type}`;
+        iconEl.textContent = icons[type] || '💬';
+        titleEl.textContent = title;
+        msgEl.textContent = msg || '';
+        void toast.offsetWidth;
+        toast.classList.add('show');
+        if (_toastTimeout) clearTimeout(_toastTimeout);
+        _toastTimeout = setTimeout(() => toast.classList.remove('show'), duration);
+    }
+
+    // ── Screenshot guide toggle ────────────────────────────────
+    function toggleScreenshotGuide() {
+        const body = document.getElementById('guide-body');
+        const btn = document.getElementById('guide-toggle-btn');
+        const chevron = document.getElementById('guide-chevron');
+        const open = body.classList.toggle('open');
+        btn.classList.toggle('open', open);
+    }
+
     // ── Screenshot OCR & Auto-Settle ────────────────────────────
     let _uploadedScreenshotUrl = null;
     let _ocrData = null;
     let _verifyData = null;
+    let _uploadedObjectUrl = null;  // for previews
 
     function resetReportModal() {
         _uploadedScreenshotUrl = null;
         _ocrData = null;
         _verifyData = null;
+        if (_uploadedObjectUrl) { URL.revokeObjectURL(_uploadedObjectUrl); _uploadedObjectUrl = null; }
 
         const icon = document.getElementById('upload-icon');
         const label = document.getElementById('upload-label');
         const thumb = document.getElementById('screenshot-thumb');
         const progress = document.getElementById('upload-progress');
         const fileInput = document.getElementById('screenshot-file-input');
-        if (icon) icon.textContent = '📸';
-        if (label) label.innerHTML = '<strong>Tap to upload</strong> or drag &amp; drop<br><span style="font-size:0.72rem;color:#555;">JPEG / PNG / WebP · Max 10MB</span>';
+        if (icon) icon.textContent = '📲';
+        if (label) label.innerHTML = '<strong>Tap to upload screenshot</strong><br><span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Take it directly from eFootball — not a photo of your screen</span>';
         if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
         if (progress) { progress.classList.remove('visible'); }
         if (fileInput) fileInput.value = '';
+
+        // Reset screenshot previews
+        ['auto','challenge','manual'].forEach(id => {
+            const el = document.getElementById(`${id}-screenshot-preview`);
+            if (el) { el.style.display = 'none'; el.src = ''; }
+        });
 
         document.getElementById('report-step-upload').style.display = 'block';
         document.getElementById('report-step-auto').style.display = 'none';
@@ -1862,11 +2175,15 @@
         if (file.size > 10 * 1024 * 1024) { showError('report-error', 'Screenshot must be under 10MB'); return; }
         document.getElementById('report-error').style.display = 'none';
 
+        // Store object URL for previews
+        if (_uploadedObjectUrl) URL.revokeObjectURL(_uploadedObjectUrl);
+        _uploadedObjectUrl = URL.createObjectURL(file);
+
         const thumb = document.getElementById('screenshot-thumb');
-        thumb.src = URL.createObjectURL(file);
+        thumb.src = _uploadedObjectUrl;
         thumb.classList.add('visible');
         document.getElementById('upload-icon').textContent = '⏳';
-        document.getElementById('upload-label').innerHTML = '<strong>Reading score…</strong><br><span style="font-size:0.72rem;color:#555;">OCR + fraud checks running</span>';
+        document.getElementById('upload-label').innerHTML = '<strong>Reading score…</strong><br><span style="font-size:0.72rem;color:#555;">AI + fraud checks running — takes ~5 seconds</span>';
 
         const progressEl = document.getElementById('upload-progress');
         const progressFill = document.getElementById('upload-progress-fill');
@@ -1888,7 +2205,7 @@
             if (!response.ok) {
                 const reason = result.error || 'Upload failed';
                 const extraWarnings = result.warnings?.length > 0
-                    ? '\n\n⚠️ ' + result.warnings.join('\n⚠️ ')
+                    ? ' — ' + result.warnings.join('; ')
                     : '';
                 throw new Error(reason + extraWarnings);
             }
@@ -1901,10 +2218,9 @@
             progressFill.style.width = '100%';
             setTimeout(() => progressEl.classList.remove('visible'), 500);
             document.getElementById('upload-icon').textContent = '✅';
-            document.getElementById('upload-label').innerHTML = `<strong>${escapeHtml(file.name)}</strong><br><span style="font-size:0.72rem;color:#555;">${(file.size/1024).toFixed(0)} KB · uploaded</span>`;
+            document.getElementById('upload-label').innerHTML = `<strong style="color:var(--neon)">Screenshot uploaded!</strong><br><span style="font-size:0.72rem;color:#555;">${escapeHtml(file.name)} · ${(file.size/1024).toFixed(0)} KB</span>`;
 
             const rec = result.verificationResult?.recommendation;
-            const conf = result.verificationResult?.confidence || 0;
 
             if (rec === 'AUTO_SETTLE') {
                 showAutoSettleStep(result);
@@ -1927,11 +2243,27 @@
         const ocr = result.ocrResult;
         const verify = result.verificationResult;
         const match = currentReportMatch;
+        const conf = verify.confidence || 0;
+
+        // Screenshot preview
+        if (_uploadedObjectUrl) {
+            const prev = document.getElementById('auto-screenshot-preview');
+            prev.src = _uploadedObjectUrl;
+            prev.style.display = 'block';
+        }
 
         document.getElementById('ocr-result-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
-        document.getElementById('ocr-result-label').textContent = `Score detected`;
-        document.getElementById('auto-confidence-text').textContent = `Confidence: ${verify.confidence}%`;
 
+        // Confidence bar
+        const confClass = conf >= 85 ? 'high' : conf >= 65 ? 'medium' : 'low';
+        const bar = document.getElementById('auto-conf-bar');
+        const pct = document.getElementById('auto-conf-pct');
+        bar.className = `conf-bar-fill ${confClass}`;
+        pct.className = `conf-pct ${confClass}`;
+        bar.style.width = `${conf}%`;
+        pct.textContent = `${conf}%`;
+
+        // Winner determination
         const teamMatch = verify.teamMatch;
         let winnerId = null, winnerName = 'Unknown';
         if (teamMatch && teamMatch.bestMapping !== 'ambiguous') {
@@ -1943,19 +2275,20 @@
         }
         const youWon = (winnerId === currentUser.id);
         if (youWon) {
-            winnerName = `YOU (${escapeHtml(currentUsername)})`;
+            winnerName = currentUsername;
         } else {
-            const opponentId = match.creator_id === currentUser.id ? match.joiner_id : match.creator_id;
-            const opponentName = match.creator_id === currentUser.id
+            winnerName = match.creator_id === currentUser.id
                 ? (match.joiner?.username || 'Opponent')
                 : (match.creator?.username || 'Opponent');
-            winnerName = escapeHtml(opponentName);
         }
-        document.getElementById('winner-name-display').textContent = winnerName;
-        document.getElementById('winner-prize-text').textContent = `wins KES ${match.winner_prize}`;
 
-        const announceEl = document.getElementById('winner-announce');
-        announceEl.className = 'winner-announce' + (youWon ? ' you-won' : '');
+        const banner = document.getElementById('winner-announce');
+        banner.className = `winner-banner ${youWon ? 'you-won' : 'opp-won'}`;
+        document.getElementById('winner-banner-emoji').textContent = youWon ? '🏆' : '💀';
+        document.getElementById('winner-name-display').textContent = youWon ? `YOU WIN!` : escapeHtml(winnerName);
+        document.getElementById('winner-prize-text').textContent = youWon
+            ? `+KES ${match.winner_prize} will be added to your wallet`
+            : `${escapeHtml(winnerName)} wins KES ${match.winner_prize}`;
 
         const warnList = document.getElementById('ocr-warn-list-auto');
         warnList.innerHTML = '';
@@ -1982,10 +2315,22 @@
     function showChallengeStep(result) {
         const ocr = result.ocrResult;
         const verify = result.verificationResult;
+        const conf = verify.confidence || 0;
+
+        // Screenshot preview
+        if (_uploadedObjectUrl) {
+            const prev = document.getElementById('challenge-screenshot-preview');
+            prev.src = _uploadedObjectUrl;
+            prev.style.display = 'block';
+        }
 
         document.getElementById('challenge-ocr-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
-        document.getElementById('challenge-ocr-label').textContent = `Score detected`;
-        document.getElementById('challenge-confidence-text').textContent = `Confidence: ${verify.confidence}%`;
+
+        // Confidence bar
+        const bar = document.getElementById('challenge-conf-bar');
+        const pct = document.getElementById('challenge-conf-pct');
+        bar.style.width = `${conf}%`;
+        pct.textContent = `${conf}%`;
 
         const warnList = document.getElementById('ocr-warn-list-challenge');
         warnList.innerHTML = '';
@@ -2012,6 +2357,13 @@
     function showManualStep(result) {
         const ocr = result.ocrResult;
         const verify = result.verificationResult;
+
+        // Screenshot preview
+        if (_uploadedObjectUrl) {
+            const prev = document.getElementById('manual-screenshot-preview');
+            prev.src = _uploadedObjectUrl;
+            prev.style.display = 'block';
+        }
 
         const scoreEl = document.getElementById('ocr-score-manual');
         const confEl = document.getElementById('ocr-confidence-manual');
@@ -2044,13 +2396,13 @@
         panel.classList.add('visible');
 
         const select = document.getElementById('report-winner');
-        select.innerHTML = '<option value="">-- Choose winner --</option>';
+        select.innerHTML = '<option value="">-- Select the winner --</option>';
         const match = currentReportMatch;
         if (match.creator_id === currentUser.id) {
-            select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+            select.innerHTML += `<option value="${currentUser.id}">✅ Me (${escapeHtml(currentUsername)})</option>`;
             if (match.joiner_id) select.innerHTML += `<option value="${match.joiner_id}">Opponent (${escapeHtml(match.joiner?.username || 'Joiner')})</option>`;
         } else {
-            select.innerHTML += `<option value="${currentUser.id}">Me (${escapeHtml(currentUsername)})</option>`;
+            select.innerHTML += `<option value="${currentUser.id}">✅ Me (${escapeHtml(currentUsername)})</option>`;
             select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
         }
 
@@ -2099,7 +2451,7 @@
 
             closeModal('report-result-modal');
             if (data.message) {
-                alert(`🏆 ${data.message}\n\nYou won KES ${data.prizePaid || data.winnerPrize || '?'}`);
+                showToast('success', '🏆 Match Settled!', `You won KES ${data.prizePaid || data.winnerPrize || '?'}`, 6000);
             }
             await refreshBalance();
             await loadMyFriendMatches();
@@ -2112,7 +2464,7 @@
     }
 
     async function submitChallengeResult() {
-        alert('Challenge upload not fully implemented – please use manual for now.');
+        showToast('info', 'Coming Soon', 'Challenge upload is not yet available. Use manual reporting for now.', 4000);
         // In production, you would re-upload the file to /friends/challenge/:matchId
     }
 
@@ -2140,9 +2492,9 @@
 
             closeModal('report-result-modal');
             if (data.requiresConfirmation) {
-                alert(`✅ Result submitted!\n\nWaiting for your opponent to confirm.\nIf they don't report within 2 hours, you'll be auto-awarded the win.`);
+                showToast('info', 'Result Submitted!', 'Waiting for opponent to confirm. You auto-win if they don\'t report in 2 hours.', 7000);
             } else {
-                alert(`🏆 Match complete! ${data.message}`);
+                showToast('success', '🏆 Match Complete!', data.message || 'Result recorded.', 6000);
                 await refreshBalance();
             }
             await loadMyFriendMatches();
@@ -2157,7 +2509,7 @@
         fetchWithAuth('/friends/my-matches', {}, 8000).then(async res => {
             const matches = await res.json();
             const match = matches.find(m => m.id === matchId);
-            if (!match) return alert('Match not found');
+            if (!match) { showToast('error', 'Match Not Found', 'Could not load match details.', 4000); return; }
             currentReportMatch = match;
 
             resetReportModal();
@@ -2173,7 +2525,7 @@
     }
 
     function openChallengeUploadModal(matchId) {
-        alert('Challenge upload not fully implemented – please use "Report Result" for now.');
+        showToast('info', 'Coming Soon', 'Use "Report Result" to submit your score for now.', 4000);
         openReportResultModal(matchId);
     }
 
@@ -2216,9 +2568,19 @@
             friendMatchTimer = null;
         }
         closeModal('waiting-friend-modal');
-        const joinerName = matchData.joinerUsername || 'Opponent';
-        alert(`🎮 Match Started!\n\n${joinerName} joined your match!\nGood luck! Winner gets KES ${matchData.winnerPrize}`);
-        loadMyFriendMatches();
+        openWarRoom({
+            matchId:         currentFriendMatch?.matchId || matchData.matchId,
+            matchCode:       currentFriendMatch?.matchCode || matchData.matchCode,
+            creatorTeam:     currentTeam,
+            creatorUsername: currentUsername,
+            joinerTeam:      matchData.joinerTeam    || matchData.joinerUsername || 'Opponent FC',
+            joinerUsername:  matchData.joinerUsername || 'Opponent',
+            wagerAmount:     matchData.wagerAmount    || currentFriendMatch?.wagerAmount,
+            winnerPrize:     matchData.winnerPrize,
+            startedAt:       new Date().toISOString(),
+            currentUserId:   currentUser.id,
+            creatorId:       currentUser.id   // caller is always the creator here
+        });
     }
 
     function onMatchExpiredOrCancelled(matchData) {
@@ -2228,9 +2590,9 @@
         }
         closeModal('waiting-friend-modal');
         if (matchData.status === 'expired') {
-            alert('⏰ Match Expired\n\nNo one joined in time. Your wager has been refunded.');
+            showToast('info', '⏰ Match Expired', 'No one joined in time. Your wager has been refunded.', 6000);
         } else {
-            alert('❌ Match Cancelled\n\nYour wager has been refunded.');
+            showToast('info', '❌ Match Cancelled', 'Your wager has been refunded.', 5000);
         }
         refreshBalance();
         loadMyFriendMatches();
@@ -2288,10 +2650,25 @@
         window.location.href = '/login';
     });
 
+    // --- War Room Navigation ─────────────────────────────────────
+    function openWarRoom(data) {
+        sessionStorage.setItem('warRoomData', JSON.stringify(data));
+        window.location.href = '/war-room';
+    }
+
     // --- Initial load ---
     window.onload = () => {
         if (!authToken) { window.location.href = '/login'; return; }
-        loadDashboard();
+        loadDashboard().then(() => {
+            // If returning from War Room with a pending report, open the modal
+            const reportId = sessionStorage.getItem('openReportMatchId');
+            if (reportId) {
+                sessionStorage.removeItem('openReportMatchId');
+                sessionStorage.removeItem('warRoomData');
+                // Small delay so matches list is rendered first
+                setTimeout(() => openReportResultModal(reportId), 600);
+            }
+        });
     };
 </script>
 </body>
