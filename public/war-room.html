@@ -256,10 +256,13 @@
     </div>
 
     <div class="war-actions">
-        <button class="btn-report" onclick="goReport()">
+        <button class="btn-report" id="btn-report" onclick="goReport()">
             📸 Report Result &amp; Upload Screenshot
         </button>
         <button class="btn-back" onclick="goBack()">← Back to Dashboard</button>
+        <button class="btn-back" onclick="forfeitMatch()" style="border-color:rgba(255,68,68,0.3);color:#ff6666;margin-top:4px">
+            🏳️ Forfeit Match
+        </button>
     </div>
 
 </div>
@@ -271,7 +274,8 @@
     }
     function qs(id) { return document.getElementById(id); }
 
-    if (!sessionStorage.getItem('supabaseToken')) { window.location.href = '/login'; }
+    const authToken = sessionStorage.getItem('supabaseToken');
+    if (!authToken) { window.location.href = '/login'; }
 
     const rawData = sessionStorage.getItem('warRoomData');
     if (!rawData) { window.location.href = '/dashboard'; }
@@ -281,6 +285,9 @@
 
     const { matchId, matchCode, creatorTeam, creatorUsername, joinerTeam, joinerUsername,
             wagerAmount, winnerPrize, startedAt, currentUserId, creatorId } = matchData;
+
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API = isLocal ? 'http://localhost:3000' : 'https://low-lilllie-kandabrian-18be1e15.koyeb.app';
 
     const isCreator = currentUserId === creatorId;
     qs('home-team').textContent   = escapeHtml(creatorTeam || 'Unknown FC');
@@ -312,6 +319,96 @@
     updateElapsed();
     setInterval(updateElapsed, 1000);
 
+    // ── Live status polling ──────────────────────────────────────────────────
+    // Polls /friends/match-status every 10s so the war room reacts to:
+    // draw → penalty_shootout, opponent forfeit, dispute, completion
+    let lastStatus = 'active';
+    async function pollMatchStatus() {
+        if (!matchId) return;
+        try {
+            const res = await fetch(`${API}/friends/match-status/${matchId}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            if (!res.ok) return;
+            const data = await res.json();
+
+            if (data.status === lastStatus) return; // nothing changed
+            lastStatus = data.status;
+
+            if (data.status === 'awaiting_confirmation') {
+                // Someone declared the score - redirect to dashboard to confirm/dispute
+                showStatusBanner('📋 SCORE DECLARED',
+                    data.iDeclared
+                        ? 'Waiting for your opponent to confirm. Check the dashboard.'
+                        : `Your opponent declared ${data.myDeclaredScore ?? '?'}-${data.opponentDeclaredScore ?? '?'}. Open the dashboard to confirm or dispute.`,
+                    '#ffb400');
+                // Redirect to dashboard after 3 seconds so they can act
+                if (!data.iDeclared) {
+                    setTimeout(() => { window.location.href = '/dashboard'; }, 3000);
+                }
+
+            } else if (data.status === 'penalty_shootout') {
+                // Show penalty instructions banner
+                showStatusBanner(`⚽ IT'S A DRAW — PENALTIES!`,
+                    `Match drew ${data.drawScore || ''}. Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
+                    '#ffd700');
+                const reportBtn = qs('btn-report');
+                if (reportBtn) reportBtn.textContent = '📸 Upload Penalty Result';
+
+            } else if (data.status === 'completed') {
+                clearInterval(statusPollTimer);
+                if (data.youWon) {
+                    showStatusBanner('🏆 YOU WON!',
+                        `KES ${data.winnerPrize || winnerPrize} has been credited to your wallet.`,
+                        '#00ff41');
+                } else if (data.settlementMethod === 'forfeit') {
+                    showStatusBanner('🏳️ MATCH FORFEITED',
+                        data.statusMessage || 'Match was forfeited.',
+                        '#ff8800');
+                } else {
+                    showStatusBanner('❌ YOU LOST',
+                        'Better luck next time.',
+                        '#ff4444');
+                }
+                setTimeout(() => { window.location.href = '/dashboard'; }, 4000);
+
+            } else if (data.status === 'disputed') {
+                clearInterval(statusPollTimer);
+                showStatusBanner('⚠️ MATCH DISPUTED',
+                    'An admin is reviewing this match. Check back later.',
+                    '#ff8800');
+            }
+        } catch (err) {
+            console.warn('Status poll error:', err.message);
+        }
+    }
+
+    function showStatusBanner(title, message, color) {
+        let banner = qs('status-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'status-banner';
+            banner.style.cssText = `
+                position:fixed; top:0; left:0; right:0; z-index:999;
+                padding:16px 20px; text-align:center;
+                font-family:'Outfit',sans-serif; font-weight:700;
+                border-bottom:2px solid currentColor;
+                animation: slideDown 0.4s ease;
+            `;
+            document.body.prepend(banner);
+        }
+        banner.style.background = `rgba(0,0,0,0.95)`;
+        banner.style.color = color;
+        banner.style.borderColor = color;
+        banner.innerHTML = `<div style="font-size:1.1rem;letter-spacing:2px">${escapeHtml(title)}</div>
+                            <div style="font-size:0.8rem;font-weight:400;margin-top:4px;color:#ccc">${escapeHtml(message)}</div>`;
+    }
+
+    const statusPollTimer = setInterval(pollMatchStatus, 10000);
+    pollMatchStatus(); // run immediately on load
+    // ────────────────────────────────────────────────────────────────────────
+
     function copyCode() {
         if (!matchCode) return;
         navigator.clipboard.writeText(matchCode).then(() => {
@@ -319,6 +416,26 @@
             btn.textContent = 'Copied!';
             setTimeout(() => btn.textContent = 'Copy', 2000);
         });
+    }
+
+    async function forfeitMatch() {
+        if (!confirm('Are you sure you want to forfeit? Your opponent will win the wager.')) return;
+        try {
+            const res = await fetch(`${API}/friends/forfeit`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matchId })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showStatusBanner('🏳️ FORFEITED', 'You forfeited. Returning to dashboard...', '#ff8800');
+                setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
+            } else {
+                alert(data.error || 'Failed to forfeit');
+            }
+        } catch (err) {
+            alert('Network error. Try again.');
+        }
     }
 
     function goReport() {

@@ -275,6 +275,20 @@
             color: #aaa;
             margin: 4px 0;
         }
+        /* Confirmation countdown cards */
+        .confirm-countdown {
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.82rem;
+        }
+        .confirm-countdown.waiting {
+            background: rgba(255,180,0,0.07);
+            border: 1px solid rgba(255,180,0,0.2);
+        }
+        .confirm-countdown.urgent {
+            background: rgba(255,68,68,0.07);
+            border: 1px solid rgba(255,68,68,0.25);
+        }
         .match-actions {
             margin-top: 12px;
             display: flex;
@@ -914,7 +928,22 @@
     <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">CREATE CHALLENGE ⚔️</div>
-        <p class="modal-subtitle">Set your wager. Both players stake equal amounts.</p>
+        <p class="modal-subtitle">Enter your eFootball room code & set your wager.</p>
+
+        <!-- Guidelines Info Box -->
+        <div style="background: rgba(0,255,65,0.05); border: 1px solid rgba(0,255,65,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 0.75rem; color: var(--muted); line-height: 1.4;">
+            <strong style="color: var(--text);">How to get your code:</strong><br>
+            1. Create a Friends Match room in eFootball<br>
+            2. eFootball will generate a code (e.g., ABC123)<br>
+            3. Paste it below & share with your friend<br>
+            <a href="EFOOTBALL_GUIDELINES.md" target="_blank" style="color: var(--neon); text-decoration: none;">📖 Full guidelines →</a>
+        </div>
+
+        <div class="modal-input-group">
+            <label>eFootball Room Code</label>
+            <input type="text" id="friend-efootball-code" class="modal-input" placeholder="ABC123" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
+        </div>
+
         <div class="modal-input-group">
             <label>Your Wager (KES)</label>
             <div class="amount-presets">
@@ -946,7 +975,8 @@
         <div class="modal-handle"></div>
         <div class="modal-title">WAITING FOR OPPONENT ⏳</div>
         <p class="modal-subtitle" id="friend-match-timer">Expires in 30:00</p>
-        <div style="font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--neon); letter-spacing:8px; margin:20px 0; text-shadow:0 0 30px rgba(0,255,65,0.4);" id="friend-match-code">VUM-XXXX</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--neon); letter-spacing:8px; margin:20px 0; text-shadow:0 0 30px rgba(0,255,65,0.4);" id="friend-match-code">ABC123</div>
+        <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 20px;">Share this code with your friend on eFootball</p>
         <div class="friend-info" style="margin-bottom:20px;">
             Your wager: KES <strong id="waiting-stake-display">0</strong> · Winner gets: KES <strong id="waiting-prize-display">0</strong>
         </div>
@@ -960,10 +990,20 @@
     <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">JOIN CHALLENGE 🎯</div>
-        <p class="modal-subtitle">Enter the match code your opponent shared.</p>
+        <p class="modal-subtitle">Enter the eFootball room code your opponent shared.</p>
+
+        <!-- Guidelines Info Box -->
+        <div style="background: rgba(255,180,0,0.05); border: 1px solid rgba(255,180,0,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 0.75rem; color: var(--muted); line-height: 1.4;">
+            <strong style="color: var(--text);">📌 Important:</strong><br>
+            • Your opponent created a room in eFootball<br>
+            • They're sharing the room code with you<br>
+            • Use that exact code here to join<br>
+            <a href="EFOOTBALL_GUIDELINES.md" target="_blank" style="color: #ffb400; text-decoration: none;">📖 Full guidelines →</a>
+        </div>
+
         <div class="modal-input-group">
-            <label>Match Code</label>
-            <input type="text" id="join-friend-code" class="modal-input" placeholder="VUM-XXXX" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
+            <label>eFootball Room Code</label>
+            <input type="text" id="join-friend-code" class="modal-input" placeholder="ABC123" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
         </div>
         <div class="balance-insufficient" id="join-friend-error"></div>
         <button class="btn-mpesa" style="background:var(--neon);color:#000;" onclick="joinFriendMatch()">JOIN & PAY WAGER</button>
@@ -980,83 +1020,76 @@
     </div>
 </div>
 
-<!-- Report Result Modal -->
-<div class="modal-overlay" id="report-result-modal" onclick="if(event.target === this) closeModal('report-result-modal')">
+<!-- ═══ DECLARE SCORE MODAL ═══ -->
+<div class="modal-overlay" id="report-result-modal" onclick="if(event.target===this)closeModal('report-result-modal')">
     <div class="modal-sheet" style="max-height:92vh;overflow-y:auto;">
         <div class="modal-handle"></div>
-        <div class="modal-title">PIGA PICHA 📸</div>
-        <p class="modal-subtitle">Upload your end-of-match screenshot — we'll detect the score automatically.</p>
-        <div class="match-details-box" id="report-match-details"></div>
 
-        <!-- Step 1: Upload zone -->
-        <div id="report-step-upload">
+        <!-- Step 1: Enter the score -->
+        <div class="step active" id="declare-step-1">
+            <div class="modal-title">WHAT WAS THE SCORE? ⚽</div>
+            <p class="modal-subtitle" id="declare-match-subtitle">Enter the final score from your match.</p>
+            <div class="match-details-box" id="report-match-details"></div>
 
-            <!-- Screenshot guide (collapsible) -->
-            <div class="screenshot-guide">
-                <div class="guide-header" id="guide-toggle-btn" onclick="toggleScreenshotGuide()">
-                    <span>📖</span> How to take the right screenshot
-                    <span class="guide-toggle" id="guide-chevron">▼</span>
+            <!-- Score pickers -->
+            <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:24px 0;">
+                <!-- My score -->
+                <div style="text-align:center;">
+                    <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;" id="my-team-label">MY GOALS</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button onclick="adjustScore('my',-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">−</button>
+                        <div id="my-score-display" style="font-family:'Bebas Neue',sans-serif;font-size:4rem;color:var(--neon);text-shadow:0 0 20px rgba(0,255,65,0.4);min-width:52px;text-align:center;line-height:1;">0</div>
+                        <button onclick="adjustScore('my',1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">+</button>
+                    </div>
                 </div>
-                <div class="guide-body" id="guide-body">
-                    <!-- Mock eFootball end-of-match screen -->
-                    <div class="mock-screenshot">
-                        <div class="mock-match-header">FULL TIME · MATCH RESULT</div>
-                        <div class="mock-scoreboard">
-                            <div class="mock-team">
-                                <div class="mock-team-logo home">🔵</div>
-                                <div class="mock-team-name">Man City</div>
-                            </div>
-                            <div class="mock-score-center">
-                                <span class="mock-score-num" style="color:#4fc3f7;">3</span>
-                                <span class="mock-score-sep">–</span>
-                                <span class="mock-score-num" style="color:#ef9a9a;">1</span>
-                            </div>
-                            <div class="mock-team">
-                                <div class="mock-team-logo away">🔴</div>
-                                <div class="mock-team-name">Arsenal</div>
-                            </div>
-                        </div>
-                        <div class="mock-ft-badge">FT · FULL TIME</div>
-                    </div>
-                    <div class="mock-annotations">
-                        <div class="annotation">
-                            <div class="annotation-dot green">✓</div>
-                            <div><strong>Team names</strong> must be visible on both sides — our AI reads them to map who is who.</div>
-                        </div>
-                        <div class="annotation">
-                            <div class="annotation-dot green">✓</div>
-                            <div><strong>Both scores</strong> must be clear and large — crop the screen to include the scoreboard.</div>
-                        </div>
-                        <div class="annotation">
-                            <div class="annotation-dot yellow">!</div>
-                            <div><strong>"Full Time" or "FT"</strong> label helps us confirm the match is over, not half-time.</div>
-                        </div>
-                    </div>
-                    <div class="guide-tips">
-                        <div class="guide-tip good"><span class="tip-icon">✅</span> Screenshot the <strong style="color:#ccc;">End of Match Results</strong> screen in eFootball</div>
-                        <div class="guide-tip good"><span class="tip-icon">✅</span> Make sure the screen is bright — no dark filter or low brightness</div>
-                        <div class="guide-tip bad"><span class="tip-icon">❌</span> Don't upload a photo of your TV/screen — take a <strong style="color:#ccc;">screenshot directly</strong></div>
-                        <div class="guide-tip bad"><span class="tip-icon">❌</span> Don't crop out the team names or the score</div>
+
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#444;padding-top:20px;">—</div>
+
+                <!-- Opponent score -->
+                <div style="text-align:center;">
+                    <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;" id="opp-team-label">OPP GOALS</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button onclick="adjustScore('opp',-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">−</button>
+                        <div id="opp-score-display" style="font-family:'Bebas Neue',sans-serif;font-size:4rem;color:#ff4444;text-shadow:0 0 20px rgba(255,68,68,0.3);min-width:52px;text-align:center;line-height:1;">0</div>
+                        <button onclick="adjustScore('opp',1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">+</button>
                     </div>
                 </div>
             </div>
 
+            <!-- Result label -->
+            <div id="score-result-label" style="text-align:center;font-size:0.9rem;color:#888;margin-bottom:20px;">Draw</div>
+
+            <div class="balance-insufficient" id="declare-error-1"></div>
+            <button class="btn-mpesa" style="background:var(--neon);color:#000;" onclick="goToDeclareStep2()">
+                NEXT: UPLOAD SCREENSHOT →
+            </button>
+            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
+        </div>
+
+        <!-- Step 2: Upload screenshot -->
+        <div class="step" id="declare-step-2">
+            <div class="modal-title">UPLOAD SCREENSHOT 📲</div>
+            <p class="modal-subtitle">Upload the Full Time results screen from eFootball.</p>
+
+            <!-- Score summary -->
+            <div id="score-summary-box" style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.2);border-radius:12px;padding:14px 18px;text-align:center;margin-bottom:18px;">
+                <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:6px;">Your declared score</div>
+                <div id="score-summary-display" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:4px;">0 — 0</div>
+                <div id="score-summary-result" style="font-size:0.8rem;color:#aaa;margin-top:4px;"></div>
+            </div>
+
             <!-- Upload zone -->
             <div class="modal-input-group">
-                <label>Your Match Screenshot <span style="color:var(--neon)">*</span></label>
                 <div class="screenshot-upload-zone" id="upload-zone">
                     <input type="file" id="screenshot-file-input" accept="image/jpeg,image/png,image/webp"
-                        onchange="handleScreenshotSelected(this.files[0])"
-                        ondragover="event.preventDefault();this.parentElement.classList.add('drag-over')"
-                        ondragleave="this.parentElement.classList.remove('drag-over')"
-                        ondrop="this.parentElement.classList.remove('drag-over')">
+                        onchange="handleScreenshotSelected(this.files[0])">
                     <span class="upload-icon" id="upload-icon">📲</span>
                     <div class="upload-label" id="upload-label">
                         <strong>Tap to upload screenshot</strong><br>
-                        <span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Take it directly from eFootball — not a photo of your screen</span>
+                        <span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Full Time results screen — not a photo of your TV</span>
                     </div>
                     <div class="upload-hint">
-                        <span>📷 JPEG</span><span>·</span><span>🖼 PNG</span><span>·</span><span>🗜 WebP</span><span>·</span><span>Max 10MB</span>
+                        <span>📷 JPEG</span><span>·</span><span>🖼 PNG</span><span>·</span><span>Max 10MB</span>
                     </div>
                     <img class="screenshot-thumb" id="screenshot-thumb" alt="preview">
                 </div>
@@ -1064,96 +1097,106 @@
                     <div class="upload-progress-fill indeterminate" id="upload-progress-fill"></div>
                 </div>
             </div>
-            <div class="balance-insufficient" id="report-error"></div>
-            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
-        </div>
 
-        <!-- Step 2a: High confidence → auto-settle -->
-        <div id="report-step-auto" style="display:none;">
-            <!-- Screenshot preview strip -->
-            <img id="auto-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
-            <!-- Detected score -->
-            <div class="ocr-result-card" id="ocr-result-card">
-                <div class="ocr-result-label" style="margin-bottom:6px;">Score detected from your screenshot</div>
-                <div class="ocr-result-score" id="ocr-result-score">0 – 0</div>
-            </div>
-            <!-- Confidence strip -->
-            <div class="conf-strip" id="auto-conf-strip">
-                <span style="font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;color:#555;">Confidence</span>
-                <div class="conf-bar-wrap"><div class="conf-bar-fill high" id="auto-conf-bar" style="width:0%"></div></div>
-                <span class="conf-pct high" id="auto-conf-pct">0%</span>
-            </div>
-            <!-- Winner announcement -->
-            <div class="winner-banner" id="winner-announce">
-                <span class="winner-banner-emoji" id="winner-banner-emoji">🏆</span>
-                <div class="winner-banner-label">WINNER</div>
-                <div class="winner-banner-name" id="winner-name-display">—</div>
-                <div class="winner-banner-prize" id="winner-prize-text">wins KES 0</div>
-            </div>
-            <div class="ocr-panel" id="ocr-panel-auto" style="margin-bottom:16px;">
-                <div class="ocr-warn-list" id="ocr-warn-list-auto"></div>
-            </div>
-            <div class="balance-insufficient" id="report-error-auto"></div>
-            <button class="btn-mpesa" id="auto-settle-btn" style="background:var(--neon);color:#000;" onclick="confirmAutoSettle()">
-                ✅ CONFIRM & SETTLE MATCH
+            <div class="balance-insufficient" id="declare-error-2"></div>
+            <button class="btn-mpesa" id="declare-submit-btn" style="background:var(--neon);color:#000;" onclick="submitScoreDeclaration()">
+                ✅ DECLARE MY SCORE
             </button>
-            <div style="font-size:0.7rem;color:#555;text-align:center;margin-top:8px;">
-                High confidence result — no opponent confirmation needed.
-            </div>
-            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">Score looks wrong? Fix manually →</button>
+            <button class="btn-cancel" onclick="switchStep('report-result-modal',1)">← Back</button>
         </div>
 
-        <!-- Step 2b: Medium confidence → challenge window -->
-        <div id="report-step-challenge" style="display:none;">
-            <img id="challenge-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
-            <div class="ocr-result-card" id="challenge-ocr-card">
-                <div class="ocr-result-label" style="margin-bottom:6px;">Score detected from your screenshot</div>
-                <div class="ocr-result-score" id="challenge-ocr-score">0 – 0</div>
+        <!-- Step 3: Waiting for opponent -->
+        <div class="step" id="declare-step-3" style="text-align:center;">
+            <div style="font-size:3rem;margin-bottom:12px;">⏳</div>
+            <div class="modal-title">WAITING FOR OPPONENT</div>
+            <p class="modal-subtitle">They have 2 hours to confirm or dispute your score.</p>
+            <div style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.15);border-radius:12px;padding:18px;margin:20px 0;">
+                <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;">You declared</div>
+                <div id="declared-score-recap" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:4px;">0 — 0</div>
+                <div id="declared-result-recap" style="font-size:0.85rem;margin-top:6px;font-weight:600;"></div>
             </div>
-            <div class="conf-strip" id="challenge-conf-strip">
-                <span style="font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;color:#555;">Confidence</span>
-                <div class="conf-bar-wrap"><div class="conf-bar-fill medium" id="challenge-conf-bar" style="width:0%"></div></div>
-                <span class="conf-pct medium" id="challenge-conf-pct">0%</span>
+            <div style="font-size:0.8rem;color:#888;line-height:1.7;margin-bottom:8px;">
+                Your opponent will see this score and either confirm it or dispute it.
             </div>
-            <div style="background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);border-radius:12px;padding:14px;margin:14px 0;font-size:0.8rem;line-height:1.6;">
-                <strong style="color:#ffb400;">⏳ Challenge Window Open</strong><br>
-                <span style="color:#aaa;">Score was detected but confidence is moderate. Your opponent has <strong style="color:#ccc;">2 hours</strong> to upload their screenshot. If they don't, you automatically win.</span>
+            <div style="background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);border-radius:10px;padding:12px;margin-bottom:20px;font-size:0.82rem;">
+                ⚡ Auto-win in <strong class="countdown-timer" id="declare-countdown" data-deadline="">30:00</strong> if they don't respond.
             </div>
-            <div class="ocr-panel" id="ocr-panel-challenge" style="margin-bottom:16px;">
-                <div class="ocr-warn-list" id="ocr-warn-list-challenge"></div>
+            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Close</button>
+        </div>
+
+        <!-- Step 4: Opponent needs to confirm (shown to the OPPONENT) -->
+        <div class="step" id="declare-step-confirm" style="text-align:center;">
+            <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
+            <div class="modal-title">CONFIRM THE SCORE</div>
+            <p class="modal-subtitle">Your opponent declared this result. Do you agree?</p>
+            <div style="background:rgba(255,180,0,0.06);border:1px solid rgba(255,180,0,0.25);border-radius:12px;padding:18px;margin:16px 0;text-align:center;">
+                <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;">Opponent declared</div>
+                <div id="confirm-score-display" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:4px;">0 — 0</div>
+                <div id="confirm-result-display" style="font-size:0.85rem;color:#aaa;margin-top:6px;"></div>
             </div>
-            <div class="balance-insufficient" id="report-error-challenge"></div>
-            <button class="btn-mpesa" id="challenge-submit-btn" style="background:var(--neon);color:#000;" onclick="submitChallengeResult()">
-                ✅ SUBMIT MY SCORE
+
+            <!-- Confirm upload -->
+            <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">Upload your screenshot to confirm (optional but recommended)</div>
+            <div class="modal-input-group" style="margin-bottom:16px;">
+                <div class="screenshot-upload-zone" id="confirm-upload-zone" style="padding:12px;">
+                    <input type="file" id="confirm-screenshot-input" accept="image/jpeg,image/png,image/webp"
+                        onchange="handleConfirmScreenshot(this.files[0])">
+                    <div class="upload-label" id="confirm-upload-label" style="font-size:0.8rem;">
+                        <strong>Upload your screenshot</strong> (optional)
+                    </div>
+                    <img class="screenshot-thumb" id="confirm-screenshot-thumb" alt="preview" style="max-height:80px;">
+                </div>
+            </div>
+
+            <div class="balance-insufficient" id="confirm-error"></div>
+            <button class="btn-mpesa" style="background:var(--neon);color:#000;margin-bottom:10px;" onclick="confirmOpponentScore()">
+                ✅ YES, CONFIRM SCORE
             </button>
-            <button class="btn-cancel" style="margin-top:8px;" onclick="showManualFallback()">Score wrong? Report manually →</button>
+            <button class="btn-mpesa" style="background:rgba(255,68,68,0.15);color:#ff6666;border:1px solid rgba(255,68,68,0.3);" onclick="showDisputeForm()">
+                ❌ DISPUTE — SCORE IS WRONG
+            </button>
         </div>
 
-        <!-- Step 2c: Manual fallback -->
-        <div id="report-step-manual" style="display:none;">
-            <img id="manual-screenshot-preview" src="" alt="Your screenshot" style="width:100%;border-radius:10px;margin-bottom:12px;border:1px solid var(--border);display:none;max-height:140px;object-fit:contain;background:#000;">
-            <div class="ocr-panel" id="ocr-panel-manual" style="margin-bottom:12px;">
-                <div class="ocr-title">🤖 AI Reading Result</div>
-                <div class="ocr-score-display" id="ocr-score-manual">?  –  ?</div>
-                <div class="ocr-confidence" id="ocr-confidence-manual"></div>
-                <div id="ocr-badge-wrap-manual"></div>
-                <div class="ocr-warn-list" id="ocr-warn-list-manual"></div>
-            </div>
-            <div style="background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.2);border-radius:12px;padding:12px 14px;font-size:0.78rem;color:#aaa;margin-bottom:14px;line-height:1.6;">
-                <strong style="color:#ff7777;">⚠️ Could not read score clearly.</strong><br>
-                Please select the winner manually. This will go to admin review — make sure your screenshot is uploaded.
+        <!-- Step 5: Dispute form -->
+        <div class="step" id="declare-step-dispute" style="text-align:center;">
+            <div style="font-size:3rem;margin-bottom:12px;">🔍</div>
+            <div class="modal-title">RAISE A DISPUTE</div>
+            <p class="modal-subtitle">Tell us what the real score was and upload your screenshot.</p>
+            <div class="modal-input-group">
+                <label style="text-align:left;display:block;">What was the REAL score?</label>
+                <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0;">
+                    <div style="text-align:center;">
+                        <div style="font-size:0.6rem;letter-spacing:1px;color:#888;margin-bottom:4px;" id="dispute-my-label">MY GOALS</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button onclick="adjustDisputeScore('my',-1)" style="width:30px;height:30px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;cursor:pointer;">−</button>
+                            <div id="dispute-my-score" style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--neon);min-width:40px;text-align:center;">0</div>
+                            <button onclick="adjustDisputeScore('my',1)" style="width:30px;height:30px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;cursor:pointer;">+</button>
+                        </div>
+                    </div>
+                    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:#444;padding-top:16px;">—</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:0.6rem;letter-spacing:1px;color:#888;margin-bottom:4px;">OPP GOALS</div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button onclick="adjustDisputeScore('opp',-1)" style="width:30px;height:30px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;cursor:pointer;">−</button>
+                            <div id="dispute-opp-score" style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#ff4444;min-width:40px;text-align:center;">0</div>
+                            <button onclick="adjustDisputeScore('opp',1)" style="width:30px;height:30px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;cursor:pointer;">+</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-input-group">
-                <label>Who Won? <span style="color:var(--neon)">*</span></label>
-                <select id="report-winner" class="modal-input" style="font-size:1rem;">
-                    <option value="">-- Select the winner --</option>
-                </select>
+                <div class="screenshot-upload-zone" id="dispute-upload-zone" style="padding:12px;">
+                    <input type="file" id="dispute-screenshot-input" accept="image/jpeg,image/png,image/webp"
+                        onchange="handleDisputeScreenshot(this.files[0])">
+                    <div class="upload-label" style="font-size:0.8rem;"><strong>Upload YOUR screenshot</strong> <span style="color:#ff4444;">*required</span></div>
+                    <img class="screenshot-thumb" id="dispute-screenshot-thumb" alt="preview" style="max-height:80px;">
+                </div>
             </div>
-            <div class="balance-insufficient" id="report-error-manual"></div>
-            <button class="btn-mpesa" id="submit-result-btn" onclick="submitMatchResult()" style="background:var(--neon);color:#000;">
-                SUBMIT RESULT →
+            <div class="balance-insufficient" id="dispute-error"></div>
+            <button class="btn-mpesa" style="background:rgba(255,68,68,0.15);color:#ff6666;border:1px solid rgba(255,68,68,0.3);margin-bottom:10px;" onclick="submitDispute()">
+                SUBMIT DISPUTE →
             </button>
-            <button class="btn-cancel" style="margin-top:8px;" onclick="closeModal('report-result-modal')">Cancel</button>
+            <button class="btn-cancel" onclick="switchStep('report-result-modal','confirm')">← Back</button>
         </div>
     </div>
 </div>
@@ -1359,8 +1402,6 @@
             document.getElementById('avatar-letter').innerText = currentUsername.charAt(0).toUpperCase();
             if (currentUser.phone) {
                 let phone = currentUser.phone.replace('+254', '0');
-                const phoneEl = document.getElementById('phone-display');
-                if (phoneEl) phoneEl.innerText = phone;
                 currentPhone = phone;
                 const dPhone = document.getElementById('deposit-phone');
                 const wPhone = document.getElementById('withdraw-phone');
@@ -1621,12 +1662,11 @@
         document.getElementById(modalId).classList.remove('open');
         if (modalId === 'deposit-modal' && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
         if (modalId === 'waiting-friend-modal' && friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
+        // FIX 8: Also stop match-status polling when the waiting modal is dismissed.
+        // Without this a second call to startMatchStatusPolling (e.g. when joining
+        // another match) stacks a competing interval on top of the first one.
+        if (modalId === 'waiting-friend-modal') { stopMatchStatusPolling(); }
         if (modalId === 'report-result-modal') { currentReportMatch = null; resetReportModal(); }
-    }
-    function switchStep(modalId, stepNum) {
-        document.querySelectorAll(`#${modalId} .step`).forEach((s, i) => {
-            s.classList.toggle('active', i + 1 === stepNum);
-        });
     }
 
     // --- Deposit Flow ---
@@ -1647,8 +1687,21 @@
         if (!amount || amount < 10) { showError('deposit-error', 'Minimum deposit is KES 10'); return; }
         if (!phone) { showError('deposit-error', 'Enter your M-PESA number'); return; }
 
-        let cleanPhone = phone.replace(/\s+/g, '');
-        if (cleanPhone.startsWith('0')) cleanPhone = '+254' + cleanPhone.substring(1);
+        // FIX 6: Complete client-side phone normalisation + validation.
+        // Previously only '0'-prefix numbers were handled; '7XX', '1XX', '+254'
+        // and invalid lengths were silently passed to the server, returning a
+        // confusing server-side error. Now we validate here and show a clear message.
+        let cleanPhone = phone.replace(/[\s\-]/g, '');
+        if (cleanPhone.startsWith('+254'))      cleanPhone = cleanPhone;          // already E.164
+        else if (cleanPhone.startsWith('254'))  cleanPhone = '+' + cleanPhone;
+        else if (cleanPhone.startsWith('0'))    cleanPhone = '+254' + cleanPhone.substring(1);
+        else if (/^[71]/.test(cleanPhone))      cleanPhone = '+254' + cleanPhone; // 7XX / 1XX
+        // Strip the leading '+' for the length check then re-add it
+        const digits = cleanPhone.replace('+', '');
+        if (!/^254[17]\d{8}$/.test(digits)) {
+            showError('deposit-error', 'Invalid M-PESA number. Use format 07XX XXX XXX or +254 7XX XXX XXX');
+            return;
+        }
 
         const btn = document.querySelector('#deposit-modal .btn-mpesa');
         btn.disabled = true; btn.textContent = 'Sending request...';
@@ -1699,8 +1752,17 @@
         if (amount > currentBalance) { showError('withdraw-error', 'Insufficient balance'); return; }
         if (!phone) { showError('withdraw-error', 'Enter your M-PESA number'); return; }
 
-        let cleanPhone = phone.replace(/\s+/g, '');
-        if (cleanPhone.startsWith('0')) cleanPhone = '+254' + cleanPhone.substring(1);
+        // FIX 6: Same complete normalisation as processDeposit.
+        let cleanPhone = phone.replace(/[\s\-]/g, '');
+        if (cleanPhone.startsWith('+254'))      cleanPhone = cleanPhone;
+        else if (cleanPhone.startsWith('254'))  cleanPhone = '+' + cleanPhone;
+        else if (cleanPhone.startsWith('0'))    cleanPhone = '+254' + cleanPhone.substring(1);
+        else if (/^[71]/.test(cleanPhone))      cleanPhone = '+254' + cleanPhone;
+        const _wDigits = cleanPhone.replace('+', '');
+        if (!/^254[17]\d{8}$/.test(_wDigits)) {
+            showError('withdraw-error', 'Invalid M-PESA number. Use format 07XX XXX XXX or +254 7XX XXX XXX');
+            return;
+        }
 
         const btn = document.querySelector('#withdraw-modal .btn-mpesa');
         btn.disabled = true; btn.textContent = 'Processing...';
@@ -1817,7 +1879,7 @@
             openProfileModal();
             return;
         }
-        document.getElementById('friend-wager-input').value = 100;
+        document.getElementById('friend-wager-input').value = 200;
         updateFriendBreakdown();
         hideError('create-friend-error');
         document.getElementById('create-friend-modal').classList.add('open');
@@ -1851,30 +1913,35 @@
     }
     async function createFriendMatch() {
         const wagerAmount = parseInt(document.getElementById('friend-wager-input').value);
+        const efootballCode = document.getElementById('friend-efootball-code').value.trim().toUpperCase();
         const errorEl = document.getElementById('create-friend-error');
         const btn = document.getElementById('create-friend-btn');
+
+        // Validate inputs
+        if (!efootballCode) { showError('create-friend-error', 'Please enter your eFootball room code'); return; }
         if (wagerAmount < 50) { showError('create-friend-error', 'Minimum wager is KES 50'); return; }
         if (wagerAmount > currentBalance) { showError('create-friend-error', 'Insufficient balance'); return; }
+
         btn.disabled = true;
         btn.textContent = 'Creating...';
         try {
-            console.log('📝 Creating friend match with wager:', wagerAmount);
+            console.log('📝 Creating friend match with eFootball code:', efootballCode, 'wager:', wagerAmount);
             const res = await fetchWithAuth('/friends/create-match', {
                 method: 'POST',
-                body: JSON.stringify({ wagerAmount })
+                body: JSON.stringify({ wagerAmount, efootballCode })
             }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            
+
             console.log('✅ Match created successfully');
-            
+
             currentFriendMatch = data;
-            
+
             // CRITICAL FIX: Always refresh balance from server after create
             await refreshBalance(3);
             console.log('💰 Balance refreshed after create:', currentBalance);
-            
-            document.getElementById('friend-match-code').textContent = data.matchCode;
+
+            document.getElementById('friend-match-code').textContent = data.efootballCode;
             document.getElementById('waiting-stake-display').textContent = wagerAmount;
             document.getElementById('waiting-prize-display').textContent = data.winnerPrize;
             startFriendTimer(data.expiresAt);
@@ -1889,33 +1956,40 @@
             await refreshBalance(3);
         } finally {
             btn.disabled = false;
-            btn.innerHTML = 'CREATE CHALLENGE (Pay KES <span id="create-friend-amount">' + wagerAmount + '</span>)';
+            // Safely rebuild button text
+            btn.textContent = '';
+            btn.appendChild(document.createTextNode('CREATE CHALLENGE (Pay KES '));
+            const _amtSpan = document.createElement('span');
+            _amtSpan.id = 'create-friend-amount';
+            _amtSpan.textContent = String(wagerAmount);
+            btn.appendChild(_amtSpan);
+            btn.appendChild(document.createTextNode(')'));
         }
     }
     async function joinFriendMatch() {
-        const matchCode = document.getElementById('join-friend-code').value.trim().toUpperCase();
+        const efootballCode = document.getElementById('join-friend-code').value.trim().toUpperCase();
         const errorEl = document.getElementById('join-friend-error');
-        if (!matchCode) { showError('join-friend-error', 'Please enter a match code'); return; }
+        if (!efootballCode) { showError('join-friend-error', 'Please enter your opponent\'s eFootball room code'); return; }
         try {
-            console.log('📝 Joining friend match with code:', matchCode);
+            console.log('📝 Joining friend match with eFootball code:', efootballCode);
             const res = await fetchWithAuth('/friends/join-match', {
                 method: 'POST',
-                body: JSON.stringify({ matchCode })
+                body: JSON.stringify({ efootballCode })
             }, 10000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
-            
+
             console.log('✅ Match joined successfully');
-            
+
             // CRITICAL FIX: Always refresh balance from server after join
             await refreshBalance(3);
             console.log('💰 Balance refreshed after join:', currentBalance);
-            
+
             currentFriendMatch = data;
             closeModal('join-friend-modal');
             openWarRoom({
                 matchId:         data.matchId,
-                matchCode:       data.matchCode,
+                efootballCode:   data.efootballCode,
                 creatorTeam:     data.creatorTeam,
                 creatorUsername: data.creatorUsername,
                 joinerTeam:      currentTeam,
@@ -2061,11 +2135,89 @@
                     actionsDiv.appendChild(reportBtn);
                 }
                 item.appendChild(actionsDiv);
+            } else if (m.status === 'awaiting_confirmation') {
+                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
+                const iDeclared = m.declared_score_by === currentUser.id;
+                const isCreator = m.creator_id === currentUser.id;
+                const myScore = isCreator ? m.declared_score_creator : m.declared_score_joiner;
+                const oppScore = isCreator ? m.declared_score_joiner : m.declared_score_creator;
+
+                if (iDeclared) {
+                    // I declared — show countdown waiting for opponent
+                    const countdownEl = createElementSafe('div', {
+                        class: 'confirm-countdown waiting',
+                        'data-deadline': m.score_confirm_deadline
+                    }, '');
+                    const cdLabel = document.createElement('div');
+                    cdLabel.style.cssText = 'font-size:0.7rem;letter-spacing:1.5px;text-transform:uppercase;color:#ffb400;margin-bottom:4px;';
+                    cdLabel.textContent = '⏳ Waiting for opponent';
+                    countdownEl.appendChild(cdLabel);
+                    const cdScore = document.createElement('div');
+                    cdScore.style.cssText = 'font-size:0.85rem;color:#ccc;';
+                    cdScore.textContent = 'You declared ';
+                    const cdStrong = document.createElement('strong');
+                    cdStrong.style.color = '#fff';
+                    cdStrong.textContent = `${myScore ?? '?'} – ${oppScore ?? '?'}`;
+                    cdScore.appendChild(cdStrong);
+                    countdownEl.appendChild(cdScore);
+                    const cdTimer = document.createElement('div');
+                    cdTimer.style.cssText = 'font-size:0.75rem;color:#888;margin-top:4px;';
+                    cdTimer.textContent = 'Auto-win in ';
+                    const cdTimerStrong = document.createElement('strong');
+                    cdTimerStrong.className = 'countdown-timer';
+                    cdTimerStrong.dataset.deadline = m.score_confirm_deadline;
+                    cdTimerStrong.textContent = '...';
+                    cdTimer.appendChild(cdTimerStrong);
+                    countdownEl.appendChild(cdTimer);
+                    actionsDiv.appendChild(countdownEl);
+                } else {
+                    // Opponent declared — urgent response needed
+                    const urgentEl = createElementSafe('div', { class: 'confirm-countdown urgent' }, '');
+                    const urgLabel = document.createElement('div');
+                    urgLabel.style.cssText = 'font-size:0.7rem;letter-spacing:1.5px;text-transform:uppercase;color:#ff4444;margin-bottom:4px;animation:pulse 1.5s infinite;';
+                    urgLabel.textContent = '⚠️ RESPONSE REQUIRED';
+                    urgentEl.appendChild(urgLabel);
+                    const urgScore = document.createElement('div');
+                    urgScore.style.cssText = 'font-size:0.85rem;color:#ccc;';
+                    urgScore.textContent = 'They declared ';
+                    const urgStrong = document.createElement('strong');
+                    urgStrong.style.color = '#fff';
+                    urgStrong.textContent = `${myScore ?? '?'} – ${oppScore ?? '?'}`;
+                    urgScore.appendChild(urgStrong);
+                    urgentEl.appendChild(urgScore);
+                    const urgTimer = document.createElement('div');
+                    urgTimer.style.cssText = 'font-size:0.75rem;color:#ff8800;margin-top:4px;';
+                    urgTimer.textContent = 'You auto-lose in ';
+                    const urgTimerStrong = document.createElement('strong');
+                    urgTimerStrong.className = 'countdown-timer';
+                    urgTimerStrong.dataset.deadline = m.score_confirm_deadline;
+                    urgTimerStrong.textContent = '...';
+                    urgTimer.appendChild(urgTimerStrong);
+                    urgentEl.appendChild(urgTimer);
+                    actionsDiv.appendChild(urgentEl);
+                    const confirmBtn = createElementSafe('button', { class: 'btn btn-green', style: 'margin-top:8px;animation:pulse 1.5s infinite;' }, '✅ Confirm or Dispute');
+                    confirmBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
+                    actionsDiv.appendChild(confirmBtn);
+                }
+                item.appendChild(actionsDiv);
+
+            } else if (m.status === 'penalty_shootout') {
+                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
+                const penaltyEl = createElementSafe('div', { style: 'font-size:0.82rem;color:#ffb400;padding:6px 0;line-height:1.5;' }, '');
+                penaltyEl.innerHTML = `⚽ <strong>Penalty Shootout!</strong><br><span style="color:#888;font-size:0.75rem;">Go to eFootball → create a Friends Match room → play Penalties → upload result here</span>`;
+                actionsDiv.appendChild(penaltyEl);
+                const penBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Penalty Result');
+                penBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
+                actionsDiv.appendChild(penBtn);
+                item.appendChild(actionsDiv);
+
             } else if (m.status === 'disputed') {
-                item.appendChild(createElementSafe('div', { class: 'match-actions' }, 'Disputed - awaiting admin'));
+                item.appendChild(createElementSafe('div', { class: 'match-actions' }, '⚖️ Disputed — admin reviewing'));
             } else if (m.status === 'completed') {
-                const winnerText = m.winner_id === currentUser.id ? 'You won!' : (m.winner ? `${m.winner.username} won` : 'Completed');
-                item.appendChild(createElementSafe('div', { class: 'match-detail' }, `🏆 ${winnerText}`));
+                const winnerText = m.winner_id === currentUser.id ? '🏆 You won!' : (m.winner ? `${m.winner.username} won` : 'Completed');
+                const settlementNote = m.settlement_method === 'auto_declaration' && m.winner_id !== currentUser.id
+                    ? ' (auto — you didn\'t respond)' : '';
+                item.appendChild(createElementSafe('div', { class: 'match-detail' }, winnerText + settlementNote));
             }
 
             container.appendChild(item);
@@ -2117,392 +2269,201 @@
     }
 
     // ── Screenshot guide toggle ────────────────────────────────
-    function toggleScreenshotGuide() {
-        const body = document.getElementById('guide-body');
-        const btn = document.getElementById('guide-toggle-btn');
-        const chevron = document.getElementById('guide-chevron');
-        const open = body.classList.toggle('open');
-        btn.classList.toggle('open', open);
+    // ═══════════════════════════════════════════════════════════════
+    // SCORE DECLARATION SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    let _declareMyScore = 0, _declareOppScore = 0;
+    let _declareUploadedUrl = null, _declareUploadedObjectUrl = null;
+    let _confirmUploadedUrl = null;
+    let _disputeUploadedUrl = null;
+    let _disputeMyScore = 0, _disputeOppScore = 0;
+
+    function adjustScore(side, delta) {
+        if (side === 'my') { _declareMyScore = Math.max(0, Math.min(20, _declareMyScore + delta)); document.getElementById('my-score-display').textContent = _declareMyScore; }
+        else { _declareOppScore = Math.max(0, Math.min(20, _declareOppScore + delta)); document.getElementById('opp-score-display').textContent = _declareOppScore; }
+        const lbl = document.getElementById('score-result-label');
+        if (lbl) lbl.textContent = _declareMyScore > _declareOppScore ? '🏆 You won!' : _declareOppScore > _declareMyScore ? '😔 You lost' : '🤝 Draw';
     }
-
-    // ── Screenshot OCR & Auto-Settle ────────────────────────────
-    let _uploadedScreenshotUrl = null;
-    let _ocrData = null;
-    let _verifyData = null;
-    let _uploadedObjectUrl = null;  // for previews
-
+    function adjustDisputeScore(side, delta) {
+        if (side === 'my') { _disputeMyScore = Math.max(0, Math.min(20, _disputeMyScore + delta)); document.getElementById('dispute-my-score').textContent = _disputeMyScore; }
+        else { _disputeOppScore = Math.max(0, Math.min(20, _disputeOppScore + delta)); document.getElementById('dispute-opp-score').textContent = _disputeOppScore; }
+    }
+    function goToDeclareStep2() {
+        const s = document.getElementById('score-summary-display');
+        const r = document.getElementById('score-summary-result');
+        if (s) s.textContent = `${_declareMyScore}  —  ${_declareOppScore}`;
+        if (r) r.textContent = _declareMyScore > _declareOppScore ? '🏆 You win' : _declareOppScore > _declareMyScore ? '😔 You lose' : '🤝 Draw';
+        switchStep('report-result-modal', 2);
+    }
     function resetReportModal() {
-        _uploadedScreenshotUrl = null;
-        _ocrData = null;
-        _verifyData = null;
-        if (_uploadedObjectUrl) { URL.revokeObjectURL(_uploadedObjectUrl); _uploadedObjectUrl = null; }
-
-        const icon = document.getElementById('upload-icon');
-        const label = document.getElementById('upload-label');
-        const thumb = document.getElementById('screenshot-thumb');
-        const progress = document.getElementById('upload-progress');
-        const fileInput = document.getElementById('screenshot-file-input');
-        if (icon) icon.textContent = '📲';
-        if (label) label.innerHTML = '<strong>Tap to upload screenshot</strong><br><span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Take it directly from eFootball — not a photo of your screen</span>';
-        if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
-        if (progress) { progress.classList.remove('visible'); }
-        if (fileInput) fileInput.value = '';
-
-        // Reset screenshot previews
-        ['auto','challenge','manual'].forEach(id => {
-            const el = document.getElementById(`${id}-screenshot-preview`);
-            if (el) { el.style.display = 'none'; el.src = ''; }
-        });
-
-        document.getElementById('report-step-upload').style.display = 'block';
-        document.getElementById('report-step-auto').style.display = 'none';
-        document.getElementById('report-step-challenge').style.display = 'none';
-        document.getElementById('report-step-manual').style.display = 'none';
-        document.getElementById('report-error').style.display = 'none';
-
-        const progressFill = document.getElementById('upload-progress-fill');
-        if (progressFill) {
-            progressFill.classList.add('indeterminate');
-            progressFill.style.width = '';
-        }
+        _declareMyScore = 0; _declareOppScore = 0;
+        _declareUploadedUrl = null; _confirmUploadedUrl = null; _disputeUploadedUrl = null;
+        if (_declareUploadedObjectUrl) { URL.revokeObjectURL(_declareUploadedObjectUrl); _declareUploadedObjectUrl = null; }
+        ['my-score-display','opp-score-display'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+        const lbl = document.getElementById('score-result-label'); if (lbl) lbl.textContent = 'Draw';
+        const icon = document.getElementById('upload-icon'); if (icon) icon.textContent = '📲';
+        const label = document.getElementById('upload-label'); if (label) label.innerHTML = '<strong>Tap to upload screenshot</strong><br><span style="font-size:0.78rem;color:#555;">Take it directly from eFootball</span>';
+        const thumb = document.getElementById('screenshot-thumb'); if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
+        const progress = document.getElementById('upload-progress'); if (progress) progress.classList.remove('visible');
+        const fi = document.getElementById('screenshot-file-input'); if (fi) fi.value = '';
+        document.getElementById('declare-error-1').style.display = 'none';
+        document.getElementById('declare-error-2').style.display = 'none';
+        switchStep('report-result-modal', 1);
     }
-
     async function handleScreenshotSelected(file) {
         if (!file || !currentReportMatch) return;
-
-        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-        if (!allowed.includes(file.type)) { showError('report-error', 'Only JPEG, PNG, or WebP images allowed'); return; }
-        if (file.size > 10 * 1024 * 1024) { showError('report-error', 'Screenshot must be under 10MB'); return; }
-        document.getElementById('report-error').style.display = 'none';
-
-        // Store object URL for previews
-        if (_uploadedObjectUrl) URL.revokeObjectURL(_uploadedObjectUrl);
-        _uploadedObjectUrl = URL.createObjectURL(file);
-
+        if (!['image/jpeg','image/png','image/webp'].includes(file.type)) { showError('declare-error-2', 'Please upload a JPEG, PNG or WebP image.'); return; }
+        if (file.size > 10*1024*1024) { showError('declare-error-2', 'File too large. Max 10MB.'); return; }
+        if (_declareUploadedObjectUrl) URL.revokeObjectURL(_declareUploadedObjectUrl);
+        _declareUploadedObjectUrl = URL.createObjectURL(file);
         const thumb = document.getElementById('screenshot-thumb');
-        thumb.src = _uploadedObjectUrl;
-        thumb.classList.add('visible');
-        document.getElementById('upload-icon').textContent = '⏳';
-        document.getElementById('upload-label').innerHTML = '<strong>Reading score…</strong><br><span style="font-size:0.72rem;color:#555;">AI + fraud checks running — takes ~5 seconds</span>';
-
-        const progressEl = document.getElementById('upload-progress');
-        const progressFill = document.getElementById('upload-progress-fill');
-        progressEl.classList.add('visible');
-        progressFill.classList.add('indeterminate');
-
+        const icon = document.getElementById('upload-icon');
+        const label = document.getElementById('upload-label');
+        if (thumb) { thumb.src = _declareUploadedObjectUrl; thumb.classList.add('visible'); }
+        if (icon) icon.textContent = '⏳';
+        if (label) label.innerHTML = '<strong>Uploading...</strong>';
+        _declareUploadedUrl = null;
+        const progress = document.getElementById('upload-progress');
+        if (progress) progress.classList.add('visible');
         try {
             const formData = new FormData();
             formData.append('screenshot', file);
             formData.append('matchId', currentReportMatch.id);
-
-            const token = sessionStorage.getItem('supabaseToken');
-            const response = await fetch(`${API}/screenshots/upload-and-verify`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                const reason = result.error || 'Upload failed';
-                const extraWarnings = result.warnings?.length > 0
-                    ? ' — ' + result.warnings.join('; ')
-                    : '';
-                throw new Error(reason + extraWarnings);
-            }
-
-            _uploadedScreenshotUrl = result.screenshotUrl;
-            _ocrData = result.ocrResult;
-            _verifyData = result.verificationResult;
-
-            progressFill.classList.remove('indeterminate');
-            progressFill.style.width = '100%';
-            setTimeout(() => progressEl.classList.remove('visible'), 500);
-            document.getElementById('upload-icon').textContent = '✅';
-            document.getElementById('upload-label').innerHTML = `<strong style="color:var(--neon)">Screenshot uploaded!</strong><br><span style="font-size:0.72rem;color:#555;">${escapeHtml(file.name)} · ${(file.size/1024).toFixed(0)} KB</span>`;
-
-            const rec = result.verificationResult?.recommendation;
-
-            if (rec === 'AUTO_SETTLE') {
-                showAutoSettleStep(result);
-            } else if (rec === 'CHALLENGE_WINDOW') {
-                showChallengeStep(result);
-            } else {
-                showManualStep(result);
-            }
-
-        } catch (err) {
-            progressEl.classList.remove('visible');
-            document.getElementById('upload-icon').textContent = '❌';
-            document.getElementById('upload-label').innerHTML = '<strong style="color:var(--danger)">Upload failed</strong><br><span style="font-size:0.72rem;color:#555;">Tap to try again</span>';
-            thumb.classList.remove('visible');
-            showError('report-error', err.message);
-        }
-    }
-
-    function showAutoSettleStep(result) {
-        const ocr = result.ocrResult;
-        const verify = result.verificationResult;
-        const match = currentReportMatch;
-        const conf = verify.confidence || 0;
-
-        // Screenshot preview
-        if (_uploadedObjectUrl) {
-            const prev = document.getElementById('auto-screenshot-preview');
-            prev.src = _uploadedObjectUrl;
-            prev.style.display = 'block';
-        }
-
-        document.getElementById('ocr-result-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
-
-        // Confidence bar
-        const confClass = conf >= 85 ? 'high' : conf >= 65 ? 'medium' : 'low';
-        const bar = document.getElementById('auto-conf-bar');
-        const pct = document.getElementById('auto-conf-pct');
-        bar.className = `conf-bar-fill ${confClass}`;
-        pct.className = `conf-pct ${confClass}`;
-        bar.style.width = `${conf}%`;
-        pct.textContent = `${conf}%`;
-
-        // Winner determination
-        const teamMatch = verify.teamMatch;
-        let winnerId = null, winnerName = 'Unknown';
-        if (teamMatch && teamMatch.bestMapping !== 'ambiguous') {
-            const isCreatorHome = (teamMatch.bestHome === match.creator_team);
-            const homeId = isCreatorHome ? match.creator_id : match.joiner_id;
-            const awayId = isCreatorHome ? match.joiner_id : match.creator_id;
-            if (ocr.score1 > ocr.score2) winnerId = homeId;
-            else if (ocr.score2 > ocr.score1) winnerId = awayId;
-        }
-        const youWon = (winnerId === currentUser.id);
-        if (youWon) {
-            winnerName = currentUsername;
-        } else {
-            winnerName = match.creator_id === currentUser.id
-                ? (match.joiner?.username || 'Opponent')
-                : (match.creator?.username || 'Opponent');
-        }
-
-        const banner = document.getElementById('winner-announce');
-        banner.className = `winner-banner ${youWon ? 'you-won' : 'opp-won'}`;
-        document.getElementById('winner-banner-emoji').textContent = youWon ? '🏆' : '💀';
-        document.getElementById('winner-name-display').textContent = youWon ? `YOU WIN!` : escapeHtml(winnerName);
-        document.getElementById('winner-prize-text').textContent = youWon
-            ? `+KES ${match.winner_prize} will be added to your wallet`
-            : `${escapeHtml(winnerName)} wins KES ${match.winner_prize}`;
-
-        const warnList = document.getElementById('ocr-warn-list-auto');
-        warnList.innerHTML = '';
-        const panel = document.getElementById('ocr-panel-auto');
-        if (verify?.warnings?.length > 0) {
-            verify.warnings.forEach(w => {
-                const el = document.createElement('div');
-                el.className = 'ocr-warn-item';
-                el.textContent = w;
-                warnList.appendChild(el);
-            });
-            panel.classList.add('visible', 'warn');
-        } else {
-            panel.style.display = 'none';
-        }
-
-        document.getElementById('report-error-auto').style.display = 'none';
-        document.getElementById('report-step-upload').style.display = 'none';
-        document.getElementById('report-step-auto').style.display = 'block';
-        document.getElementById('report-step-challenge').style.display = 'none';
-        document.getElementById('report-step-manual').style.display = 'none';
-    }
-
-    function showChallengeStep(result) {
-        const ocr = result.ocrResult;
-        const verify = result.verificationResult;
-        const conf = verify.confidence || 0;
-
-        // Screenshot preview
-        if (_uploadedObjectUrl) {
-            const prev = document.getElementById('challenge-screenshot-preview');
-            prev.src = _uploadedObjectUrl;
-            prev.style.display = 'block';
-        }
-
-        document.getElementById('challenge-ocr-score').textContent = `${ocr.score1}  –  ${ocr.score2}`;
-
-        // Confidence bar
-        const bar = document.getElementById('challenge-conf-bar');
-        const pct = document.getElementById('challenge-conf-pct');
-        bar.style.width = `${conf}%`;
-        pct.textContent = `${conf}%`;
-
-        const warnList = document.getElementById('ocr-warn-list-challenge');
-        warnList.innerHTML = '';
-        const panel = document.getElementById('ocr-panel-challenge');
-        if (verify?.warnings?.length > 0) {
-            verify.warnings.forEach(w => {
-                const el = document.createElement('div');
-                el.className = 'ocr-warn-item';
-                el.textContent = w;
-                warnList.appendChild(el);
-            });
-            panel.classList.add('visible', 'warn');
-        } else {
-            panel.style.display = 'none';
-        }
-
-        document.getElementById('report-error-challenge').style.display = 'none';
-        document.getElementById('report-step-upload').style.display = 'none';
-        document.getElementById('report-step-auto').style.display = 'none';
-        document.getElementById('report-step-challenge').style.display = 'block';
-        document.getElementById('report-step-manual').style.display = 'none';
-    }
-
-    function showManualStep(result) {
-        const ocr = result.ocrResult;
-        const verify = result.verificationResult;
-
-        // Screenshot preview
-        if (_uploadedObjectUrl) {
-            const prev = document.getElementById('manual-screenshot-preview');
-            prev.src = _uploadedObjectUrl;
-            prev.style.display = 'block';
-        }
-
-        const scoreEl = document.getElementById('ocr-score-manual');
-        const confEl = document.getElementById('ocr-confidence-manual');
-        const badgeWrap = document.getElementById('ocr-badge-wrap-manual');
-        const warnList = document.getElementById('ocr-warn-list-manual');
-        warnList.innerHTML = '';
-        badgeWrap.innerHTML = '';
-
-        const panel = document.getElementById('ocr-panel-manual');
-
-        if (ocr?.isValid && ocr.score1 !== null && ocr.score2 !== null) {
-            scoreEl.textContent = `${ocr.score1}  –  ${ocr.score2}`;
-            confEl.textContent = `Confidence: ${ocr.confidence}% — too low for auto-settle`;
-            const bc = ocr.confidence >= 80 ? 'ok' : 'low';
-            badgeWrap.innerHTML = `<span class="ocr-badge ${bc}">${ocr.confidence >= 80 ? 'HIGH' : 'LOW'} CONFIDENCE</span>`;
-        } else {
-            scoreEl.textContent = '?  –  ?';
-            confEl.textContent = 'Score not detected — select winner below';
-            badgeWrap.innerHTML = '<span class="ocr-badge fail">UNDETECTED</span>';
-        }
-
-        if (verify?.warnings?.length > 0) {
-            verify.warnings.forEach(w => {
-                const el = document.createElement('div');
-                el.className = 'ocr-warn-item';
-                el.textContent = w;
-                warnList.appendChild(el);
-            });
-        }
-        panel.classList.add('visible');
-
-        const select = document.getElementById('report-winner');
-        select.innerHTML = '<option value="">-- Select the winner --</option>';
-        const match = currentReportMatch;
-        if (match.creator_id === currentUser.id) {
-            select.innerHTML += `<option value="${currentUser.id}">✅ Me (${escapeHtml(currentUsername)})</option>`;
-            if (match.joiner_id) select.innerHTML += `<option value="${match.joiner_id}">Opponent (${escapeHtml(match.joiner?.username || 'Joiner')})</option>`;
-        } else {
-            select.innerHTML += `<option value="${currentUser.id}">✅ Me (${escapeHtml(currentUsername)})</option>`;
-            select.innerHTML += `<option value="${match.creator_id}">Opponent (${escapeHtml(match.creator?.username || 'Creator')})</option>`;
-        }
-
-        document.getElementById('report-error-manual').style.display = 'none';
-        document.getElementById('report-step-upload').style.display = 'none';
-        document.getElementById('report-step-auto').style.display = 'none';
-        document.getElementById('report-step-challenge').style.display = 'none';
-        document.getElementById('report-step-manual').style.display = 'block';
-    }
-
-    function showManualFallback() {
-        showManualStep({ ocrResult: _ocrData, verificationResult: _verifyData });
-    }
-
-    async function confirmAutoSettle() {
-        if (!currentReportMatch || !_uploadedScreenshotUrl) return;
-
-        const btn = document.getElementById('auto-settle-btn');
-        btn.disabled = true;
-        btn.textContent = 'Submitting…';
-        document.getElementById('report-error-auto').style.display = 'none';
-
-        try {
-            const res = await fetchWithAuth('/friends/submit-ocr-result', {
-                method: 'POST',
-                body: JSON.stringify({
-                    matchId: currentReportMatch.id,
-                    screenshotUrl: _uploadedScreenshotUrl,
-                    ocrResult: _ocrData,
-                    verificationResult: _verifyData
-                })
-            }, 15000);
+            const res = await fetchWithAuth('/screenshots/upload-and-verify', { method: 'POST', body: formData, headers: {} }, 30000);
+            if (!res || !res.ok) throw new Error('Upload failed');
             const data = await res.json();
-
-            if (!res.ok) {
-                if (res.status === 422) {
-                    showManualFallback();
-                    showError('report-error-manual', data.error);
-                } else {
-                    showError('report-error-auto', data.error);
-                    btn.disabled = false;
-                    btn.textContent = '✅ SUBMIT & SETTLE MATCH';
-                }
-                return;
-            }
-
-            closeModal('report-result-modal');
-            if (data.message) {
-                showToast('success', '🏆 Match Settled!', `You won KES ${data.prizePaid || data.winnerPrize || '?'}`, 6000);
-            }
-            await refreshBalance();
-            await loadMyFriendMatches();
-
+            _declareUploadedUrl = data.screenshotUrl || data.url || data.publicUrl;
+            if (progress) progress.classList.remove('visible');
+            if (icon) icon.textContent = '✅';
+            if (label) label.innerHTML = `<strong style="color:var(--neon)">✅ ${escapeHtml(file.name)}</strong>`;
         } catch (err) {
-            showError('report-error-auto', err.message);
-            btn.disabled = false;
-            btn.textContent = '✅ SUBMIT & SETTLE MATCH';
+            if (progress) progress.classList.remove('visible');
+            showError('declare-error-2', 'Upload failed. Try again.');
+            _declareUploadedUrl = null;
+            if (icon) icon.textContent = '📲';
         }
     }
-
-    async function submitChallengeResult() {
-        showToast('info', 'Coming Soon', 'Challenge upload is not yet available. Use manual reporting for now.', 4000);
-        // In production, you would re-upload the file to /friends/challenge/:matchId
-    }
-
-    async function submitMatchResult() {
-        if (!currentReportMatch) return;
-        const winnerId = document.getElementById('report-winner').value;
-        if (!winnerId) { showError('report-error-manual', 'Please select a winner'); return; }
-        if (!_uploadedScreenshotUrl) { showError('report-error-manual', 'Please upload a match screenshot'); return; }
-
-        const btn = document.getElementById('submit-result-btn');
-        btn.disabled = true;
-        btn.textContent = 'Submitting…';
-
+    async function _uploadHelper(file, onSuccess) {
+        if (!file) return;
         try {
-            const res = await fetchWithAuth('/friends/submit-result', {
+            const formData = new FormData();
+            formData.append('screenshot', file);
+            formData.append('matchId', currentReportMatch.id);
+            const res = await fetchWithAuth('/screenshots/upload-and-verify', { method: 'POST', body: formData, headers: {} }, 30000);
+            if (res && res.ok) { const d = await res.json(); onSuccess(d.screenshotUrl || d.url || d.publicUrl); }
+        } catch (e) {}
+    }
+    async function handleConfirmScreenshot(file) {
+        if (!file) return;
+        const thumb = document.getElementById('confirm-screenshot-thumb');
+        const lbl = document.getElementById('confirm-upload-label');
+        if (thumb) { thumb.src = URL.createObjectURL(file); thumb.classList.add('visible'); }
+        await _uploadHelper(file, url => {
+            _confirmUploadedUrl = url;
+            if (lbl) lbl.innerHTML = '<strong style="color:var(--neon)">✅ Screenshot uploaded</strong>';
+        });
+    }
+    async function handleDisputeScreenshot(file) {
+        if (!file) return;
+        const thumb = document.getElementById('dispute-screenshot-thumb');
+        if (thumb) { thumb.src = URL.createObjectURL(file); thumb.classList.add('visible'); }
+        await _uploadHelper(file, url => { _disputeUploadedUrl = url; });
+    }
+    async function submitScoreDeclaration() {
+        if (!currentReportMatch) return;
+        const btn = document.getElementById('declare-submit-btn');
+        showError('declare-error-2', '');
+        if (!_declareUploadedUrl) { showError('declare-error-2', 'Please wait for the screenshot to finish uploading.'); return; }
+        btn.disabled = true; btn.textContent = 'Declaring...';
+        try {
+            const res = await fetchWithAuth('/friends/declare-score', {
                 method: 'POST',
-                body: JSON.stringify({
-                    matchId: currentReportMatch.id,
-                    winnerId,
-                    screenshotUrl: _uploadedScreenshotUrl
-                })
+                body: JSON.stringify({ matchId: currentReportMatch.id, myScore: _declareMyScore, opponentScore: _declareOppScore, screenshotUrl: _declareUploadedUrl })
             }, 15000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
 
-            closeModal('report-result-modal');
-            if (data.requiresConfirmation) {
-                showToast('info', 'Result Submitted!', 'Waiting for opponent to confirm. You auto-win if they don\'t report in 2 hours.', 7000);
-            } else {
-                showToast('success', '🏆 Match Complete!', data.message || 'Result recorded.', 6000);
-                await refreshBalance();
+            // Draw → penalty shootout — show special message then close
+            if (data.isDraw) {
+                closeModal('report-result-modal');
+                await loadMyFriendMatches();
+                showToast('info', '🤝 It\'s a Draw!',
+                    'Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.',
+                    8000);
+                return;
             }
+
+            // Non-draw → show waiting screen with countdown
+            const recap = document.getElementById('declared-score-recap');
+            const resultRecap = document.getElementById('declared-result-recap');
+            if (recap) recap.textContent = `${_declareMyScore}  —  ${_declareOppScore}`;
+            if (resultRecap) {
+                if (_declareMyScore > _declareOppScore) { resultRecap.textContent = '🏆 You declared a WIN'; resultRecap.style.color = 'var(--neon)'; }
+                else { resultRecap.textContent = '😔 You declared a LOSS'; resultRecap.style.color = '#ff6666'; }
+            }
+            // Show auto-win countdown on step 3
+            const countdownEl = document.getElementById('declare-countdown');
+            if (countdownEl && data.confirmDeadline) {
+                countdownEl.setAttribute('data-deadline', data.confirmDeadline);
+                tickCountdowns();
+            }
+            switchStep('report-result-modal', 3);
             await loadMyFriendMatches();
         } catch (err) {
-            showError('report-error-manual', err.message);
-            btn.disabled = false;
-            btn.textContent = 'SUBMIT RESULT →';
+            showError('declare-error-2', err.message || 'Failed to declare. Try again.');
+        } finally { btn.disabled = false; btn.textContent = '✅ DECLARE MY SCORE'; }
+    }
+    function showDisputeForm() {
+        _disputeMyScore = 0; _disputeOppScore = 0;
+        document.getElementById('dispute-my-score').textContent = '0';
+        document.getElementById('dispute-opp-score').textContent = '0';
+        switchStep('report-result-modal', 'dispute');
+    }
+    async function confirmOpponentScore() {
+        if (!currentReportMatch) return;
+        showError('confirm-error', '');
+        try {
+            const res = await fetchWithAuth('/friends/confirm-score', {
+                method: 'POST', body: JSON.stringify({ matchId: currentReportMatch.id, screenshotUrl: _confirmUploadedUrl || null })
+            }, 15000);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            closeModal('report-result-modal');
+            await refreshBalance(3);
+            await loadMyFriendMatches();
+            showToast(data.youWon ? 'success' : 'info', data.youWon ? '🏆 You Won!' : 'Match Confirmed',
+                data.youWon ? `KES ${data.prizePaid} added to your wallet!` : 'Result confirmed. Better luck next time!', 6000);
+        } catch (err) { showError('confirm-error', err.message || 'Failed to confirm. Try again.'); }
+    }
+    async function submitDispute() {
+        if (!currentReportMatch) return;
+        showError('dispute-error', '');
+        if (!_disputeUploadedUrl) { showError('dispute-error', 'Please upload your screenshot as evidence.'); return; }
+        try {
+            const res = await fetchWithAuth('/friends/dispute-score', {
+                method: 'POST', body: JSON.stringify({ matchId: currentReportMatch.id, screenshotUrl: _disputeUploadedUrl, myScore: _disputeMyScore, opponentScore: _disputeOppScore })
+            }, 15000);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            closeModal('report-result-modal');
+            await loadMyFriendMatches();
+            showToast('info', '⚖️ Dispute Raised', 'An admin will review both screenshots within 24 hours.', 7000);
+        } catch (err) { showError('dispute-error', err.message || 'Failed to raise dispute.'); }
+    }
+
+    // switchStep extended to support named steps (declare-step-confirm, declare-step-dispute)
+    function switchStep(modalId, stepNum) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        modal.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        let target;
+        if (stepNum === 'confirm') target = modal.querySelector('#declare-step-confirm');
+        else if (stepNum === 'dispute') target = modal.querySelector('#declare-step-dispute');
+        else {
+            const steps = modal.querySelectorAll('.step');
+            if (steps[stepNum - 1]) target = steps[stepNum - 1];
         }
+        if (target) target.classList.add('active');
     }
 
     function openReportResultModal(matchId) {
@@ -2511,23 +2472,65 @@
             const match = matches.find(m => m.id === matchId);
             if (!match) { showToast('error', 'Match Not Found', 'Could not load match details.', 4000); return; }
             currentReportMatch = match;
-
             resetReportModal();
-
+            const isCreator = match.creator_id === currentUser.id;
+            const myTeamLabel = document.getElementById('my-team-label');
+            const oppTeamLabel = document.getElementById('opp-team-label');
+            const disputeMyLabel = document.getElementById('dispute-my-label');
+            if (myTeamLabel) myTeamLabel.textContent = (isCreator ? match.creator_team : match.joiner_team) || 'MY GOALS';
+            if (oppTeamLabel) oppTeamLabel.textContent = (isCreator ? match.joiner_team : match.creator_team) || 'OPP GOALS';
+            if (disputeMyLabel) disputeMyLabel.textContent = (isCreator ? match.creator_team : match.joiner_team) || 'MY GOALS';
             const detailsDiv = document.getElementById('report-match-details');
-            detailsDiv.innerHTML = `
-                <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
-                <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
-            `;
-
+            if (detailsDiv) detailsDiv.innerHTML = `<div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div><div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>`;
+            // Show confirmation step if opponent declared and we haven't confirmed yet
+            if (match.status === 'awaiting_confirmation' && match.declared_score_by !== currentUser.id) {
+                const myDeclared = isCreator ? match.declared_score_creator : match.declared_score_joiner;
+                const oppDeclared = isCreator ? match.declared_score_joiner : match.declared_score_creator;
+                const cd = document.getElementById('confirm-score-display');
+                const cr = document.getElementById('confirm-result-display');
+                if (cd) cd.textContent = `${myDeclared ?? '?'}  —  ${oppDeclared ?? '?'}`;
+                if (cr) {
+                    if (match.declared_winner_id === currentUser.id) { cr.textContent = '🏆 They say YOU won'; cr.style.color = 'var(--neon)'; }
+                    else if (match.declared_winner_id) { cr.textContent = '😔 They say they won'; cr.style.color = '#ff6666'; }
+                    else { cr.textContent = '🤝 They declared a draw'; cr.style.color = '#ffb400'; }
+                }
+                switchStep('report-result-modal', 'confirm');
+            }
             document.getElementById('report-result-modal').classList.add('open');
         });
     }
+    function openChallengeUploadModal(matchId) { openReportResultModal(matchId); }
 
-    function openChallengeUploadModal(matchId) {
-        showToast('info', 'Coming Soon', 'Use "Report Result" to submit your score for now.', 4000);
-        openReportResultModal(matchId);
+    // ── Countdown timers for awaiting_confirmation cards ────────────────────
+    // Updates all .countdown-timer elements every second
+    function formatCountdown(ms) {
+        if (ms <= 0) return 'now';
+        const totalSecs = Math.floor(ms / 1000);
+        const mins = Math.floor(totalSecs / 60);
+        const secs = totalSecs % 60;
+        return mins > 0
+            ? `${mins}m ${String(secs).padStart(2,'0')}s`
+            : `${secs}s`;
     }
+
+    function tickCountdowns() {
+        const timers = document.querySelectorAll('.countdown-timer[data-deadline]');
+        timers.forEach(el => {
+            const deadline = new Date(el.dataset.deadline);
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) {
+                el.textContent = 'any moment now';
+                el.style.color = '#ff4444';
+            } else {
+                el.textContent = formatCountdown(remaining);
+                // Turn red in last 5 minutes
+                if (remaining < 5 * 60 * 1000) el.style.color = '#ff6666';
+            }
+        });
+    }
+    setInterval(tickCountdowns, 1000);
+    tickCountdowns();
+    // ─────────────────────────────────────────────────────────────────────────
 
     // --- Real-time match status polling (unchanged) ---
     function startMatchStatusPolling(matchId) {
@@ -2670,6 +2673,20 @@
             }
         });
     };
+
+    // FIX 7: Clean up ALL polling intervals when the user closes/refreshes the
+    // tab. Without this, setInterval callbacks keep firing in the background,
+    // and currentCheckoutId becomes permanently orphaned in sessionStorage so
+    // that the next page load still tries to poll a stale transaction.
+    window.addEventListener('beforeunload', () => {
+        if (pollInterval)            { clearInterval(pollInterval);            pollInterval = null; }
+        if (friendMatchTimer)        { clearInterval(friendMatchTimer);        friendMatchTimer = null; }
+        if (matchStatusPollInterval) { clearInterval(matchStatusPollInterval); matchStatusPollInterval = null; }
+        if (balanceRefreshInterval)  { clearInterval(balanceRefreshInterval);  balanceRefreshInterval = null; }
+        if (supabaseRealtime && realtimeChannel) {
+            supabaseRealtime.removeChannel(realtimeChannel);
+        }
+    });
 </script>
 </body>
 </html>
