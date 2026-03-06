@@ -1,653 +1,737 @@
 /**
- * ULTRA-OPTIMIZED SCREENSHOT VERIFIER v2.1
- * - Single OCR pass (no redundant scans)
- * - Optimized image preprocessing (800x600, no normalize/sharpen)
- * - PSM 6 (uniform block) for faster score detection
- * - 10-second timeout to prevent hangs
- * - OCR data returned in verification result
- * - Expected performance: 15-20 seconds per image (was 40-60s)
+ * SCREENSHOT VERIFIER v7 — Gemini Vision
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Score extraction is now a single Gemini Vision API call.
+ * No Tesseract, no color segmentation, no preprocessing variants.
+ *
+ * Gemini receives the raw screenshot and returns structured JSON:
+ *   { score1, score2, homeTeam, awayTeam, hasFullTime, confidence }
+ *
+ * All fraud checks (duplicate hash, EXIF, manipulation, etc.) are unchanged.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const ExifReader = require('exifreader');
+'use strict';
+
 const sharp = require('sharp');
-const Tesseract = require('tesseract.js');
-const crypto = require('crypto');
 
-// ─── Persistent Tesseract Worker (Reused across requests) ─────────────────
-let _tesseractWorker = null;
-let _workerInitializing = false;
-let _workerInitQueue = [];
+const DEBUG = process.env.DEBUG_OCR === 'true';
+function log(...a) { if (DEBUG) console.log('[OCR-v7]', ...a); }
 
-async function getTesseractWorker() {
-    if (_tesseractWorker) return _tesseractWorker;
-    if (_workerInitializing) {
-        return new Promise((resolve, reject) => _workerInitQueue.push({ resolve, reject }));
-    }
-    _workerInitializing = true;
-    console.log('📦 Initializing persistent Tesseract worker (one-time)...');
-    try {
-        const worker = await Tesseract.createWorker('eng', 1, {
-            logger: () => {},
-            errorHandler: (err) => console.error('Tesseract worker error:', err)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL   = 'gemini-2.5-flash';
+const GEMINI_URL     = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+// ── Gemini rate-limit queue ───────────────────────────────────────────────────
+// Free tier: 15 req/min. We serialize all Gemini calls through this queue and
+// enforce a minimum 5s gap between requests (= max 12/min, safely under limit).
+// If multiple uploads arrive simultaneously they wait their turn rather than
+// all firing at once and burning through the per-minute quota.
+const GEMINI_MIN_GAP_MS = 13000; // 13s between calls → max ~4.6/min, safely under 5 RPM free limit
+let _geminiLastCall = 0;
+let _geminiQueue = Promise.resolve();
+
+function queuedGeminiFetch(body) {
+    _geminiQueue = _geminiQueue.then(async () => {
+        const now = Date.now();
+        const wait = GEMINI_MIN_GAP_MS - (now - _geminiLastCall);
+        if (wait > 0) {
+            console.log(`⏱️  [OCR-v7] Rate-limit gap: waiting ${wait}ms before Gemini call`);
+            await new Promise(r => setTimeout(r, wait));
+        }
+        _geminiLastCall = Date.now();
+        return fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(25000),
         });
-        _tesseractWorker = worker;
-        console.log('✅ Persistent Tesseract worker ready.');
-        _workerInitQueue.forEach(({ resolve }) => resolve(_tesseractWorker));
-        _workerInitQueue = [];
-        return _tesseractWorker;
-    } catch (err) {
-        console.error('❌ Failed to initialize Tesseract worker:', err.message);
-        _workerInitQueue.forEach(({ reject }) => reject(err));
-        _workerInitQueue = [];
-        _workerInitializing = false;
-        throw err;
-    } finally {
-        _workerInitializing = false;
+    });
+    return _geminiQueue;
+}
+
+const USER_MESSAGES = {
+    fileIntegrity:    'The file appears corrupt or is not a valid image. Please take a fresh screenshot and try again.',
+    duplicate:        'This screenshot has already been used in a previous match. Please upload the actual result from this match.',
+    exifTimestamp:    'Screenshot metadata shows it was taken BEFORE this match started. Please upload the correct end-of-match result screen.',
+    tooEarly:         'The match just started — it cannot have finished yet. Upload the result screenshot after you finish playing.',
+    manipulation:     'Our system detected possible image editing or tampering. If genuine, contact admin with the original file.',
+    ocrSanity:        'Could not read the score from the screenshot. Please upload the final "Full Time" result screen from eFootball.',
+    scoreSanity:      'The score detected looks unusual. Please upload the correct end-of-match result screen.',
+    statsConsistency: "Match statistics don't match the score. This screenshot may be from a different match.",
+    teamNameMatch:    "Team names in the screenshot don't match the teams registered for this match.",
+    fullTimeWord:     'Screenshot is missing the "Full Time" text. Please upload the actual end-of-match summary screen.',
+    aspectRatio:      'Image dimensions are unusual for a game screenshot. Please screenshot the eFootball result screen directly.',
+    matchContext:     "Neither player's username was found in the screenshot. Make sure you upload the result from THIS match.",
+    usernameMatch:    "Player usernames in the screenshot don't match this match's players. Please upload the correct result screen.",
+    scorePlausibility:'The score looks unusually extreme. This match has been flagged for admin confirmation.',
+};
+
+// ─── Gemini Vision score extraction ──────────────────────────────────────────
+
+const GEMINI_PROMPT = `You are analyzing an eFootball (Konami) mobile/console match result screenshot.
+
+The final score appears at the TOP of the screen in a banner:
+- Left side: home team name + their score in a YELLOW BOX (e.g. "1")
+- Center: the eFootball ⊖ logo (this is NOT a digit, ignore it)
+- Right side: away score in a YELLOW BOX (e.g. "6") + away team name
+
+Below the score banner there is usually "Full Time" text.
+Below that may be player usernames/gamertags (NOT team names — these are the PSN/Xbox/mobile account names of the two players).
+Below that is a stats table with rows like Shots, Passes, Fouls, etc. — IGNORE all numbers in the stats table.
+
+Extract ONLY the two numbers in the yellow score boxes, the team names, and any visible player usernames.
+
+Respond with ONLY valid JSON — no markdown fences, no extra text:
+{
+  "score1": <home score as integer, e.g. 1>,
+  "score2": <away score as integer, e.g. 6>,
+  "homeTeam": "<home team name exactly as shown>",
+  "awayTeam": "<away team name exactly as shown>",
+  "homeUsername": "<home player's username/gamertag if visible, else null>",
+  "awayUsername": "<away player's username/gamertag if visible, else null>",
+  "hasFullTime": <true or false>,
+  "confidence": <integer 50-100 — always provide a number, never null>
+}
+
+Rules:
+- score1 and score2 MUST be integers between 0 and 20
+- confidence must always be an integer — use 50 if unsure, never null or omit it
+- If you truly cannot find any score at all, set score1 and score2 to null
+- NEVER read from the stats rows — only the top score banner
+- The ⊖ symbol is the game logo, NOT a minus sign or digit
+- homeUsername and awayUsername are the player account names, NOT team names`;
+
+async function extractScoreWithGemini(imageBuffer) {
+    if (!GEMINI_API_KEY) {
+        console.error('❌ [OCR-v7] GEMINI_API_KEY not set in environment');
+        return null;
+    }
+
+    // Resize to max 1280px wide to stay well under Gemini's size limits
+    const resized = await sharp(imageBuffer)
+        .resize(1280, null, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 90 })
+        .toBuffer();
+
+    const base64 = resized.toString('base64');
+
+    const body = {
+        contents: [{
+            parts: [
+                { text: GEMINI_PROMPT },
+                { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+            ]
+        }],
+        generationConfig: {
+            temperature: 0,       // deterministic
+            maxOutputTokens: 512,  // enough for the JSON response
+        }
+    };
+
+    // Use the serialized queue — enforces 5s minimum gap between calls
+    // so concurrent uploads don't collide and burn the per-minute quota.
+    let res = await queuedGeminiFetch(body);
+
+    // Single retry if still 429 (e.g. burst from previous session)
+    if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10);
+        const waitMs = retryAfter > 0 ? retryAfter * 1000 : 65000;
+        console.warn(`⏳ [OCR-v7] Gemini 429 — waiting ${waitMs / 1000}s then retrying once...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        _geminiLastCall = 0; // reset gap tracker after long wait
+        res = await queuedGeminiFetch(body);
+        if (res.status === 429) {
+            console.warn('⏳ [OCR-v7] Gemini still 429 — quota exhausted. Failing gracefully.');
+            return null;
+        }
+    }
+
+    if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.error(`❌ [OCR-v7] Gemini API error ${res.status}:`, errText.slice(0, 300));
+        return null;
+    }
+
+    const data = await res.json();
+    const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    log('Gemini raw response:', raw);
+
+    // Strip any accidental markdown fences
+    const clean = raw.replace(/```json|```/gi, '').trim();
+
+    try {
+        const parsed = JSON.parse(clean);
+        const s1 = parsed.score1, s2 = parsed.score2;
+
+        if (s1 === null || s1 === undefined || s2 === null || s2 === undefined) {
+            log('Gemini returned null scores');
+            return null;
+        }
+
+        const score1 = parseInt(s1, 10), score2 = parseInt(s2, 10);
+        if (isNaN(score1) || isNaN(score2) || score1 < 0 || score1 > 20 || score2 < 0 || score2 > 20) {
+            log('Gemini returned out-of-range scores:', s1, s2);
+            return null;
+        }
+
+        return {
+            score1,
+            score2,
+            homeTeam:     parsed.homeTeam     || null,
+            awayTeam:     parsed.awayTeam     || null,
+            homeUsername: parsed.homeUsername || null,
+            awayUsername: parsed.awayUsername || null,
+            hasFullTime:  parsed.hasFullTime   === true,
+            confidence:   Math.min(100, Math.max(0, parseInt(parsed.confidence, 10) || 0)),
+        };
+    } catch (e) {
+        console.error('❌ [OCR-v7] Failed to parse Gemini JSON:', e.message, '| raw:', raw.slice(0, 300));
+        return null;
     }
 }
 
-getTesseractWorker().catch(() => {});
+// ─── Fraud detection helpers ──────────────────────────────────────────────────
 
-class OptimizedScreenshotVerifier {
+async function pHash(buf) {
+    try {
+        const px  = await sharp(buf).resize(8, 8, { fit: 'fill' }).grayscale().raw().toBuffer();
+        const avg = px.reduce((s, v) => s + v, 0) / px.length;
+        return Array.from(px).map(v => v >= avg ? '1' : '0').join('');
+    } catch { return null; }
+}
+
+function hammingDistance(a, b) {
+    if (!a || !b || a.length !== b.length) return Infinity;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+    return d;
+}
+
+async function detectManipulation(buf) {
+    try {
+        const { data: raw, info } = await sharp(buf)
+            .resize(400, 225, { fit: 'inside' }).grayscale().raw()
+            .toBuffer({ resolveWithObject: true });
+        const BS = 8, ents = [];
+        for (let y = 0; y < info.height - BS; y += BS)
+            for (let x = 0; x < info.width - BS; x += BS) {
+                const hist = new Array(256).fill(0);
+                for (let dy = 0; dy < BS; dy++)
+                    for (let dx = 0; dx < BS; dx++)
+                        hist[raw[(y + dy) * info.width + (x + dx)]]++;
+                let e = 0;
+                for (const c of hist) if (c > 0) { const p = c / (BS * BS); e -= p * Math.log2(p); }
+                ents.push(e);
+            }
+        if (!ents.length) return { suspicious: false };
+        const mean = ents.reduce((s, v) => s + v, 0) / ents.length;
+        const std  = Math.sqrt(ents.reduce((s, v) => s + (v - mean) ** 2, 0) / ents.length);
+        return { suspicious: std > 2.8, stdDev: +std.toFixed(3), mean: +mean.toFixed(3) };
+    } catch (e) { return { suspicious: false, error: e.message }; }
+}
+
+function fuzzyTeamMatch(a, b) {
+    if (!a || !b) return false;
+    // Normalize: lowercase, remove common suffixes, strip non-alphanumeric
+    const norm = s => s.toLowerCase()
+        .replace(/\b(fc|cf|sc|ac|af|bc|united|city|town|club|football)\b/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const strip = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const na = norm(a), nb = norm(b);
+    const sa = strip(a), sb = strip(b);
+
+    // Exact match after normalization
+    if (na === nb) return true;
+    // Stripped exact match (handles "Arsenal FC" vs "Arsenal")
+    if (sa === sb) return true;
+    // One contains the other (handles "Arsenal FC" matching "Arsenal")
+    if (sa.includes(sb) || sb.includes(sa)) return true;
+    // First 5 chars of stripped match
+    if (sa.length >= 5 && sb.length >= 5 && (sa.startsWith(sb.slice(0, 5)) || sb.startsWith(sa.slice(0, 5)))) return true;
+    // Word overlap — for multi-word custom names like "this team vere level"
+    // At least 60% of words from the shorter name appear in the longer name
+    const wordsA = na.split(' ').filter(w => w.length > 2);
+    const wordsB = nb.split(' ').filter(w => w.length > 2);
+    if (wordsA.length > 0 && wordsB.length > 0) {
+        const [sh, lo] = wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
+        const loStr = lo.join(' ');
+        const overlap = sh.filter(w => loStr.includes(w)).length;
+        if (overlap / sh.length >= 0.6) return true;
+    }
+    // Character overlap fallback — only for short names (abbreviations)
+    const shS = sa.length < sb.length ? sa : sb;
+    const loS = sa.length < sb.length ? sb : sa;
+    if (shS.length <= 8 && loS.length <= 12) {
+        return (Array.from(shS).filter(ch => loS.includes(ch)).length / Math.max(shS.length, 1)) >= 0.65;
+    }
+    return false;
+}
+
+function determineWinner(sd, md) {
+    if (sd.score1 == null || sd.score2 == null) return { winner: null, reason: 'no_score' };
+    const ct = (md.creatorTeam || '').toLowerCase(), jt = (md.joinerTeam || '').toLowerCase();
+    const h  = (sd.homeTeam   || '').toLowerCase(), aw = (sd.awayTeam  || '').toLowerCase();
+    let cih = null; // is creator playing as home?
+
+    // Primary: match by team name
+    if (ct) { if (fuzzyTeamMatch(h, ct)) cih = true;  else if (fuzzyTeamMatch(aw, ct)) cih = false; }
+    if (cih === null && jt) { if (fuzzyTeamMatch(h, jt)) cih = false; else if (fuzzyTeamMatch(aw, jt)) cih = true; }
+
+    // Secondary fallback: match by username (if Gemini read them from the screenshot)
+    if (cih === null && (sd.homeUsername || sd.awayUsername)) {
+        const cu = (md.uploaderUsername || md.creatorUsername || '').toLowerCase();
+        const ju = (md.opponentUsername  || md.joinerUsername  || '').toLowerCase();
+        const hu = (sd.homeUsername || '').toLowerCase();
+        const au = (sd.awayUsername || '').toLowerCase();
+        const usernameHit = (name, extracted) => name.length >= 4 && extracted.length >= 4 &&
+            (extracted.includes(name.slice(0, 5)) || name.includes(extracted.slice(0, 5)));
+        if (cu && usernameHit(cu, hu)) cih = true;
+        else if (cu && usernameHit(cu, au)) cih = false;
+        else if (ju && usernameHit(ju, hu)) cih = false;
+        else if (ju && usernameHit(ju, au)) cih = true;
+    }
+
+    if (cih === null) return { winner: null, score1: sd.score1, score2: sd.score2, reason: 'team_side_unknown' };
+    const cs = cih ? sd.score1 : sd.score2, js = cih ? sd.score2 : sd.score1;
+    if (cs > js) return { winner: 'creator', creatorScore: cs, joinerScore: js, score1: sd.score1, score2: sd.score2 };
+    if (js > cs) return { winner: 'joiner',  creatorScore: cs, joinerScore: js, score1: sd.score1, score2: sd.score2 };
+    return { winner: 'draw', creatorScore: cs, joinerScore: js, score1: sd.score1, score2: sd.score2 };
+}
+
+function parseExifDate(b) {
+    try {
+        const m = b.toString('binary').match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+        return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`) : null;
+    } catch { return null; }
+}
+
+// ─── Main verifier class ──────────────────────────────────────────────────────
+
+class ScreenshotVerifier {
     constructor(supabase, teamConfig = {}) {
         this.supabase = supabase;
         this.teams = teamConfig.teams || [];
         this.extractTeamNames = teamConfig.extractTeamNames || (() => ({ home: null, away: null }));
-        this._ocrText = null;
-        this._ocrConfidence = null;
+    }
 
-        this.eFootballSignatures = {
-            scoreboardBlue: { r: [0, 50],    g: [100, 200], b: [200, 255] },
-            resultGreen:    { r: [0, 100],   g: [200, 255], b: [0, 100]   },
-            menuYellow:     { r: [200, 255], g: [200, 255], b: [0, 100]   },
-            darkBackground: { r: [0, 50],    g: [0, 50],    b: [0, 50]    }
+    async verifyScreenshot(imageBuffer, matchData = {}) {
+        const t0 = Date.now(), warnings = [], checks = {};
+        let fraudScore = 0;
+
+        const fail = (name, pts, det = {}) => {
+            checks[name] = { passed: false, details: det, warning: USER_MESSAGES[name] || 'Suspicious.' };
+            warnings.push(USER_MESSAGES[name] || name);
+            fraudScore += pts;
+            log(`❌ ${name} +${pts} → ${fraudScore}`);
         };
-    }
-
-    /**
-     * OPTIMIZED OCR: 15-20 seconds (was 30-40s)
-     * - Smaller resolution (800x600 not 1200x800)
-     * - PSM 6 (uniform block) not PSM 3 (full auto)
-     * - No normalize/sharpen (unnecessary and slow)
-     * - 10-second timeout to prevent hangs
-     */
-    async _performOCR(imageBuffer) {
-        if (this._ocrText !== null) {
-            console.log('✅ Using cached OCR result');
-            return { text: this._ocrText, confidence: this._ocrConfidence };
-        }
-
-        try {
-            console.log('⏱️  Starting OCR (may take 10-20 seconds)...');
-            let worker;
-            try {
-                worker = await getTesseractWorker();
-            } catch (workerErr) {
-                console.error('❌ Failed to initialize Tesseract worker:', workerErr.message);
-                return { text: '', confidence: 0, error: 'Tesseract worker unavailable' };
-            }
-
-            if (!worker) {
-                console.error('❌ Tesseract worker is null');
-                return { text: '', confidence: 0, error: 'Tesseract worker unavailable' };
-            }
-
-            // ✅ OPTIMIZATION 1: Smaller resolution (faster processing)
-            console.log('🖼️  Preprocessing image...');
-            const startPreprocess = Date.now();
-            let preprocessed;
-            try {
-                preprocessed = await sharp(imageBuffer)
-                    .resize(800, 600, {
-                        fit: 'inside',
-                        withoutEnlargement: true
-                    })
-                    .grayscale()
-                    .toBuffer();
-            } catch (sharpErr) {
-                console.error('❌ Image preprocessing failed:', sharpErr.message);
-                return { text: '', confidence: 0, error: 'Image processing failed' };
-            }
-            const preprocessTime = Date.now() - startPreprocess;
-            console.log(`✅ Preprocessing done in ${preprocessTime}ms`);
-
-            // ✅ OPTIMIZATION 2: Better OCR parameters with timeout
-            console.log('🔍 Running OCR with optimized parameters...');
-            const startOcr = Date.now();
-
-            const ocrPromise = (async () => {
-                try {
-                    // PSM 6 = assume uniform block of text (scores are in a score display)
-                    await worker.setParameters({
-                        tessedit_pageseg_mode: '6',           // Faster than PSM 3
-                        tessedit_char_whitelist: '0123456789-: ',
-                        tessedit_ocr_engine_mode: '1'         // LSTM only (faster)
-                    });
-
-                    const { data: { text, confidence } } = await worker.recognize(preprocessed);
-                    return { text, confidence };
-                } catch (err) {
-                    console.error('❌ OCR recognition failed:', err.message);
-                    throw err;
-                }
-            })();
-
-            // ✅ OPTIMIZATION 3: Add timeout to prevent infinite hangs (10s)
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('OCR timeout (10s exceeded)')), 10000)
-            );
-
-            let result;
-            try {
-                result = await Promise.race([ocrPromise, timeoutPromise]);
-            } catch (raceErr) {
-                console.error('⏱️ OCR operation failed/timed out:', raceErr.message);
-                return { text: '', confidence: 0, error: raceErr.message };
-            }
-
-            const ocrTime = Date.now() - startOcr;
-            console.log(`✅ OCR complete in ${ocrTime}ms: ${(result?.text || '').trim().length} chars, confidence ${Math.round(result?.confidence || 0)}%`);
-
-            // Only cache if we got meaningful results
-            if (result?.text && result.text.trim().length > 0) {
-                this._ocrText = result.text;
-                this._ocrConfidence = result.confidence;
-            }
-
-            return { text: result?.text || '', confidence: result?.confidence || 0 };
-
-        } catch (err) {
-            console.error('❌ OCR failed:', err.message);
-            return { text: '', confidence: 0, error: err.message };
-        }
-    }
-
-    /**
-     * Extract score from OCR text
-     * Reuse this result instead of running OCR again!
-     */
-    async _extractScore(ocrText) {
-        const patterns = [
-            /(\d+)\s*[-:]\s*(\d+)/,
-            /[A-Za-z]\s+(\d{1,2})\s+[^\d]*\s+(\d{1,2})\s+[A-Za-z]/,
-            /^\s*(\d{1,2})\s+(\d{1,2})\s*$/m,
-            /HOME\s+(\d+).*AWAY\s+(\d+)/i,
-        ];
-
-        for (const pattern of patterns) {
-            const match = ocrText.match(pattern);
-            if (match) {
-                const s1 = parseInt(match[1]);
-                const s2 = parseInt(match[2]);
-                if (s1 <= 20 && s2 <= 20) {
-                    return { score1: s1, score2: s2 };
-                }
-            }
-        }
-        return { score1: undefined, score2: undefined };
-    }
-
-    /**
-     * MAIN VERIFICATION: Runs once per upload
-     * Returns OCR data alongside fraud checks
-     */
-    async verifyScreenshot(imageBuffer, matchData, clientMetadata = {}) {
-        // Reset instance cache for fresh verification
-        this._ocrText = null;
-        this._ocrConfidence = null;
-
-        const ocr = await this._performOCR(imageBuffer);
-        const ocrText = ocr.text;
-        const ocrConfidence = ocr.confidence;
-
-        const results = {
-            isValid: true,
-            fraudScore: 0,
-            warnings: [],
-            checks: {},
-            riskLevel: 'LOW',
-            requiresManualReview: false,
-            teamMatch: null,
-            
-            // ✅ NEW: Return OCR data so caller doesn't need to run OCR again!
-            ocrText: ocrText,
-            ocrConfidence: ocrConfidence,
-            extractedScores: null
+        const pass = (name, det = {}) => {
+            checks[name] = { passed: true, details: det };
+            log(`✅ ${name}`);
         };
 
-        const scores = {
-            metadata: 30, timestamp: 25, manipulation: 40, duplicate: 50,
-            device: 20, gameUIRecognition: 35, matchContext: 40,
-            ocrSanity: 20, behavioral: 30, crossReference: 30
-        };
+        // 1. File integrity
+        let imgMeta;
+        try {
+            imgMeta = await sharp(imageBuffer).metadata();
+            if (!imgMeta.width || !imgMeta.height) throw new Error('No dimensions');
+            pass('fileIntegrity', { width: imgMeta.width, height: imgMeta.height, format: imgMeta.format });
+        } catch (e) {
+            fail('fileIntegrity', 100, { error: e.message });
+            return this._build({ checks, warnings, fraudScore: 100, geminiResult: null, elapsed: Date.now() - t0 });
+        }
 
-        const checks = [
-            ['metadata',          () => this.checkAdvancedMetadata(imageBuffer, matchData),         true],
-            ['timestamp',         () => this.checkTimestamp(matchData),                             false],
-            ['manipulation',      () => this.checkAdvancedManipulation(imageBuffer),                true],
-            ['duplicate',         () => this.checkDuplicate(imageBuffer, matchData),                true],
-            ['device',            () => this.checkDeviceConsistency(imageBuffer, matchData.userId), true],
-            ['gameUIRecognition', () => this.recognizeGameUI(imageBuffer),                          true],
-            ['matchContext',      () => this.checkMatchContext(ocrText, matchData),                 false],
-            ['ocrSanity',         () => this.checkOcrSanity(ocrText, ocrConfidence),                false],
-            ['behavioral',        () => this.analyzeBehavioralPattern(matchData),                   true],
-            ['crossReference',    () => this.crossReferenceOpponent(matchData),                     true]
-        ];
+        // 2. Aspect ratio
+        const ratio = imgMeta.width / imgMeta.height;
+        ratio < 1.3
+            ? fail('aspectRatio', 20, { ratio: +ratio.toFixed(2) })
+            : pass('aspectRatio', { ratio: +ratio.toFixed(2) });
 
-        for (const [name, fn, isAsync] of checks) {
+        // 3. Duplicate hash
+        const hash = await pHash(imageBuffer);
+        if (hash && this.supabase) {
             try {
-                const check = isAsync ? await fn() : fn();
-                results.checks[name] = check;
-                if (!check.passed) {
-                    const fraudPoints = check.score ?? scores[name];
-                    results.fraudScore += fraudPoints;
-                    if (check.warning) results.warnings.push(check.warning);
-                    if (check.critical) results.requiresManualReview = true;
-                }
-            } catch (err) {
-                console.error(`Check "${name}" threw:`, err.message);
-                results.checks[name] = { passed: true, warning: null, details: { error: err.message } };
-            }
-        }
+                const { data: rows } = await this.supabase.from('screenshot_hashes').select('match_id,hash').limit(2000);
+                const dup = (rows || []).find(r => r.hash && hammingDistance(hash, r.hash) <= 8 && r.match_id !== matchData.matchId);
+                dup ? fail('duplicate', 80, { originalMatch: dup.match_id, hash }) : pass('duplicate', { hash });
+            } catch { pass('duplicate', { hash, dbError: true }); }
+        } else { pass('duplicate', { hash }); }
 
+        // 4. EXIF timestamp
+        const exifDate    = imgMeta.exif ? parseExifDate(imgMeta.exif) : null;
+        const matchStarted = matchData.startedAt ? new Date(matchData.startedAt) : null;
+        if (exifDate && matchStarted) {
+            const diff = (exifDate - matchStarted) / 60000;
+            diff < -5
+                ? fail('exifTimestamp', 70, { diff: +diff.toFixed(1) })
+                : pass('exifTimestamp', { diff: +diff.toFixed(1) });
+        } else { pass('exifTimestamp', { note: 'skipped' }); }
+
+        // 5. Too early
+        if (matchStarted) {
+            const age = (Date.now() - matchStarted.getTime()) / 1000;
+            age < 60
+                ? fail('tooEarly', 60, { ageSeconds: Math.round(age) })
+                : pass('tooEarly', { ageSeconds: Math.round(age) });
+        } else { pass('tooEarly', { note: 'skipped' }); }
+
+        // 6. Manipulation detection
+        const manip = await detectManipulation(imageBuffer);
+        manip.suspicious ? fail('manipulation', 40, manip) : pass('manipulation', manip);
+
+        // 7. Gemini Vision — extract score, teams, Full Time
+        let geminiResult = null;
         try {
-            results.teamMatch = await this.resolveTeamMapping(ocrText, matchData);
-        } catch (err) {
-            console.error('Team mapping failed:', err.message);
-            results.teamMatch = { bestMapping: 'ambiguous', bestHome: null, bestAway: null, reason: err.message };
+            geminiResult = await extractScoreWithGemini(imageBuffer);
+            log('Gemini result:', JSON.stringify(geminiResult));
+        } catch (e) {
+            console.error('❌ [OCR-v7] Gemini call failed:', e.message);
         }
 
-        // ✅ NEW: Extract score from OCR text
-        try {
-            const scoreResult = await this._extractScore(ocrText);
-            results.extractedScores = scoreResult;
-        } catch (err) {
-            console.error('Score extraction failed:', err);
-            results.extractedScores = { score1: undefined, score2: undefined };
-        }
+        const scoreFound  = geminiResult && geminiResult.score1 != null && geminiResult.score2 != null;
+        const hasFullTime = geminiResult?.hasFullTime === true;
+        const gemConf     = geminiResult?.confidence ?? 0;
 
-        if (results.fraudScore >= 90) {
-            results.riskLevel = 'CRITICAL';
-            results.recommendation = 'REJECT - Multiple fraud indicators detected';
-            results.isValid = false;
-        } else if (results.fraudScore >= 60) {
-            results.riskLevel = 'HIGH';
-            results.recommendation = 'MANUAL_REVIEW - High suspicion of fraud';
-        } else if (results.fraudScore >= 30) {
-            results.riskLevel = 'MEDIUM';
-            results.recommendation = 'REVIEW - Some concerns detected';
-        } else {
-            results.riskLevel = 'LOW';
-            results.recommendation = 'APPROVE - Low fraud risk';
-        }
+        scoreFound
+            ? pass('ocrSanity', { score1: geminiResult.score1, score2: geminiResult.score2, confidence: gemConf })
+            : fail('ocrSanity', 30, { error: 'Gemini could not read the score' });
 
-        console.log(`📊 Verification complete: risk=${results.riskLevel}, fraud_score=${results.fraudScore}, recommendation=${results.recommendation}`);
-        return results;
-    }
+        hasFullTime
+            ? pass('fullTimeWord')
+            : fail('fullTimeWord', 15, { note: 'Full Time text not detected' });
 
-    // ─── VERIFICATION CHECKS (existing code, unchanged) ──────────────────────
+        // 8. Score sanity — 0-0 with many shots is suspicious
+        if (scoreFound) {
+            const s1 = geminiResult.score1, s2 = geminiResult.score2;
+            const zeroZeroSuspicious = s1 === 0 && s2 === 0 && gemConf < 70;
+            zeroZeroSuspicious
+                ? fail('scoreSanity', 20, { score1: s1, score2: s2 })
+                : pass('scoreSanity', { score1: s1, score2: s2 });
+        } else { pass('scoreSanity', { note: 'no score' }); }
 
-    async checkAdvancedMetadata(imageBuffer, matchData) {
-        const result = { passed: true, warning: null, critical: false, details: {} };
-        try {
-            const exif = ExifReader.load(imageBuffer);
-            const dateTimeOriginal = exif.DateTime?.value || exif.DateTimeDigitized?.value;
-            if (!dateTimeOriginal) {
-                result.details.noExifDate = true;
-                return result;
-            }
-
-            const parts = dateTimeOriginal.split(/[:\s]/);
-            const taken = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]), 
-                                    parseInt(parts[3]), parseInt(parts[4]), parseInt(parts[5]));
-            const started = new Date(matchData.startedAt);
-            const now = new Date();
-            const diffMinutes = (now - taken) / (1000 * 60);
-
-            result.details.photoTakenAt = taken.toISOString();
-            result.details.matchStartedAt = started.toISOString();
-            result.details.timeDiffMinutes = diffMinutes;
-
-            if (taken > now) {
-                result.passed = false;
-                result.warning = 'Screenshot appears to be from the future';
-                result.critical = true;
-            } else if (taken < started && (started - taken) > 3600000) {
-                result.passed = false;
-                result.warning = 'Screenshot was taken more than 1 hour before match started';
-                result.critical = true;
-            }
-        } catch (err) {
-            result.details.exifError = err.message;
-        }
-        return result;
-    }
-
-    checkTimestamp(matchData) {
-        const result = { passed: true, warning: null, details: {} };
-        const now = new Date();
-        const started = new Date(matchData.startedAt);
-        const delayMinutes = (now - started) / (1000 * 60);
-
-        result.details.delayMinutes = delayMinutes;
-        if (delayMinutes < 1) {
-            result.passed = false;
-            result.warning = 'Upload too soon after match started (match may not be finished)';
-        }
-        return result;
-    }
-
-    async checkAdvancedManipulation(imageBuffer) {
-        const result = { passed: true, warning: null, details: {} };
-        try {
-            const metadata = await sharp(imageBuffer).metadata();
-            result.details.format = metadata.format;
-            result.details.hasAlpha = metadata.hasAlpha;
-            result.details.width = metadata.width;
-            result.details.height = metadata.height;
-            
-            if (metadata.hasAlpha) {
-                result.warning = 'Image has transparency (may indicate editing)';
-            }
-        } catch (err) {
-            result.details.error = err.message;
-        }
-        return result;
-    }
-
-    async checkDuplicate(imageBuffer, matchData) {
-        const result = { passed: true, warning: null, details: {} };
-        try {
-            const hashes = await this.generatePerceptualHashes(imageBuffer);
-            result.details.hash = hashes.standard;
-
-            const { data: matches } = await this.supabase
-                .from('screenshot_hashes')
-                .select('match_id, user_id')
-                .or(`standard_hash.eq.${hashes.standard},rotated_hash.eq.${hashes.rotated}`);
-
-            if (matches && matches.length > 0) {
-                const otherMatch = matches.find(m => m.match_id !== matchData.matchId);
-                if (otherMatch) {
-                    result.passed = false;
-                    result.warning = 'This screenshot has already been used in another match';
-                    result.details.originalMatch = otherMatch.match_id;
-                    result.critical = true;
-                }
-            }
-        } catch (err) {
-            result.details.error = err.message;
-        }
-        return result;
-    }
-
-    async checkDeviceConsistency(imageBuffer, userId) {
-        const result = { passed: true, warning: null, details: {} };
-        try {
-            const metadata = await sharp(imageBuffer).metadata();
-            result.details.resolution = `${metadata.width}x${metadata.height}`;
-            
-            const { data: recentUploads } = await this.supabase
-                .from('screenshots')
-                .select('metadata')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-            if (recentUploads && recentUploads.length > 2) {
-                const resolutions = recentUploads.map(u => u.metadata?.resolution || 'unknown');
-                if (!resolutions.includes(`${metadata.width}x${metadata.height}`)) {
-                    result.warning = 'Device resolution differs from previous uploads';
-                }
-            }
-        } catch (err) {
-            result.details.error = err.message;
-        }
-        return result;
-    }
-
-    recognizeGameUI(imageBuffer) {
-        const result = { passed: true, warning: null, details: { detected: [] } };
-        // Simplified: Just check if image looks like a game screenshot
-        // In production, use image recognition models
-        result.details.basicCheck = 'Game UI recognition skipped (requires ML model)';
-        return result;
-    }
-
-    async resolveTeamMapping(ocrText, matchData) {
-        try {
-            // Extract team names from OCR text
-            const extractedTeams = this.extractTeamNames(ocrText);
-
-            if (!extractedTeams.home && !extractedTeams.away) {
-                return {
-                    bestMapping: 'ambiguous',
-                    bestHome: null,
-                    bestAway: null,
-                    note: 'Could not identify team names in screenshot'
-                };
-            }
-
-            // Get match creator and joiner team names
-            const creatorTeam = matchData.creatorTeam;
-            const joinerTeam = matchData.joinerTeam;
-
-            // Match extracted teams to match participants
-            if (extractedTeams.home === creatorTeam && extractedTeams.away === joinerTeam) {
-                return {
-                    bestMapping: 'creator_home',
-                    bestHome: creatorTeam,
-                    bestAway: joinerTeam
-                };
-            } else if (extractedTeams.home === joinerTeam && extractedTeams.away === creatorTeam) {
-                return {
-                    bestMapping: 'joiner_home',
-                    bestHome: joinerTeam,
-                    bestAway: creatorTeam
-                };
-            } else if (extractedTeams.home === creatorTeam || extractedTeams.away === creatorTeam) {
-                // Creator team found but ambiguous home/away
-                return {
-                    bestMapping: 'ambiguous',
-                    bestHome: extractedTeams.home,
-                    bestAway: extractedTeams.away,
-                    note: 'Creator team identified but position is ambiguous'
-                };
+        // 9. Team name match — compare Gemini's read against THIS match's registered teams only
+        // (not a static club list — players use custom clubs like "this team vere level")
+        if (scoreFound && matchData.creatorTeam && matchData.joinerTeam) {
+            const home = geminiResult.homeTeam, away = geminiResult.awayTeam;
+            const cOk = fuzzyTeamMatch(home, matchData.creatorTeam) || fuzzyTeamMatch(away, matchData.creatorTeam);
+            const jOk = fuzzyTeamMatch(home, matchData.joinerTeam)  || fuzzyTeamMatch(away, matchData.joinerTeam);
+            if (home && away && !cOk && !jOk) {
+                // Neither team matches — genuinely suspicious (wrong match screenshot)
+                fail('teamNameMatch', 25, { geminiHome: home, geminiAway: away, creatorTeam: matchData.creatorTeam, joinerTeam: matchData.joinerTeam });
+            } else if (home && (!cOk || !jOk)) {
+                // One team matched, one didn't — soft flag only (custom club names are common)
+                fail('teamNameMatch', 10, { geminiHome: home, geminiAway: away, creatorTeam: matchData.creatorTeam, joinerTeam: matchData.joinerTeam, note: 'partial_match' });
             } else {
-                // Teams don't match the match participants
-                return {
-                    bestMapping: 'mismatch',
-                    bestHome: extractedTeams.home,
-                    bestAway: extractedTeams.away,
-                    note: 'Extracted teams do not match match participants'
-                };
+                pass('teamNameMatch', { home, away });
             }
-        } catch (err) {
-            console.error('Team mapping error:', err);
-            return {
-                bestMapping: 'error',
-                bestHome: null,
-                bestAway: null,
-                note: err.message
-            };
-        }
-    }
+        } else { pass('teamNameMatch', { note: 'skipped — match teams not registered' }); }
 
-    async analyzeBehavioralPattern(matchData) {
-        const result = { passed: true, warning: null, details: {} };
-        try {
-            const userId = matchData.userId;
-            const now = new Date();
+        // 10. Username presence — soft check only; many eFootball result screens don't show usernames
+        // Only fail hard if BOTH Gemini found usernames AND neither matches
+        if (scoreFound && (matchData.uploaderUsername || matchData.opponentUsername)) {
+            const hu = (geminiResult.homeUsername || '').toLowerCase();
+            const au = (geminiResult.awayUsername || '').toLowerCase();
+            const uploaderName = (matchData.uploaderUsername || '').toLowerCase();
+            const opponentName = (matchData.opponentUsername || '').toLowerCase();
 
-            const { data: matches, error } = await this.supabase
-                .from('friend_matches')
-                .select('id, winner_id, created_at')
-                .or(`creator_id.eq.${userId},joiner_id.eq.${userId}`)
-                .eq('status', 'completed')
-                .order('created_at', { ascending: false }).limit(20);
-
-            if (error) throw error;
-            if (!matches || matches.length < 3) { result.details.insufficientHistory = true; return result; }
-
-            result.details.submissionCount = matches.length;
-            const wins = matches.filter(m => m.winner_id === userId).length;
-            const winRate = wins / matches.length;
-            result.details.winRate = (winRate * 100).toFixed(1) + '%';
-
-            if (winRate > 0.95 && matches.length >= 10) {
-                result.passed = false; result.score = 25;
-                result.warning = `${(winRate * 100).toFixed(0)}% win rate - abnormally high`;
-                result.details.suspiciousWinRate = true;
-            }
-
-            const recentCount = matches.filter(m => (now - new Date(m.created_at)) < 3600000).length;
-            result.details.recentSubmissions = recentCount;
-            if (recentCount >= 5) {
-                result.passed = false; result.score = 20;
-                result.warning = `${recentCount} submissions in the last hour - unusually high frequency`;
-                result.details.rapidFireSubmissions = true;
-            }
-        } catch (err) {
-            result.passed = true; result.details.error = err.message;
-        }
-        return result;
-    }
-
-    async crossReferenceOpponent(matchData) {
-        const result = { passed: true, warning: null, details: {} };
-        try {
-            const { data: match, error } = await this.supabase
-                .from('friend_matches')
-                .select('declared_score_creator, declared_score_joiner, declared_score_by')
-                .eq('id', matchData.matchId).single();
-
-            if (error || !match) { result.details.noOpponentData = true; return result; }
-            if (!match.declared_score_by) { result.details.noDeclarationYet = true; return result; }
-
-            const isUploaderCreator = (matchData.userId === matchData.creatorId);
-            const uploaderScore = isUploaderCreator ? match.declared_score_creator : match.declared_score_joiner;
-            const opponentScore = isUploaderCreator ? match.declared_score_joiner : match.declared_score_creator;
-
-            if (opponentScore === null) { result.details.opponentNotDeclared = true; return result; }
-
-            const extractedScore = matchData.extractedScore;
-            if (extractedScore) {
-                const [s1, s2] = extractedScore.split('-').map(Number);
-                const userScoreFromOcr = isUploaderCreator ? s1 : s2;
-                const oppScoreFromOcr = isUploaderCreator ? s2 : s1;
-                if (uploaderScore !== null && userScoreFromOcr !== uploaderScore) {
-                    result.passed = false; result.score = 40;
-                    result.warning = 'Your OCR score does not match your declared score';
-                    result.details.ocrVsDeclared = { ocr: userScoreFromOcr, declared: uploaderScore };
-                }
-                if (opponentScore !== null && oppScoreFromOcr !== opponentScore) {
-                    result.passed = false; result.score = 40;
-                    result.warning = "OCR score does not match opponent's declared score";
-                    result.details.ocrVsOpponent = { ocr: oppScoreFromOcr, declared: opponentScore };
+            // If Gemini couldn't read any usernames, skip — screen may not show them
+            if (!hu && !au) {
+                pass('usernameMatch', { note: 'no usernames visible in screenshot — skipped' });
+            } else {
+                const usernameHit = (name, extracted) => !name || !extracted ||
+                    extracted.includes(name.slice(0, 5)) || name.includes(extracted.slice(0, 5));
+                const uploaderFound = usernameHit(uploaderName, hu) || usernameHit(uploaderName, au);
+                const opponentFound = usernameHit(opponentName, hu) || usernameHit(opponentName, au);
+                if (!uploaderFound && !opponentFound) {
+                    // Usernames ARE visible but match neither player — moderately suspicious
+                    fail('usernameMatch', 20, { geminiHome: hu, geminiAway: au, uploaderUsername: matchData.uploaderUsername, opponentUsername: matchData.opponentUsername });
+                } else {
+                    pass('usernameMatch', { homeUsername: geminiResult.homeUsername, awayUsername: geminiResult.awayUsername });
                 }
             }
-        } catch (err) {
-            result.passed = true; result.details.error = err.message;
-        }
-        return result;
-    }
+        } else { pass('usernameMatch', { note: 'skipped — no usernames provided' }); }
 
-    checkOcrSanity(ocrText, ocrConfidence) {
-        const hasNumbers = /\d/.test(ocrText);
-        return {
-            passed: hasNumbers,
-            warning: hasNumbers ? null : 'No numbers found in image',
-            details: { hasNumbers, ocrConfidence: Math.round(ocrConfidence), textLength: ocrText.trim().length }
-        };
-    }
-
-    checkMatchContext(ocrText, matchData) {
-        const hasTeamNames = matchData.creatorTeam || matchData.joinerTeam;
-        if (!hasTeamNames && !matchData.opponentUsername) {
-            return { passed: true, warning: null, details: { skipped: 'no context' } };
-        }
-
-        const rawText = ocrText.toLowerCase();
-        const result = { passed: true, warning: null, details: { rawText: rawText.substring(0, 200) } };
-
-        const teamNames = [matchData.creatorTeam, matchData.joinerTeam].filter(Boolean);
-        for (const team of teamNames) {
-            const teamLower = team.toLowerCase();
-            const firstWord = teamLower.split(/\s+/).find(w => w.length >= 4) || teamLower;
-            if (rawText.includes(teamLower) || rawText.includes(firstWord)) {
-                result.details.teamFound = team;
-                result.details.contextVerified = 'team_name';
-                return result;
+        // 11. Score plausibility — extreme scorelines are rare in eFootball
+        if (scoreFound) {
+            const s1 = geminiResult.score1, s2 = geminiResult.score2;
+            const gap = Math.abs(s1 - s2);
+            const total = s1 + s2;
+            if (gap > 8 || total > 15) {
+                // Very lopsided or extremely high-scoring — flag for admin confirmation, don't auto-settle
+                fail('scorePlausibility', 20, { score1: s1, score2: s2, gap, total, note: 'Extreme scoreline — unlikely in normal eFootball match' });
+            } else {
+                pass('scorePlausibility', { score1: s1, score2: s2, gap, total });
             }
-        }
+        } else { pass('scorePlausibility', { note: 'no score' }); }
 
-        if (matchData.opponentUsername) {
-            const opponentName = matchData.opponentUsername.toLowerCase();
-            const stub = opponentName.substring(0, Math.min(4, opponentName.length));
-            if (rawText.includes(opponentName) || (stub.length >= 4 && rawText.includes(stub))) {
-                result.details.contextVerified = 'username';
-                return result;
-            }
-        }
+        fraudScore = Math.min(100, fraudScore);
 
-        result.passed = false; result.score = 15;
-        result.details.foundPartialUsername = false;
-        result.warning = teamNames.length > 0
-            ? `Team names not found in screenshot — please ensure the Full Time results screen is shown`
-            : `Opponent not found in screenshot`;
-        return result;
+        let rec;
+        if      (fraudScore >= 80)             rec = 'reject';
+        else if (fraudScore >= 60)             rec = 'admin_review';
+        else if (!scoreFound)                  rec = 'manual_declare';
+        else if (gemConf >= 80 && fraudScore < 30) rec = 'auto_settle';
+        else if (gemConf >= 60)                rec = 'challenge_window';
+        else                                   rec = 'manual_confirm';
+
+        const scoreData = scoreFound
+            ? { score1: geminiResult.score1, score2: geminiResult.score2, homeTeam: geminiResult.homeTeam, awayTeam: geminiResult.awayTeam, homeUsername: geminiResult.homeUsername, awayUsername: geminiResult.awayUsername }
+            : { score1: null, score2: null, homeTeam: null, awayTeam: null, homeUsername: null, awayUsername: null };
+
+        const winner = scoreFound ? determineWinner(scoreData, matchData) : { winner: null, reason: 'no_score' };
+        const elapsed = Date.now() - t0;
+
+        console.log(`📊 [OCR-v7] ${elapsed}ms — score=${scoreData.score1 ?? '?'}-${scoreData.score2 ?? '?'} gemConf=${gemConf}% fraud=${fraudScore} winner=${winner.winner ?? 'unknown'} rec=${rec}`);
+
+        return this._build({ checks, warnings, fraudScore, geminiResult, scoreData, elapsed, gemConf, winner, hash, rec });
     }
 
-    async generatePerceptualHashes(imageBuffer) {
-        const image = sharp(imageBuffer);
-        const standard = await image.resize(32, 32, { fit: 'fill' }).grayscale().raw().toBuffer();
-        const rotated  = await sharp(imageBuffer).rotate(90).resize(32, 32, { fit: 'fill' }).grayscale().raw().toBuffer();
-        const { width, height } = await image.metadata();
-        const cropped  = await sharp(imageBuffer)
-            .extract({ left: Math.floor(width*0.1), top: Math.floor(height*0.1), width: Math.floor(width*0.8), height: Math.floor(height*0.8) })
-            .resize(32, 32, { fit: 'fill' }).grayscale().raw().toBuffer();
+    _build({ checks, warnings, fraudScore, geminiResult, scoreData = {}, elapsed, gemConf = 0, winner, hash, rec }) {
+        const sf = scoreData.score1 != null;
+        const scoreStr = sf ? `${scoreData.score1}–${scoreData.score2}` : null;
         return {
-            standard: crypto.createHash('sha256').update(standard).digest('hex'),
-            rotated:  crypto.createHash('sha256').update(rotated).digest('hex'),
-            cropped:  crypto.createHash('sha256').update(cropped).digest('hex')
+            isValid:          sf && fraudScore < 80 && gemConf >= 50,
+            ocrText:          '',   // not applicable with Gemini
+            ocrConfidence:    gemConf,
+            extractedScores:  { score1: scoreData.score1 ?? null, score2: scoreData.score2 ?? null },
+            teamMatch:        { home: scoreData.homeTeam ?? null, away: scoreData.awayTeam ?? null },
+            extractedStats:   {},
+            winner:           winner || { winner: null, reason: 'no_score' },
+            recommendation:   rec || 'manual_declare',
+            fraudScore,
+            confidence:       gemConf,
+            warnings,
+            userMessage:      this._msg(fraudScore, checks, sf, rec, scoreStr),
+            checks,
+            timings:          { total: elapsed },
+            hash,
+            geminiResult,
         };
     }
 
-    comparePerceptualHashes(hash1, hash2) {
-        const similarities = [];
-        for (const key of ['standard', 'rotated', 'cropped']) {
-            if (hash1[key] && hash2[key]) similarities.push(this.hammingDistance(hash1[key], hash2[key]));
+    _msg(fs, checks, sf, rec, scoreStr) {
+        if (fs >= 80) {
+            const W = { duplicate: 5, fileIntegrity: 5, exifTimestamp: 4, manipulation: 3, tooEarly: 3 };
+            const top = Object.entries(checks)
+                .filter(([, v]) => !v.passed)
+                .sort(([a], [b]) => (W[b] || 1) - (W[a] || 1))[0];
+            return top ? top[1].warning : 'Screenshot rejected. Contact admin if this is an error.';
         }
-        return similarities.length > 0 ? Math.max(...similarities) : 0;
-    }
-
-    hammingDistance(hash1, hash2) {
-        if (hash1 === hash2) return 1.0;
-        let differences = 0;
-        const len = Math.min(hash1.length, hash2.length);
-        for (let i = 0; i < len; i++) { if (hash1[i] !== hash2[i]) differences++; }
-        return 1 - (differences / len);
-    }
-
-    /**
-     * DEPRECATED: Use verifyScreenshot() which now returns extractedScores
-     * This method should no longer be called to avoid duplicate OCR
-     */
-    async extractScoreWithConfidence(imageBuffer) {
-        console.warn('⚠️  extractScoreWithConfidence() is deprecated. Use verifyScreenshot() result.extractedScores instead.');
-        const ocr = await this._performOCR(imageBuffer);
-        const text = ocr.text;
-        const confidence = ocr.confidence;
-
-        const result = await this._extractScore(text);
-        return {
-            score1: result.score1,
-            score2: result.score2,
-            confidence,
-            rawText: text,
-            isValid: result.score1 !== undefined && result.score2 !== undefined && confidence > 50
-        };
+        if (fs >= 60) return `Flagged for admin review: ${Object.entries(checks).filter(([, v]) => !v.passed).map(([, v]) => v.warning).filter(Boolean).join(' | ')}`;
+        if (!sf) return 'Could not read the score. Upload the "Full Time" result screen showing both team names and the final score.';
+        const w = Object.entries(checks).filter(([, v]) => !v.passed).map(([, v]) => v.warning).filter(Boolean);
+        if (w.length) return `Screenshot accepted with caution. Note: ${w.join(' | ')}`;
+        return `Screenshot verified! Score: ${scoreStr ?? '?'}. Confidence: ${rec === 'auto_settle' ? 90 : 70}%.`;
     }
 }
 
-module.exports = OptimizedScreenshotVerifier;
+// ─── Gemini Arbitration — resolves cases without admin ────────────────────────
+//
+// Handles three situations:
+//   'team_side'    — score known, can't tell which player is home/away
+//   'low_score'    — score unclear, retry with a focused prompt on just the scoreline
+//   'mismatch'     — two screenshots show different scores, Gemini picks the credible one
+//
+// Returns:
+//   { resolved: true,  winner: 'creator'|'joiner'|'draw', score1, score2, confidence, reason }
+//   { resolved: false, reason: string }   ← escalate to admin
+// ─────────────────────────────────────────────────────────────────────────────
+async function geminiArbitrate(type, payload) {
+    if (!GEMINI_API_KEY) return { resolved: false, reason: 'no_api_key' };
+
+    try {
+        if (type === 'team_side') {
+            // We know the score but not which player is home/away.
+            // Give Gemini the screenshot + both registered team names and ask it to decide.
+            const { imageBuffer, score1, score2, creatorTeam, joinerTeam } = payload;
+
+            const resized = await sharp(imageBuffer)
+                .resize(1280, null, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 90 }).toBuffer();
+
+            const prompt = `This is an eFootball match result screenshot. The final score is ${score1}–${score2}.
+
+Two players are registered for this match:
+- Creator played as: "${creatorTeam}"
+- Joiner played as: "${joinerTeam}"
+
+Look at the team names shown in the score banner at the top of the screen.
+Determine which side (home=left, away=right) each registered team is on.
+
+Respond with ONLY valid JSON, no markdown:
+{
+  "creatorIsHome": <true if creator's team is on the LEFT/home side, false if RIGHT/away>,
+  "creatorScore": <creator's final score as integer>,
+  "joinerScore": <joiner's final score as integer>,
+  "winner": <"creator", "joiner", or "draw">,
+  "confidence": <integer 50-100>,
+  "reasoning": "<one sentence explaining how you identified which team is which>"
+}`;
+
+            const body = {
+                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: resized.toString('base64') } }] }],
+                generationConfig: { temperature: 0, maxOutputTokens: 256 }
+            };
+
+            const res = await queuedGeminiFetch(body);
+            if (!res.ok) return { resolved: false, reason: `gemini_${res.status}` };
+
+            const data = await res.json();
+            const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const parsed = JSON.parse(raw.replace(/```json|```/gi, '').trim());
+
+            if (!parsed.winner || !['creator','joiner','draw'].includes(parsed.winner)) {
+                return { resolved: false, reason: 'gemini_bad_response' };
+            }
+            if ((parsed.confidence ?? 0) < 70) {
+                return { resolved: false, reason: 'low_confidence', confidence: parsed.confidence };
+            }
+            return {
+                resolved:      true,
+                winner:        parsed.winner,
+                creatorScore:  parsed.creatorScore ?? (parsed.creatorIsHome ? score1 : score2),
+                joinerScore:   parsed.joinerScore  ?? (parsed.creatorIsHome ? score2 : score1),
+                score1, score2,
+                confidence:    parsed.confidence,
+                reasoning:     parsed.reasoning || '',
+            };
+        }
+
+        if (type === 'low_score') {
+            // Gemini gave low confidence on score — retry with a sharper, score-focused prompt
+            const { imageBuffer } = payload;
+
+            const resized = await sharp(imageBuffer)
+                .resize(1280, null, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 95 }).toBuffer();
+
+            const prompt = `Focus ONLY on the score banner at the very top of this eFootball match result screenshot.
+Find the two numbers in yellow boxes — these are the final scores.
+Ignore all stats in the table below.
+
+Respond with ONLY valid JSON, no markdown:
+{
+  "score1": <left/home score as integer>,
+  "score2": <right/away score as integer>,
+  "homeTeam": "<team name on left>",
+  "awayTeam": "<team name on right>",
+  "hasFullTime": <true or false>,
+  "confidence": <integer 50-100>
+}`;
+
+            const body = {
+                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: resized.toString('base64') } }] }],
+                generationConfig: { temperature: 0, maxOutputTokens: 128 }
+            };
+
+            const res = await queuedGeminiFetch(body);
+            if (!res.ok) return { resolved: false, reason: `gemini_${res.status}` };
+
+            const data = await res.json();
+            const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const parsed = JSON.parse(raw.replace(/```json|```/gi, '').trim());
+
+            const s1 = parseInt(parsed.score1, 10), s2 = parseInt(parsed.score2, 10);
+            if (isNaN(s1) || isNaN(s2) || s1 < 0 || s1 > 20 || s2 < 0 || s2 > 20) {
+                return { resolved: false, reason: 'score_unreadable' };
+            }
+            if ((parsed.confidence ?? 0) < 65) {
+                return { resolved: false, reason: 'low_confidence', confidence: parsed.confidence };
+            }
+            return {
+                resolved:    true,
+                score1:      s1,
+                score2:      s2,
+                homeTeam:    parsed.homeTeam    || null,
+                awayTeam:    parsed.awayTeam    || null,
+                hasFullTime: parsed.hasFullTime === true,
+                confidence:  parsed.confidence,
+            };
+        }
+
+        if (type === 'mismatch') {
+            // Two screenshots claim different scores. Give Gemini both images and ask it to judge.
+            const { creatorBuffer, joinerBuffer, creatorTeam, joinerTeam, score1A, score2A, score1B, score2B } = payload;
+
+            const [imgA, imgB] = await Promise.all([
+                sharp(creatorBuffer).resize(960, null, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer(),
+                sharp(joinerBuffer).resize(960, null, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer(),
+            ]);
+
+            const prompt = `You are adjudicating a disputed eFootball match result.
+
+Two players submitted different screenshots showing different scores:
+- Creator (${creatorTeam || 'unknown team'}) claims: ${score1A}–${score2A}
+- Joiner  (${joinerTeam  || 'unknown team'}) claims: ${score1B}–${score2B}
+
+The FIRST image is the creator's screenshot.
+The SECOND image is the joiner's screenshot.
+
+Examine both screenshots carefully. Look for:
+1. The score in the yellow boxes at the top
+2. "Full Time" text
+3. Whether the screenshot looks genuine vs edited
+4. Timestamp or match context clues
+
+Respond with ONLY valid JSON, no markdown:
+{
+  "credibleScreenshot": <"creator", "joiner", or "neither">,
+  "score1": <the correct home score as integer>,
+  "score2": <the correct away score as integer>,
+  "winner": <"creator", "joiner", or "draw">,
+  "confidence": <integer 50-100>,
+  "reasoning": "<2-3 sentences explaining your decision>"
+}
+
+If you cannot determine a clear winner, set credibleScreenshot to "neither" and confidence below 60.`;
+
+            const body = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: 'image/jpeg', data: imgA.toString('base64') } },
+                        { inline_data: { mime_type: 'image/jpeg', data: imgB.toString('base64') } },
+                    ]
+                }],
+                generationConfig: { temperature: 0, maxOutputTokens: 512 }
+            };
+
+            const res = await queuedGeminiFetch(body);
+            if (!res.ok) return { resolved: false, reason: `gemini_${res.status}` };
+
+            const data = await res.json();
+            const raw  = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const parsed = JSON.parse(raw.replace(/```json|```/gi, '').trim());
+
+            console.log(`⚖️  [geminiArbitrate/mismatch] credible=${parsed.credibleScreenshot} conf=${parsed.confidence} winner=${parsed.winner}`);
+            console.log(`   Reasoning: ${parsed.reasoning}`);
+
+            if (parsed.credibleScreenshot === 'neither' || (parsed.confidence ?? 0) < 70) {
+                return { resolved: false, reason: 'gemini_undecided', confidence: parsed.confidence, reasoning: parsed.reasoning };
+            }
+            if (!parsed.winner || !['creator','joiner','draw'].includes(parsed.winner)) {
+                return { resolved: false, reason: 'gemini_bad_response' };
+            }
+            return {
+                resolved:           true,
+                winner:             parsed.winner,
+                score1:             parseInt(parsed.score1, 10),
+                score2:             parseInt(parsed.score2, 10),
+                confidence:         parsed.confidence,
+                credibleScreenshot: parsed.credibleScreenshot,
+                reasoning:          parsed.reasoning || '',
+            };
+        }
+
+        return { resolved: false, reason: 'unknown_type' };
+
+    } catch (err) {
+        console.error(`❌ [geminiArbitrate/${type}] error:`, err.message);
+        return { resolved: false, reason: 'exception', error: err.message };
+    }
+}
+
+module.exports = { ScreenshotVerifier, geminiArbitrate };

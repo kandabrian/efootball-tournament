@@ -28,6 +28,7 @@
   "homepage": "https://github.com/kandabrian/efootball-tournament#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
+    "async-mutex": "^0.5.0",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
     "exifreader": "^4.21.1",

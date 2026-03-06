@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="theme-color" content="#050507">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard | Vumbua eFootball</title>
+    <title>Vumbua — eFootball Wagers</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
     <!-- Production-ready CSP -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://low-lilllie-kandabrian-18be1e15.koyeb.app wss://low-lilllie-kandabrian-18be1e15.koyeb.app https://wqnnuqudxsnxldlgxhwr.supabase.co wss://wqnnuqudxsnxldlgxhwr.supabase.co;">
@@ -11,45 +12,57 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* ... (all your existing styles remain exactly as before) ... */
         :root {
             --neon: #00ff41;
             --neon-dim: rgba(0,255,65,0.08);
-            --bg: #060608;
-            --surface: #0c0c0f;
-            --card: #111116;
-            --card2: #161619;
-            --border: rgba(255,255,255,0.06);
+            --neon-glow: rgba(0,255,65,0.15);
+            --bg: #050507;
+            --surface: #0a0a0e;
+            --card: #0f0f14;
+            --card2: #14141a;
+            --border: rgba(255,255,255,0.07);
+            --border-strong: rgba(255,255,255,0.12);
             --text: #f0f0f0;
-            --muted: #666;
-            --danger: #ff4444;
+            --muted: #55556a;
+            --danger: #ff4455;
+            --gold: #ffd700;
+            --radius-card: 20px;
+            --radius-btn: 14px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif; min-height: 100vh; overflow-x: hidden; }
         #loading-screen {
             position: fixed; inset: 0; z-index: 1000; background: var(--bg);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
         }
         .spinner {
-            width: 36px; height: 36px; border: 2px solid rgba(0,255,65,0.15);
-            border-top-color: var(--neon); border-radius: 50%; animation: spin 0.7s linear infinite;
+            width: 32px; height: 32px; border: 2px solid rgba(0,255,65,0.1);
+            border-top-color: var(--neon); border-radius: 50%; animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-text { font-size: 0.75rem; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
         .pitch-bg {
             position: fixed; inset: 0; z-index: 0;
-            background: radial-gradient(ellipse 60% 40% at 70% 0%, rgba(0,255,65,0.04) 0%, transparent 55%);
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,255,65,0.04) 0%, transparent 60%),
+                radial-gradient(ellipse 40% 30% at 90% 80%, rgba(0,200,50,0.02) 0%, transparent 50%);
         }
         .pitch-lines {
-            position: fixed; inset: 0; z-index: 0; opacity: 0.025;
+            position: fixed; inset: 0; z-index: 0; opacity: 0.018;
             background-image:
                 repeating-linear-gradient(0deg, transparent, transparent 79px, rgba(0,255,65,0.8) 80px),
                 repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(0,255,65,0.8) 80px);
-            animation: gridDrift 25s linear infinite;
+            animation: gridDrift 30s linear infinite;
         }
         @keyframes gridDrift { 0% { transform: translateY(0); } 100% { transform: translateY(80px); } }
+        .noise-overlay {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+            background-size: 200px;
+        }
         .app {
             position: relative; z-index: 1; max-width: 480px; margin: 0 auto;
             padding: 0 0 80px 0; min-height: 100vh;
@@ -58,9 +71,11 @@
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         .topnav {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 20px 20px 16px;
+            padding: 18px 20px 14px;
             position: sticky; top: 0; z-index: 10;
-            background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+            background: linear-gradient(to bottom, rgba(5,5,7,0.98) 60%, transparent);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
         .nav-logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 4px; color: var(--neon); }
         .nav-right { display: flex; align-items: center; gap: 10px; }
@@ -84,11 +99,11 @@
         .btn-logout:hover { border-color: rgba(255,68,68,0.4); color: #ff8888; }
         .content { padding: 0 16px; }
         .wallet-card {
-            background: linear-gradient(135deg, #111116 0%, #0d1a12 100%);
-            border: 1px solid rgba(0,255,65,0.15);
-            border-radius: 22px; padding: 28px;
+            background: linear-gradient(145deg, #0c1410 0%, #0a1209 50%, #0f1a0e 100%);
+            border: 1px solid rgba(0,255,65,0.2);
+            border-radius: 24px; padding: 28px 28px 24px;
             position: relative; overflow: hidden;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,255,65,0.1);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,255,65,0.05), inset 0 1px 0 rgba(0,255,65,0.12);
             margin-bottom: 20px;
             animation: slideUp 0.5s 0.1s ease both;
         }
@@ -123,9 +138,10 @@
             animation: pulse 1.5s infinite;
         }
         .wallet-amount {
-            font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem;
+            font-family: 'Bebas Neue', sans-serif; font-size: 4rem;
             color: var(--neon); line-height: 1;
-            text-shadow: 0 0 40px rgba(0,255,65,0.3);
+            text-shadow: 0 0 40px rgba(0,255,65,0.4), 0 0 80px rgba(0,255,65,0.15);
+            letter-spacing: 1px;
         }
         .wallet-currency { font-size: 1.5rem; opacity: 0.6; margin-right: 4px; }
         .wallet-meta { margin-top: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -133,39 +149,50 @@
         .wallet-phone span { color: #666; }
         .wallet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; animation: slideUp 0.5s 0.15s ease both; }
         .btn-action {
-            padding: 14px; border-radius: 14px; border: none; font-weight: 700;
-            font-size: 0.85rem; letter-spacing: 1px; cursor: pointer; font-family: 'Outfit', sans-serif;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+            padding: 15px; border-radius: var(--radius-btn); border: none; font-weight: 700;
+            font-size: 0.85rem; letter-spacing: 1.5px; cursor: pointer; font-family: 'Outfit', sans-serif;
+            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s, opacity 0.15s;
             display: flex; align-items: center; justify-content: center; gap: 8px;
+            text-transform: uppercase;
         }
         .btn-action:hover { transform: translateY(-2px); }
         .btn-action:active { transform: translateY(0); opacity: 0.85; }
-        .btn-deposit { background: var(--neon); color: #000; box-shadow: 0 6px 20px rgba(0,255,65,0.2); }
-        .btn-deposit:hover { box-shadow: 0 10px 30px rgba(0,255,65,0.35); }
+        .btn-deposit { background: var(--neon); color: #000; box-shadow: 0 6px 20px rgba(0,255,65,0.25); }
+        .btn-deposit:hover { box-shadow: 0 12px 35px rgba(0,255,65,0.45); transform: translateY(-3px); }
         .btn-withdraw { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
         .section-header {
             display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 14px; animation: slideUp 0.5s 0.2s ease both;
         }
-        .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 2px; }
+        .section-title {
+            font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem;
+            letter-spacing: 3px; color: #e0e0e0;
+        }
         .section-link { font-size: 0.78rem; color: var(--neon); cursor: pointer; font-weight: 500; }
         .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 28px; animation: slideUp 0.5s 0.25s ease both; }
         .quick-card {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 18px 12px; text-align: center;
-            cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+            border-radius: 18px; padding: 20px 12px; text-align: center;
+            cursor: pointer; transition: border-color 0.25s, transform 0.25s, background 0.25s, box-shadow 0.25s;
+            position: relative; overflow: hidden;
         }
-        .quick-card:hover { border-color: rgba(0,255,65,0.3); transform: translateY(-2px); }
+        .quick-card::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 0%, rgba(0,255,65,0.06) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .quick-card:hover { border-color: rgba(0,255,65,0.35); transform: translateY(-3px); background: #121218; box-shadow: 0 12px 30px rgba(0,0,0,0.4); }
+        .quick-card:hover::before { opacity: 1; }
         .quick-icon { font-size: 1.5rem; margin-bottom: 8px; display: block; }
         .quick-label { font-size: 0.72rem; font-weight: 600; color: #ccc; letter-spacing: 0.5px; }
         .tournaments { animation: slideUp 0.5s 0.3s ease both; margin-bottom: 28px; }
         .tournament-card {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 18px; margin-bottom: 10px;
-            cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+            border-radius: 20px; padding: 20px; margin-bottom: 12px;
+            cursor: pointer; transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
             position: relative; overflow: hidden;
         }
-        .tournament-card:hover { border-color: rgba(0,255,65,0.25); transform: translateY(-1px); }
+        .tournament-card:hover { border-color: rgba(0,255,65,0.3); transform: translateY(-2px); box-shadow: 0 16px 40px rgba(0,0,0,0.4); }
         .tournament-card.live::before {
             content: ''; position: absolute; left: 0; top: 0; bottom: 0;
             width: 3px; background: var(--neon);
@@ -199,7 +226,7 @@
         .friend-section { animation: slideUp 0.5s 0.35s ease both; margin-bottom: 24px; }
         .friend-card {
             background: var(--card); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px;
+            border-radius: 22px; padding: 22px;
         }
         .friend-buttons {
             display: grid;
@@ -246,10 +273,12 @@
         .match-item {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 10px;
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
+        .match-item:hover { border-color: var(--border-strong); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
         .match-header {
             display: flex;
             justify-content: space-between;
@@ -384,8 +413,10 @@
         .status-live { background: rgba(0,255,65,0.1); color: var(--neon); border: 1px solid rgba(0,255,65,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
         .status-disputed { background: rgba(255,68,68,0.1); color: #ff6666; border: 1px solid rgba(255,68,68,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
         .status-closed { background: rgba(100,100,100,0.1); color: #777; border: 1px solid rgba(100,100,100,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
-        @keyframes balFlash { 0%,100%{color:var(--neon);} 50%{color:#fff; text-shadow:0 0 20px #fff;} }
-        .balance-flash { animation: balFlash 0.6s ease; }
+        .status-won { background: rgba(0,255,65,0.1); color: var(--neon); border: 1px solid rgba(0,255,65,0.2); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; font-weight: 700; }
+        .status-lost { background: rgba(255,68,68,0.08); color: #ff7777; border: 1px solid rgba(255,68,68,0.18); border-radius: 20px; padding: 3px 10px; font-size: 0.65rem; text-transform: uppercase; }
+        @keyframes balFlash { 0%,100%{color:var(--neon);} 50%{color:#80ffb0; text-shadow:0 0 40px rgba(0,255,65,0.8), 0 0 80px rgba(0,255,65,0.3);} }
+        .balance-flash { animation: balFlash 0.7s ease; }
         .breakdown-box {
             background: rgba(0,255,65,0.04); border: 1px solid rgba(0,255,65,0.12);
             border-radius: 12px; padding: 14px; margin: 14px 0;
@@ -674,20 +705,993 @@
         .confidence-high { color: var(--neon); }
         .confidence-medium { color: #ffb400; }
         .confidence-low { color: #ff8888; }
-    </style>
+
+        /* ══════════════════════════════════════════
+           MATCH STATE CARDS — ENHANCED UX
+        ══════════════════════════════════════════ */
+
+        /* --- Active: waiting for opponent to post results --- */
+        .match-state-waiting-results {
+            margin-top: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 14px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .waiting-results-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .opponent-avatar-ring {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            flex-shrink: 0;
+        }
+        .opponent-avatar-ring svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            animation: ringRotate 3s linear infinite;
+        }
+        @keyframes ringRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .opponent-avatar-inner {
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #aaa;
+        }
+        .waiting-results-text {}
+        .waiting-results-label {
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #555;
+        }
+        .waiting-results-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #bbb;
+            margin-top: 1px;
+        }
+        .waiting-results-sub {
+            font-size: 0.72rem;
+            color: #555;
+            margin-top: 1px;
+        }
+        .waiting-dots {
+            display: inline-flex;
+            gap: 3px;
+            margin-left: 4px;
+        }
+        .waiting-dots span {
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: #555;
+            animation: dotBlink 1.4s infinite both;
+        }
+        .waiting-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .waiting-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBlink {
+            0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1.2); }
+        }
+        .match-state-waiting-results .declare-cta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,255,65,0.05);
+            border: 1px solid rgba(0,255,65,0.12);
+            border-radius: 10px;
+            padding: 10px 14px;
+        }
+        .declare-cta-text {
+            font-size: 0.78rem;
+            color: #aaa;
+        }
+        .declare-cta-text strong { color: var(--neon); }
+        .declare-cta-btn {
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: none;
+            background: var(--neon);
+            color: #000;
+            font-size: 0.75rem;
+            font-weight: 800;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            white-space: nowrap;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .declare-cta-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,255,65,0.3); }
+
+        /* --- Awaiting confirmation: I declared, waiting for opponent to confirm --- */
+        .match-state-confirming {
+            margin-top: 12px;
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+        }
+        .confirming-inner {
+            background: linear-gradient(135deg, rgba(0,255,65,0.06) 0%, rgba(0,255,65,0.02) 100%);
+            border: 1px solid rgba(0,255,65,0.2);
+            border-radius: 14px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .confirming-inner::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 60%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,255,65,0.06), transparent);
+            animation: shimmerSlide 2.5s ease-in-out infinite;
+        }
+        @keyframes shimmerSlide {
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+        .confirming-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .confirming-icon-wrap {
+            width: 42px; height: 42px;
+            position: relative; flex-shrink: 0;
+        }
+        .confirming-ring-svg {
+            width: 100%; height: 100%;
+            position: absolute; inset: 0;
+        }
+        .confirming-ring-track {
+            fill: none;
+            stroke: rgba(0,255,65,0.12);
+            stroke-width: 3;
+        }
+        .confirming-ring-progress {
+            fill: none;
+            stroke: var(--neon);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 110;
+            stroke-dashoffset: 110;
+            transform-origin: center;
+            transform: rotate(-90deg);
+            filter: drop-shadow(0 0 3px rgba(0,255,65,0.6));
+            transition: stroke-dashoffset 1s linear;
+        }
+        .confirming-icon-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        .confirming-text {}
+        .confirming-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: var(--neon);
+            margin-bottom: 3px;
+        }
+        .confirming-badge-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--neon);
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 0 6px rgba(0,255,65,0.6);
+        }
+        .confirming-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #eee;
+        }
+        .confirming-sub {
+            font-size: 0.72rem;
+            color: #777;
+            margin-top: 2px;
+        }
+        .confirming-score-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .confirming-score-team {
+            text-align: center;
+            flex: 1;
+        }
+        .confirming-score-team-name {
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #555;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .confirming-score-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.4rem;
+            line-height: 1;
+            color: #fff;
+        }
+        .confirming-score-num.my { color: var(--neon); text-shadow: 0 0 12px rgba(0,255,65,0.4); }
+        .confirming-score-num.opp { color: #aaa; }
+        .confirming-score-sep {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.8rem;
+            color: #333;
+        }
+        /* ── Big countdown clock — confirming (green) ── */
+        .confirming-clock-block {
+            background: rgba(0,0,0,0.35);
+            border-radius: 12px;
+            padding: 14px 16px 10px;
+            margin-top: 2px;
+        }
+        .confirming-clock-label {
+            font-size: 0.58rem;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: #444;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .confirming-clock-digits {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+        }
+        .clock-unit {
+            text-align: center;
+            min-width: 56px;
+        }
+        .clock-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
+            line-height: 1;
+            color: var(--neon);
+            text-shadow: 0 0 24px rgba(0,255,65,0.4);
+            letter-spacing: 1px;
+            display: block;
+        }
+        .clock-num.urgent-red { color: #ff4444; text-shadow: 0 0 24px rgba(255,68,68,0.5); }
+        .clock-unit-label {
+            font-size: 0.5rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #444;
+            margin-top: 3px;
+        }
+        .clock-sep {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            color: #2a2a2a;
+            padding-bottom: 14px;
+            line-height: 1;
+            margin: 0 2px;
+        }
+        .confirming-countdown-bar {
+            height: 3px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        .confirming-countdown-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon), rgba(0,255,65,0.5));
+            border-radius: 3px;
+            transition: width 1s linear;
+        }
+        .confirming-auto-win-note {
+            text-align: center;
+            font-size: 0.68rem;
+            color: #444;
+            margin-top: 7px;
+        }
+        .confirming-auto-win-note strong { color: var(--neon); font-weight: 700; }
+
+        /* --- Awaiting confirmation: OPPONENT declared, urgent action needed --- */
+        .match-state-urgent {
+            margin-top: 12px;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .urgent-inner {
+            background: linear-gradient(135deg, rgba(255,68,68,0.08) 0%, rgba(255,68,68,0.03) 100%);
+            border: 1px solid rgba(255,68,68,0.3);
+            border-radius: 14px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .urgent-inner::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 14px;
+            border: 1px solid rgba(255,68,68,0.5);
+            animation: urgentBorderPulse 1.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes urgentBorderPulse {
+            0%, 100% { opacity: 0; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.005); }
+        }
+        .urgent-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .urgent-alarm {
+            width: 36px; height: 36px;
+            background: rgba(255,68,68,0.15);
+            border: 1px solid rgba(255,68,68,0.3);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem;
+            animation: alarmPulse 1s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+        @keyframes alarmPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0); }
+            50% { box-shadow: 0 0 0 6px rgba(255,68,68,0.15); }
+        }
+        .urgent-text-group {}
+        .urgent-label {
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: #ff4444;
+        }
+        .urgent-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #eee;
+            margin-top: 2px;
+        }
+        .urgent-sub { font-size: 0.72rem; color: #888; margin-top: 2px; }
+        .urgent-score-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .urgent-score-team { text-align: center; flex: 1; }
+        .urgent-score-team-name {
+            font-size: 0.6rem; letter-spacing: 1px; text-transform: uppercase;
+            color: #555; margin-bottom: 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .urgent-score-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.4rem; line-height: 1; color: #777;
+        }
+        .urgent-score-num.winning { color: #ff6666; text-shadow: 0 0 12px rgba(255,68,68,0.4); }
+        .urgent-score-sep { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: #333; }
+        /* ── Big countdown clock — urgent (red) ── */
+        .urgent-clock-block {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 14px 16px 10px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,68,68,0.1);
+        }
+        .urgent-clock-label {
+            font-size: 0.58rem;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: #883333;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .urgent-clock-digits {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .urgent-clock-sep {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            color: #3a1a1a;
+            padding-bottom: 14px;
+            line-height: 1;
+            margin: 0 2px;
+        }
+        .urgent-bar {
+            height: 3px;
+            background: rgba(255,68,68,0.12);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        .urgent-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, rgba(255,68,68,0.5));
+            border-radius: 3px;
+            transition: width 1s linear;
+        }
+        .urgent-auto-lose-note {
+            text-align: center;
+            font-size: 0.68rem;
+            color: #663333;
+            margin-top: 7px;
+        }
+        .urgent-auto-lose-note strong { color: #ff6666; font-weight: 700; }
+        .urgent-timer-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,68,68,0.06);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+        }
+        .urgent-timer-label { font-size: 0.7rem; color: #888; }
+        .urgent-timer-val {
+            font-weight: 800;
+            font-size: 0.8rem;
+            color: #ff4444;
+        }
+        .urgent-timer-val.countdown-timer { color: #ff4444; }
+        .urgent-action-btn {
+            width: 100%;
+            padding: 13px;
+            border-radius: 10px;
+            border: none;
+            background: linear-gradient(135deg, #ff4444, #cc2222);
+            color: #fff;
+            font-weight: 800;
+            font-size: 0.88rem;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: 0.5px;
+            transition: transform 0.15s, box-shadow 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            animation: urgentBtnPulse 2s ease-in-out infinite;
+        }
+        @keyframes urgentBtnPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(255,68,68,0.2); }
+            50% { box-shadow: 0 4px 25px rgba(255,68,68,0.45); }
+        }
+        .urgent-action-btn:hover { transform: translateY(-1px); }
+
+        /* ══════════════════════════════════════════════════════
+           FLOATING CONFIRM-REQUIRED BANNER
+           Slides up from bottom when opponent has declared
+           and it's your turn to confirm or dispute.
+        ══════════════════════════════════════════════════════ */
+        #confirm-action-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(140%);
+            width: calc(100% - 32px);
+            max-width: 448px;
+            z-index: 500;
+            border-radius: 18px;
+            transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+            opacity: 0;
+            pointer-events: none;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,68,68,0.35);
+        }
+        #confirm-action-banner.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #confirm-action-banner.expired .banner-clock-row { opacity: 0.4; }
+        #confirm-action-banner.expired .banner-btn { opacity: 0.45; pointer-events: none; }
+        #confirm-action-banner.expired .banner-expired-msg { display: block; }
+
+        .banner-inner {
+            background: linear-gradient(145deg, rgba(22,5,5,0.98) 0%, rgba(28,8,8,0.98) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,68,68,0.3);
+            border-radius: 18px;
+            padding: 16px 16px 14px;
+            position: relative;
+            overflow: hidden;
+        }
+        .banner-inner::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent 0%, #ff4444 50%, transparent 100%);
+            animation: bannerTopGlow 2s ease-in-out infinite;
+        }
+        @keyframes bannerTopGlow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; box-shadow: 0 0 12px rgba(255,68,68,0.6); }
+        }
+        .banner-top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .banner-alarm-dot {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: rgba(255,68,68,0.15);
+            border: 1px solid rgba(255,68,68,0.4);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.05rem; flex-shrink: 0;
+            animation: alarmPulse 1.2s ease-in-out infinite;
+        }
+        .banner-text { flex: 1; min-width: 0; }
+        .banner-badge {
+            font-size: 0.55rem;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: #ff4444;
+            margin-bottom: 2px;
+        }
+        .banner-title {
+            font-size: 0.86rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.2;
+        }
+        .banner-sub {
+            font-size: 0.68rem;
+            color: #666;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .banner-dismiss {
+            background: none; border: none;
+            color: #444; font-size: 1.2rem;
+            cursor: pointer; padding: 4px;
+            line-height: 1; flex-shrink: 0;
+            transition: color 0.2s;
+        }
+        .banner-dismiss:hover { color: #777; }
+
+        /* Score display inside banner */
+        .banner-score-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: rgba(0,0,0,0.35);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+        }
+        .banner-score-team {
+            flex: 1; text-align: center;
+        }
+        .banner-score-team-name {
+            font-size: 0.52rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #444;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .banner-score-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.2rem;
+            line-height: 1;
+            color: #cc4444;
+        }
+        .banner-score-num.my-score { color: #aaa; }
+        .banner-score-sep {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.6rem;
+            color: #2a1a1a;
+            flex-shrink: 0;
+            padding: 0 2px;
+        }
+        .banner-result-line {
+            text-align: center;
+            font-size: 0.68rem;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .banner-result-line.win { color: var(--neon); }
+        .banner-result-line.lose { color: #ff6666; }
+
+        /* Countdown row */
+        .banner-clock-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,68,68,0.08);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            transition: opacity 0.3s;
+        }
+        .banner-clock-label-text {
+            font-size: 0.62rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #663333;
+            flex: 1;
+            line-height: 1.3;
+        }
+        .banner-clock-digits {
+            display: flex;
+            align-items: flex-end;
+            gap: 0;
+            flex-shrink: 0;
+        }
+        .banner-digit-group {
+            text-align: center;
+        }
+        .banner-clock-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2rem;
+            line-height: 1;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255,68,68,0.4);
+            display: block;
+            min-width: 2.2ch;
+        }
+        .banner-digit-label {
+            font-size: 0.42rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #442222;
+            display: block;
+            margin-top: 2px;
+        }
+        .banner-clock-colon {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.6rem;
+            color: #331111;
+            line-height: 1;
+            margin: 0 1px;
+            padding-bottom: 6px;
+        }
+
+        /* Progress bar */
+        .banner-progress {
+            height: 3px;
+            background: rgba(255,68,68,0.08);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .banner-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, rgba(255,68,68,0.4));
+            border-radius: 3px;
+            transition: width 1s linear;
+        }
+
+        /* Expired message */
+        .banner-expired-msg {
+            text-align: center;
+            font-size: 0.7rem;
+            color: #553333;
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        /* Action buttons */
+        .banner-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .banner-btn {
+            flex: 1;
+            padding: 12px 8px;
+            border-radius: 11px;
+            border: none;
+            font-weight: 800;
+            font-size: 0.8rem;
+            font-family: 'Outfit', sans-serif;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, opacity 0.3s;
+            letter-spacing: 0.3px;
+        }
+        .banner-btn:active { transform: scale(0.97); }
+        .banner-btn-confirm {
+            background: linear-gradient(135deg, #00ff41, #00cc30);
+            color: #000;
+            box-shadow: 0 4px 18px rgba(0,255,65,0.25);
+        }
+        .banner-btn-confirm:hover { box-shadow: 0 6px 26px rgba(0,255,65,0.4); transform: translateY(-1px); }
+        .banner-btn-dispute {
+            background: rgba(255,68,68,0.1);
+            color: #ff7777;
+            border: 1px solid rgba(255,68,68,0.3);
+        }
+        .banner-btn-dispute:hover { background: rgba(255,68,68,0.18); transform: translateY(-1px); }
+    
+        /* ── Enhanced visual polish ── */
+        .wallet-card::before {
+            content: ''; position: absolute; top: -80px; right: -80px;
+            width: 260px; height: 260px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,255,65,0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .wallet-card::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(to right, transparent, rgba(0,255,65,0.25), transparent);
+        }
+        .wallet-currency {
+            font-size: 1.4rem; opacity: 0.45; margin-right: 2px;
+            font-family: 'Outfit', sans-serif; font-weight: 300;
+        }
+        /* Scan line effect on wallet */
+        @keyframes scanLine {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(400%); }
+        }
+        .wallet-card .scan-line {
+            position: absolute; left: 0; right: 0; height: 60px;
+            background: linear-gradient(to bottom, transparent, rgba(0,255,65,0.03), transparent);
+            animation: scanLine 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        /* Quick icon hover enlarge */
+        .quick-icon {
+            font-size: 1.6rem; margin-bottom: 8px; display: block;
+            transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        .quick-card:hover .quick-icon { transform: scale(1.25) rotate(-5deg); }
+        .quick-label {
+            font-size: 0.7rem; font-weight: 700; color: #ccc;
+            letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        /* Progress bar glow */
+        .progress-fill {
+            box-shadow: 0 0 8px rgba(0,255,65,0.5);
+        }
+        /* Better modal inputs */
+        .modal-input:focus {
+            outline: none;
+            border-color: rgba(0,255,65,0.4);
+            box-shadow: 0 0 0 3px rgba(0,255,65,0.08);
+            background: #131318;
+        }
+        /* Section link polish */
+        .section-link {
+            font-size: 0.72rem; color: var(--neon); cursor: pointer;
+            font-weight: 600; opacity: 0.7; transition: opacity 0.2s;
+            letter-spacing: 0.5px;
+        }
+        .section-link:hover { opacity: 1; }
+        /* Nav logo glow on hover */
+        .nav-logo { transition: text-shadow 0.3s; }
+        .nav-logo:hover { text-shadow: 0 0 20px rgba(0,255,65,0.5); }
+        /* Better bottom nav */
+        .bottom-nav {
+            background: rgba(8,8,12,0.97);
+            border-top: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 -20px 40px rgba(0,0,0,0.5);
+        }
+        .nav-item { transition: color 0.2s, transform 0.2s; }
+        .nav-item:hover { color: rgba(0,255,65,0.6); }
+        .nav-item:active { transform: scale(0.92); }
+        /* Match code style */
+        .match-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem; letter-spacing: 3px; color: var(--neon);
+            background: rgba(0,255,65,0.07); padding: 3px 10px;
+            border-radius: 6px; border: 1px solid rgba(0,255,65,0.15);
+        }
+        /* Declare CTA button */
+        .declare-cta-btn {
+            background: linear-gradient(135deg, var(--neon), #00cc33);
+            box-shadow: 0 4px 16px rgba(0,255,65,0.3);
+        }
+        .declare-cta-btn:hover { box-shadow: 0 6px 22px rgba(0,255,65,0.45); }
+        /* Friend info box */
+        .friend-info {
+            background: rgba(0,255,65,0.04);
+            border: 1px solid rgba(0,255,65,0.1);
+            border-radius: 14px; padding: 14px;
+            font-size: 0.75rem; color: #777; line-height: 1.8;
+        }
+        /* Waiting dots animation improvement */
+        @keyframes dotBlink {
+            0%, 80%, 100% { opacity: 0.15; transform: scale(0.7); }
+            40% { opacity: 1; transform: scale(1.3); }
+        }
+        /* Score OCR display */
+        .ocr-score-display {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Realtime indicator */
+        .realtime-indicator {
+            font-size: 0.58rem; letter-spacing: 1.5px; text-transform: uppercase;
+        }
+        /* Topnav user pill */
+        .nav-user {
+            border: 1px solid rgba(0,255,65,0.15);
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .nav-user:hover { border-color: rgba(0,255,65,0.35); background: #141418; }
+        /* Pending status pulse */
+        .status-live::before {
+            content: '';
+            display: inline-block;
+            width: 6px; height: 6px;
+            background: var(--neon);
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 1.5s infinite;
+            vertical-align: middle;
+        }
+        /* Improve modal sheet */
+        .modal-sheet {
+            background: #0d0d12;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-bottom: none;
+        }
+        /* Btn green / red */
+        .btn-green {
+            background: linear-gradient(135deg, var(--neon), #00cc33);
+            color: #000; box-shadow: 0 4px 16px rgba(0,255,65,0.25);
+        }
+        .btn-green:hover { box-shadow: 0 6px 22px rgba(0,255,65,0.4); transform: translateY(-1px); }
+        .btn-red {
+            background: rgba(255,68,68,0.1); color: #ff7777;
+            border: 1px solid rgba(255,68,68,0.25);
+            transition: background 0.2s, transform 0.2s;
+        }
+        .btn-red:hover { background: rgba(255,68,68,0.18); transform: translateY(-1px); }
+
+        
+        /* ── Loading skeletons ── */
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #111116 25%, #1a1a22 50%, #111116 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease infinite;
+            border-radius: 8px;
+        }
+        .skeleton-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 20px; padding: 20px; margin-bottom: 12px;
+        }
+        /* ── Empty state ── */
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 10px; padding: 40px 20px; text-align: center;
+        }
+        .empty-state-icon { font-size: 2.5rem; opacity: 0.4; }
+        .empty-state-text { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+        .empty-state-cta {
+            margin-top: 4px; padding: 10px 22px; border-radius: 12px;
+            background: rgba(0,255,65,0.08); border: 1px solid rgba(0,255,65,0.2);
+            color: var(--neon); font-size: 0.78rem; font-weight: 700; cursor: pointer;
+            font-family: 'Outfit', sans-serif; transition: background 0.2s;
+        }
+        .empty-state-cta:hover { background: rgba(0,255,65,0.14); }
+
+        </style>
 </head>
 <body>
 <div id="loading-screen">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:6px;color:rgba(0,255,65,0.9);text-shadow:0 0 30px rgba(0,255,65,0.4);margin-bottom:20px;">VUMBUA</div>
     <div class="spinner"></div>
-    <div class="loading-text">Verifying session...</div>
+    <div class="loading-text" style="margin-top:12px;">Loading your wallet...</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     FLOATING CONFIRM-REQUIRED BANNER
+     Shown when opponent has declared and it's your turn.
+     Managed by showConfirmBanner() / hideConfirmBanner()
+══════════════════════════════════════════════════════════ -->
+<div id="confirm-action-banner" role="alert" aria-live="assertive">
+    <div class="banner-inner">
+        <div class="banner-top-row">
+            <div class="banner-alarm-dot">⚠️</div>
+            <div class="banner-text">
+                <div class="banner-badge">⚡ Action Required</div>
+                <div class="banner-title" id="banner-title">Opponent posted results</div>
+                <div class="banner-sub" id="banner-sub">Confirm or dispute before time runs out</div>
+            </div>
+            <button class="banner-dismiss" id="banner-dismiss-btn" aria-label="Dismiss" title="Dismiss (banner will reappear on reload)">✕</button>
+        </div>
+
+        <!-- Score declared by opponent -->
+        <div class="banner-score-row">
+            <div class="banner-score-team">
+                <div class="banner-score-team-name" id="banner-my-team">YOU</div>
+                <div class="banner-score-num my-score" id="banner-my-score">?</div>
+            </div>
+            <div class="banner-score-sep">—</div>
+            <div class="banner-score-team">
+                <div class="banner-score-team-name" id="banner-opp-team">OPP</div>
+                <div class="banner-score-num" id="banner-opp-score">?</div>
+            </div>
+        </div>
+        <div class="banner-result-line" id="banner-result-line"></div>
+
+        <!-- Countdown -->
+        <div class="banner-clock-row" id="banner-clock-row">
+            <div class="banner-clock-label-text">⏰ Time left<br>to respond</div>
+            <div class="banner-clock-digits">
+                <div class="banner-digit-group">
+                    <span class="banner-clock-num" id="banner-min">--</span>
+                    <span class="banner-digit-label">min</span>
+                </div>
+                <span class="banner-clock-colon">:</span>
+                <div class="banner-digit-group">
+                    <span class="banner-clock-num" id="banner-sec">--</span>
+                    <span class="banner-digit-label">sec</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shrinking bar -->
+        <div class="banner-progress">
+            <div class="banner-progress-fill" id="banner-progress-fill" style="width:100%"></div>
+        </div>
+
+        <div class="banner-expired-msg" id="banner-expired-msg">
+            ⏱ Time expired — this match may be auto-settled soon.
+        </div>
+
+        <!-- Buttons -->
+        <div class="banner-actions">
+            <button class="banner-btn banner-btn-confirm" id="banner-confirm-btn">✅ Confirm Score</button>
+            <button class="banner-btn banner-btn-dispute" id="banner-dispute-btn">⚔️ Dispute</button>
+        </div>
+    </div>
 </div>
 
 <div class="pitch-bg"></div>
 <div class="pitch-lines"></div>
+<div class="noise-overlay"></div>
 
 <div class="app" id="main-content" style="display:none;">
     <nav class="topnav">
-        <span class="nav-logo">VUMBUA</span>
+        <span class="nav-logo">VUMBUA<span style="color:rgba(0,255,65,0.4);font-size:0.5em;vertical-align:super;letter-spacing:0px;">⚽</span></span>
         <div class="nav-right">
             <div class="nav-user" onclick="openProfileModal()">
                 <div class="avatar" id="avatar-letter">P</div>
@@ -698,20 +1702,28 @@
     </nav>
     <div class="content">
         <div class="wallet-card">
-            <div class="wallet-label">
-                Available Balance
-                <span class="realtime-indicator" id="realtime-indicator" title="Live updates active">
+            <div class="scan-line"></div>
+            <div class="wallet-label" style="margin-bottom:14px;">
+                <span style="font-size:0.58rem;letter-spacing:3px;text-transform:uppercase;color:#333;">Available Balance</span>
+                <span class="realtime-indicator" id="realtime-indicator" title="Live updates active" style="color:rgba(0,255,65,0.7);">
                     <span class="dot"></span> LIVE
                 </span>
             </div>
             <div class="wallet-amount">
                 <span class="wallet-currency">KES</span><span id="balance">0.00</span>
             </div>
-            <div class="wallet-meta">
-                <div class="wallet-phone">Team: <span id="team-display">—</span></div>
+            <div class="wallet-meta" style="margin-top:18px;display:flex;justify-content:space-between;align-items:flex-end;">
+                <div class="wallet-phone" style="font-size:0.72rem;color:#333;">
+                    <span style="color:#3a3a4a;letter-spacing:1px;text-transform:uppercase;font-size:0.6rem;">Team</span><br>
+                    <span id="team-display" style="color:#666;font-weight:600;">—</span>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:#2a2a38;margin-bottom:3px;">Username</div>
+                    <div style="font-size:0.72rem;color:#3a3a50;font-weight:600;" id="wallet-username-display">@player</div>
+                </div>
             </div>
         </div>
-        <div class="wallet-actions">
+        <div class="wallet-actions" style="margin-bottom:24px;">
             <button class="btn-action btn-deposit" onclick="openDepositModal()">
                 <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                 Deposit
@@ -722,7 +1734,7 @@
             </button>
         </div>
 
-        <div class="section-header">
+        <div class="section-header" style="margin-bottom:12px;">
             <div class="section-title">QUICK PLAY</div>
         </div>
         <div class="quick-grid">
@@ -763,10 +1775,11 @@
                         🎯 Join Challenge
                     </button>
                 </div>
-                <div class="friend-info">
-                    💰 Both players stake equal amounts<br/>
-                    🏆 Winner takes the pot (minus 10% fee)<br/>
-                    ⏱️ Match codes expire in 30 minutes
+                <div class="friend-info" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:16px;">
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>💰</span><span>Equal stakes from both players</span></div>
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>🏆</span><span>Winner takes 90% of the pot</span></div>
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>📸</span><span>Upload screenshot to settle</span></div>
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>⏱️</span><span>Codes expire in 30 minutes</span></div>
                 </div>
             </div>
         </div>
@@ -1025,70 +2038,32 @@
     <div class="modal-sheet" style="max-height:92vh;overflow-y:auto;">
         <div class="modal-handle"></div>
 
-        <!-- Step 1: Enter the score -->
-        <div class="step active" id="declare-step-1">
-            <div class="modal-title">WHAT WAS THE SCORE? ⚽</div>
-            <p class="modal-subtitle" id="declare-match-subtitle">Enter the final score from your match.</p>
+        <!-- Step 1: Match info (hidden, skipped) -->
+        <div class="step" id="declare-step-1" style="display:none;">
             <div class="match-details-box" id="report-match-details"></div>
-
-            <!-- Score pickers -->
-            <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:24px 0;">
-                <!-- My score -->
-                <div style="text-align:center;">
-                    <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;" id="my-team-label">MY GOALS</div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <button onclick="adjustScore('my',-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">−</button>
-                        <div id="my-score-display" style="font-family:'Bebas Neue',sans-serif;font-size:4rem;color:var(--neon);text-shadow:0 0 20px rgba(0,255,65,0.4);min-width:52px;text-align:center;line-height:1;">0</div>
-                        <button onclick="adjustScore('my',1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">+</button>
-                    </div>
-                </div>
-
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#444;padding-top:20px;">—</div>
-
-                <!-- Opponent score -->
-                <div style="text-align:center;">
-                    <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;" id="opp-team-label">OPP GOALS</div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <button onclick="adjustScore('opp',-1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">−</button>
-                        <div id="opp-score-display" style="font-family:'Bebas Neue',sans-serif;font-size:4rem;color:#ff4444;text-shadow:0 0 20px rgba(255,68,68,0.3);min-width:52px;text-align:center;line-height:1;">0</div>
-                        <button onclick="adjustScore('opp',1)" style="width:36px;height:36px;border-radius:50%;border:1px solid #333;background:transparent;color:#fff;font-size:1.2rem;cursor:pointer;">+</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Result label -->
-            <div id="score-result-label" style="text-align:center;font-size:0.9rem;color:#888;margin-bottom:20px;">Draw</div>
-
-            <div class="balance-insufficient" id="declare-error-1"></div>
-            <button class="btn-mpesa" style="background:var(--neon);color:#000;" onclick="goToDeclareStep2()">
-                NEXT: UPLOAD SCREENSHOT →
-            </button>
-            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Cancel</button>
         </div>
 
         <!-- Step 2: Upload screenshot -->
         <div class="step" id="declare-step-2">
             <div class="modal-title">UPLOAD SCREENSHOT 📲</div>
-            <p class="modal-subtitle">Upload the Full Time results screen from eFootball.</p>
+            <p class="modal-subtitle">Tap below to upload — Gemini reads the score automatically.</p>
 
-            <!-- Score summary -->
-            <div id="score-summary-box" style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.2);border-radius:12px;padding:14px 18px;text-align:center;margin-bottom:18px;">
-                <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:6px;">Your declared score</div>
-                <div id="score-summary-display" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:4px;">0 — 0</div>
-                <div id="score-summary-result" style="font-size:0.8rem;color:#aaa;margin-top:4px;"></div>
+            <!-- Match details for context -->
+            <div id="score-summary-box" class="match-details-box" style="margin-bottom:18px;" id="upload-match-context">
+                <div id="report-match-details-mini"></div>
             </div>
 
             <!-- Upload zone -->
             <div class="modal-input-group">
-                <div class="screenshot-upload-zone" id="upload-zone">
+                <div class="screenshot-upload-zone" id="upload-zone" style="padding:32px 20px;">
                     <input type="file" id="screenshot-file-input" accept="image/jpeg,image/png,image/webp"
                         onchange="handleScreenshotSelected(this.files[0])">
-                    <span class="upload-icon" id="upload-icon">📲</span>
+                    <span class="upload-icon" id="upload-icon" style="font-size:2.8rem;">📲</span>
                     <div class="upload-label" id="upload-label">
-                        <strong>Tap to upload screenshot</strong><br>
-                        <span style="font-size:0.78rem;color:#555;margin-top:2px;display:block;">Full Time results screen — not a photo of your TV</span>
+                        <strong style="font-size:0.9rem;">Tap to upload screenshot</strong><br>
+                        <span style="font-size:0.75rem;color:#444;margin-top:4px;display:block;">Upload the "Full Time" screen from eFootball</span>
                     </div>
-                    <div class="upload-hint">
+                    <div class="upload-hint" style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(0,255,65,0.08);">
                         <span>📷 JPEG</span><span>·</span><span>🖼 PNG</span><span>·</span><span>Max 10MB</span>
                     </div>
                     <img class="screenshot-thumb" id="screenshot-thumb" alt="preview">
@@ -1096,32 +2071,32 @@
                 <div class="upload-progress" id="upload-progress">
                     <div class="upload-progress-fill indeterminate" id="upload-progress-fill"></div>
                 </div>
+                <div style="text-align:center;margin-top:10px;font-size:0.7rem;color:#333;letter-spacing:1px;">
+                    🤖 Gemini AI reads the score automatically
+                </div>
             </div>
 
             <div class="balance-insufficient" id="declare-error-2"></div>
-            <button class="btn-mpesa" id="declare-submit-btn" style="background:var(--neon);color:#000;" onclick="submitScoreDeclaration()">
-                ✅ DECLARE MY SCORE
+            <button class="btn-mpesa" id="declare-submit-btn" style="background:var(--neon);color:#000;font-size:0.9rem;letter-spacing:1.5px;" onclick="submitScoreDeclaration()">
+                ✅ SUBMIT RESULT
             </button>
-            <button class="btn-cancel" onclick="switchStep('report-result-modal',1)">← Back</button>
+            <button class="btn-cancel" onclick="closeModal('report-result-modal')">← Close</button>
         </div>
 
         <!-- Step 3: Waiting for opponent -->
         <div class="step" id="declare-step-3" style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:12px;">⏳</div>
-            <div class="modal-title">WAITING FOR OPPONENT</div>
-            <p class="modal-subtitle">They have 2 hours to confirm or dispute your score.</p>
-            <div style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.15);border-radius:12px;padding:18px;margin:20px 0;">
-                <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:8px;">You declared</div>
-                <div id="declared-score-recap" style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fff;letter-spacing:4px;">0 — 0</div>
-                <div id="declared-result-recap" style="font-size:0.85rem;margin-top:6px;font-weight:600;"></div>
+            <div style="font-size:3rem;margin-bottom:12px;animation:pulse 2s infinite;">⏳</div>
+            <div class="modal-title" style="margin-bottom:6px;">RESULT SUBMITTED</div>
+            <p class="modal-subtitle" style="margin-bottom:24px;">Your opponent has 2 hours to confirm or dispute.</p>
+            <div style="background:linear-gradient(135deg,rgba(0,255,65,0.07),rgba(0,255,65,0.03));border:1px solid rgba(0,255,65,0.2);border-radius:16px;padding:20px;margin:0 0 20px;">
+                <div style="font-size:0.58rem;letter-spacing:3px;text-transform:uppercase;color:#3a3a4a;margin-bottom:10px;">Gemini detected</div>
+                <div id="declared-score-recap" style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:#fff;letter-spacing:6px;text-shadow:0 0 20px rgba(255,255,255,0.1);">—</div>
+                <div id="declared-result-recap" style="font-size:0.82rem;margin-top:8px;font-weight:600;"></div>
             </div>
-            <div style="font-size:0.8rem;color:#888;line-height:1.7;margin-bottom:8px;">
-                Your opponent will see this score and either confirm it or dispute it.
+            <div style="background:rgba(255,180,0,0.06);border:1px solid rgba(255,180,0,0.15);border-radius:12px;padding:14px;margin-bottom:20px;font-size:0.8rem;color:#aaa;line-height:1.6;">
+                ⚡ You <strong style="color:#ffb400;">auto-win</strong> in <strong class="countdown-timer" id="declare-countdown" data-deadline="">—</strong> if they don't respond.
             </div>
-            <div style="background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);border-radius:10px;padding:12px;margin-bottom:20px;font-size:0.82rem;">
-                ⚡ Auto-win in <strong class="countdown-timer" id="declare-countdown" data-deadline="">30:00</strong> if they don't respond.
-            </div>
-            <button class="btn-cancel" onclick="closeModal('report-result-modal')">Close</button>
+            <button class="btn-cancel" style="font-weight:700;" onclick="closeModal('report-result-modal')">← Back to Dashboard</button>
         </div>
 
         <!-- Step 4: Opponent needs to confirm (shown to the OPPONENT) -->
@@ -1270,11 +2245,16 @@
     // --- Enhanced fetch with timeout ---
     async function fetchWithAuth(url, options = {}, timeoutMs = 8000) {
         if (!authToken) { window.location.href = '/login'; return; }
+        // For multipart uploads, let the browser set Content-Type (with boundary).
+        // Callers signal this by passing headers: {} or headers: { 'Content-Type': null }
+        const isMultipart = options.body instanceof FormData;
         const headers = {
-            'Content-Type': 'application/json',
+            ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
             'Authorization': `Bearer ${authToken}`,
             ...options.headers
         };
+        // Remove any explicit null/undefined header values (clean signal from caller)
+        Object.keys(headers).forEach(k => { if (headers[k] == null) delete headers[k]; });
         const fullUrl = url.startsWith('http') ? url : `${API}${url}`;
         
         const controller = new AbortController();
@@ -1398,6 +2378,8 @@
             console.log('👤 Loaded user:', currentUser.id, currentUser.phone);
             
             currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0,8) || 'Player';
+            const walletUsernameEl = document.getElementById('wallet-username-display');
+            if (walletUsernameEl) walletUsernameEl.textContent = '@' + currentUsername;
             document.getElementById('username-display').innerText = '@' + currentUsername;
             document.getElementById('avatar-letter').innerText = currentUsername.charAt(0).toUpperCase();
             if (currentUser.phone) {
@@ -1554,6 +2536,8 @@
                 const profile = await res.json();
                 currentTeam = profile.team_name || '';
                 document.getElementById('team-display').innerText = currentTeam || '—';
+                const walletUsernameEl2 = document.getElementById('wallet-username-display');
+                if (walletUsernameEl2) walletUsernameEl2.textContent = '@' + currentUsername;
                 document.getElementById('profile-username').value = escapeHtml(currentUsername);
                 document.getElementById('profile-team').value = escapeHtml(currentTeam);
             }
@@ -1600,7 +2584,11 @@
             console.error('Error loading tournaments:', err);
             const container = document.getElementById('tournament-list');
             container.innerHTML = '';
-            container.appendChild(createElementSafe('div', { class: 'tournament-card' }, 'No active tournaments right now.'));
+            const noTourney = document.createElement('div');
+            noTourney.className = 'tournament-card';
+            noTourney.style.cssText = 'text-align:center;padding:28px;color:#444;font-size:0.82rem;';
+            noTourney.innerHTML = '<div style="font-size:2rem;margin-bottom:8px;opacity:0.3;">🏆</div>No active tournaments right now.<br><span style="font-size:0.72rem;color:#333;">Check back soon!</span>';
+            container.appendChild(noTourney);
         }
     }
 
@@ -1608,7 +2596,11 @@
         const container = document.getElementById('tournament-list');
         container.innerHTML = '';
         if (!tournaments || tournaments.length === 0) {
-            container.appendChild(createElementSafe('div', { class: 'tournament-card' }, 'No active tournaments right now.'));
+            const noTourney = document.createElement('div');
+            noTourney.className = 'tournament-card';
+            noTourney.style.cssText = 'text-align:center;padding:28px;color:#444;font-size:0.82rem;';
+            noTourney.innerHTML = '<div style="font-size:2rem;margin-bottom:8px;opacity:0.3;">🏆</div>No active tournaments right now.<br><span style="font-size:0.72rem;color:#333;">Check back soon!</span>';
+            container.appendChild(noTourney);
             return;
         }
         tournaments.forEach(t => {
@@ -2073,6 +3065,8 @@
             if (!res) return;
             const matches = await res.json();
             renderMyMatches(matches);
+            // Show floating banner if any match needs our response
+            checkAndShowConfirmBanner(matches);
         } catch (e) {
             console.warn('loadMyFriendMatches failed:', e);
         }
@@ -2082,145 +3076,754 @@
         const container = document.getElementById('my-matches-list');
         container.innerHTML = '';
         if (!matches || matches.length === 0) {
-            container.appendChild(createElementSafe('div', { class: 'friend-info', style: 'text-align:center;' }, 'No matches yet. Create or join one!'));
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'empty-state';
+            emptyDiv.innerHTML = `
+                <div class="empty-state-icon">⚽</div>
+                <div class="empty-state-text">No matches yet.<br>Challenge a friend to win KES!</div>
+                <button class="empty-state-cta" onclick="openCreateMatchModal()">⚔️ Create Challenge</button>
+            `;
+            container.appendChild(emptyDiv);
             return;
         }
 
-        // Show only the 3 most recent matches
         const displayMatches = matches.slice(0, 3);
         if (matches.length > 3) {
             const moreEl = createElementSafe('div', { class: 'friend-info', style: 'text-align:center;font-size:0.75rem;margin-bottom:8px;' }, `Showing 3 of ${matches.length} matches`);
             container.appendChild(moreEl);
         }
+
         displayMatches.forEach(m => {
             const item = createElementSafe('div', { class: 'match-item' });
+            const isCreator = m.creator_id === currentUser.id;
+            const opponentName = isCreator
+                ? (m.joiner?.username || 'Waiting...')
+                : (m.creator?.username || 'Unknown');
+            const opponentInitial = opponentName.charAt(0).toUpperCase();
+            const myTeam   = isCreator ? (m.creator_team || 'My Team') : (m.joiner_team || 'My Team');
+            const oppTeam  = isCreator ? (m.joiner_team  || 'Opponent') : (m.creator_team || 'Opponent');
 
+            // ── Header: code + status badge ───────────────────────────────
             const headerDiv = createElementSafe('div', { class: 'match-header' });
-            headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, m.match_code));
-            const statusSpan = createElementSafe('span', { class: `match-status status-${m.status}` }, m.status);
+            const codeDisplay = m.match_code ? m.match_code.replace('VUM-', '') : '—';
+            headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, codeDisplay));
+
+            // Friendly status labels
+            const _completedYouWon = m.status === 'completed' && m.winner_id === currentUser.id;
+            const statusLabels = {
+                pending:               'Waiting',
+                active:                'Live',
+                awaiting_confirmation: m.declared_score_by === currentUser.id ? 'Confirming…' : 'Respond!',
+                penalty_shootout:      'Penalties',
+                disputed:              'Disputed',
+                completed:             _completedYouWon ? '🏆 Won' : '😔 Lost',
+                cancelled:             'Cancelled',
+            };
+            const statusCssMap = {
+                pending:               'status-pending',
+                active:                'status-live',
+                awaiting_confirmation: m.declared_score_by === currentUser.id ? 'status-live' : 'status-disputed',
+                penalty_shootout:      'status-pending',
+                disputed:              'status-disputed',
+                completed:             _completedYouWon ? 'status-won' : 'status-lost',
+                cancelled:             'status-closed',
+            };
+            const statusSpan = createElementSafe('span', { class: `match-status ${statusCssMap[m.status] || 'status-closed'}` }, statusLabels[m.status] || m.status);
             headerDiv.appendChild(statusSpan);
             item.appendChild(headerDiv);
 
-            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Wager: KES ${m.wager_amount}`));
-            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Winner prize: KES ${m.winner_prize}`));
-            const opponentName = (m.creator_id === currentUser.id)
-                ? (m.joiner?.username || 'Waiting...')
-                : (m.creator?.username || 'Unknown');
-            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `Opponent: ${opponentName}`));
+            // ── Sub-info row ───────────────────────────────────────────────
+            item.appendChild(createElementSafe('div', { class: 'match-detail' }, `KES ${m.wager_amount} wager · Prize KES ${m.winner_prize}`));
 
-            if (m.status === 'pending' && m.creator_id === currentUser.id) {
+            // ── State-specific rich cards ──────────────────────────────────
+            if (m.status === 'pending' && isCreator) {
+                // Pending: waiting for someone to join
                 const actionsDiv = createElementSafe('div', { class: 'match-actions' });
-                const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel');
-                cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancelPendingMatch(m.id); });
+                const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel & Refund');
+                cancelBtn.addEventListener('click', e => { e.stopPropagation(); cancelPendingMatch(m.id); });
                 actionsDiv.appendChild(cancelBtn);
                 item.appendChild(actionsDiv);
+
             } else if (m.status === 'active') {
-                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
-                if (m.challenge_deadline && !m.challenge_uploaded && m.first_upload_winner_id) {
-                    const iAmFirstUploader = (m.first_upload_winner_id === currentUser.id);
-                    if (iAmFirstUploader) {
-                        const waitEl = createElementSafe('div', { style: 'font-size:0.78rem;color:#ffb400;padding:6px 0;' }, '⏳ Score submitted — waiting for opponent\'s screenshot');
-                        actionsDiv.appendChild(waitEl);
-                    } else {
-                        const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Your Screenshot');
-                        reportBtn.style.cssText = 'animation: pulse 1.5s infinite;';
-                        reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openChallengeUploadModal(m.id); });
-                        actionsDiv.appendChild(reportBtn);
-                        const nudge = createElementSafe('div', { style: 'font-size:0.72rem;color:var(--neon);margin-top:4px;' }, '🟢 Opponent uploaded — your turn to confirm!');
-                        actionsDiv.appendChild(nudge);
-                    }
+                // ── ACTIVE: Both joined, results not yet posted ────────────
+                const stateCard = document.createElement('div');
+                stateCard.className = 'match-state-waiting-results';
+
+                // Opponent avatar with spinning ring
+                const headerRow = document.createElement('div');
+                headerRow.className = 'waiting-results-header';
+
+                const avatarRing = document.createElement('div');
+                avatarRing.className = 'opponent-avatar-ring';
+                avatarRing.innerHTML = `
+                    <svg viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="19" cy="19" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
+                        <circle cx="19" cy="19" r="16" fill="none" stroke="rgba(100,100,100,0.4)" stroke-width="2.5"
+                            stroke-dasharray="25 75" stroke-linecap="round"
+                            style="transform-origin:center;animation:ringRotate 2s linear infinite;"/>
+                    </svg>
+                    <div class="opponent-avatar-inner">${escapeHtml(opponentInitial)}</div>`;
+
+                const textGroup = document.createElement('div');
+                textGroup.className = 'waiting-results-text';
+                const opLabel = createElementSafe('div', { class: 'waiting-results-label' }, 'Playing against');
+                const opNameEl = document.createElement('div');
+                opNameEl.className = 'waiting-results-name';
+                opNameEl.textContent = opponentName;
+                const opSub = document.createElement('div');
+                opSub.className = 'waiting-results-sub';
+                opSub.innerHTML = `Waiting for results<span class="waiting-dots"><span></span><span></span><span></span></span>`;
+
+                textGroup.appendChild(opLabel);
+                textGroup.appendChild(opNameEl);
+                textGroup.appendChild(opSub);
+                headerRow.appendChild(avatarRing);
+                headerRow.appendChild(textGroup);
+                stateCard.appendChild(headerRow);
+
+                // ── Declare CTA — or Pending Payout if screenshot already uploaded ──
+                const declareCta = document.createElement('div');
+                declareCta.className = 'declare-cta';
+
+                if (m.screenshot_url) {
+                    // Screenshot already submitted — show pending payout state
+                    declareCta.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,180,0,0.08);border:1px solid rgba(255,180,0,0.2);border-radius:10px;">
+                            <span style="font-size:1.3rem;">⏳</span>
+                            <div>
+                                <div style="font-size:0.82rem;font-weight:700;color:#ffb400;letter-spacing:0.5px;">Pending Payout</div>
+                                <div style="font-size:0.72rem;color:#888;margin-top:2px;">Screenshot received — admin is verifying your result</div>
+                            </div>
+                        </div>`;
                 } else {
-                    const reportBtn = createElementSafe('button', { class: 'btn btn-green' }, 'Report Result');
-                    reportBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
-                    actionsDiv.appendChild(reportBtn);
+                    // No screenshot yet — show report button
+                    const ctaText = document.createElement('div');
+                    ctaText.className = 'declare-cta-text';
+                    ctaText.innerHTML = `Match done? <strong>Post your result</strong>`;
+                    const ctaBtn = createElementSafe('button', { class: 'declare-cta-btn' }, '⚽ Report Result');
+                    ctaBtn.addEventListener('click', e => { e.stopPropagation(); openReportResultModal(m.id); });
+                    declareCta.appendChild(ctaText);
+                    declareCta.appendChild(ctaBtn);
                 }
-                item.appendChild(actionsDiv);
+
+                stateCard.appendChild(declareCta);
+                item.appendChild(stateCard);
+
             } else if (m.status === 'awaiting_confirmation') {
-                const actionsDiv = createElementSafe('div', { class: 'match-actions' });
                 const iDeclared = m.declared_score_by === currentUser.id;
-                const isCreator = m.creator_id === currentUser.id;
-                const myScore = isCreator ? m.declared_score_creator : m.declared_score_joiner;
-                const oppScore = isCreator ? m.declared_score_joiner : m.declared_score_creator;
+                const myScore  = isCreator ? m.declared_score_creator : m.declared_score_joiner;
+                const oppScore = isCreator ? m.declared_score_joiner  : m.declared_score_creator;
+                const deadline = m.score_confirm_deadline;
+                const totalMs  = 30 * 60 * 1000; // 30 min window
 
                 if (iDeclared) {
-                    // I declared — show countdown waiting for opponent
-                    const countdownEl = createElementSafe('div', {
-                        class: 'confirm-countdown waiting',
-                        'data-deadline': m.score_confirm_deadline
-                    }, '');
-                    const cdLabel = document.createElement('div');
-                    cdLabel.style.cssText = 'font-size:0.7rem;letter-spacing:1.5px;text-transform:uppercase;color:#ffb400;margin-bottom:4px;';
-                    cdLabel.textContent = '⏳ Waiting for opponent';
-                    countdownEl.appendChild(cdLabel);
-                    const cdScore = document.createElement('div');
-                    cdScore.style.cssText = 'font-size:0.85rem;color:#ccc;';
-                    cdScore.textContent = 'You declared ';
-                    const cdStrong = document.createElement('strong');
-                    cdStrong.style.color = '#fff';
-                    cdStrong.textContent = `${myScore ?? '?'} – ${oppScore ?? '?'}`;
-                    cdScore.appendChild(cdStrong);
-                    countdownEl.appendChild(cdScore);
-                    const cdTimer = document.createElement('div');
-                    cdTimer.style.cssText = 'font-size:0.75rem;color:#888;margin-top:4px;';
-                    cdTimer.textContent = 'Auto-win in ';
-                    const cdTimerStrong = document.createElement('strong');
-                    cdTimerStrong.className = 'countdown-timer';
-                    cdTimerStrong.dataset.deadline = m.score_confirm_deadline;
-                    cdTimerStrong.textContent = '...';
-                    cdTimer.appendChild(cdTimerStrong);
-                    countdownEl.appendChild(cdTimer);
-                    actionsDiv.appendChild(countdownEl);
+                    // ── CONFIRMING STATE: I declared, waiting for opponent ─
+                    const stateCard = document.createElement('div');
+                    stateCard.className = 'match-state-confirming';
+
+                    const inner = document.createElement('div');
+                    inner.className = 'confirming-inner';
+
+                    // Top row: ring icon + text
+                    const topRow = document.createElement('div');
+                    topRow.className = 'confirming-top';
+
+                    const iconWrap = document.createElement('div');
+                    iconWrap.className = 'confirming-icon-wrap';
+                    // SVG ring — progress updated by tickAllClocks
+                    const circumference = 2 * Math.PI * 17.5; // r=17.5
+                    iconWrap.innerHTML = `
+                        <svg class="confirming-ring-svg" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg">
+                            <circle class="confirming-ring-track" cx="21" cy="21" r="17.5"/>
+                            <circle class="confirming-ring-progress" cx="21" cy="21" r="17.5"
+                                stroke-dasharray="${circumference.toFixed(1)}"
+                                stroke-dashoffset="${circumference.toFixed(1)}"
+                                style="transform:rotate(-90deg);transform-origin:center;"/>
+                        </svg>
+                        <div class="confirming-icon-center">⏳</div>`;
+                    // Set deadline after innerHTML so it's never escaped
+                    const ringEl = iconWrap.querySelector('.confirming-ring-progress');
+                    if (ringEl && deadline) {
+                        ringEl.setAttribute('data-deadline', deadline);
+                        ringEl.setAttribute('data-total', String(totalMs));
+                    }
+
+                    const textGroup = document.createElement('div');
+                    textGroup.className = 'confirming-text';
+                    const badge = document.createElement('div');
+                    badge.className = 'confirming-badge';
+                    badge.innerHTML = `<span class="confirming-badge-dot"></span> CONFIRMING`;
+                    const title = createElementSafe('div', { class: 'confirming-title' }, `Waiting for ${opponentName}`);
+                    const sub = createElementSafe('div', { class: 'confirming-sub' }, `They have 30 min to confirm or dispute`);
+                    textGroup.appendChild(badge);
+                    textGroup.appendChild(title);
+                    textGroup.appendChild(sub);
+
+                    topRow.appendChild(iconWrap);
+                    topRow.appendChild(textGroup);
+                    inner.appendChild(topRow);
+
+                    // Score display
+                    const scoreDisplay = document.createElement('div');
+                    scoreDisplay.className = 'confirming-score-display';
+                    scoreDisplay.innerHTML = `
+                        <div class="confirming-score-team">
+                            <div class="confirming-score-team-name">${escapeHtml(myTeam)}</div>
+                            <div class="confirming-score-num my">${myScore ?? '?'}</div>
+                        </div>
+                        <div class="confirming-score-sep">—</div>
+                        <div class="confirming-score-team">
+                            <div class="confirming-score-team-name">${escapeHtml(oppTeam)}</div>
+                            <div class="confirming-score-num opp">${oppScore ?? '?'}</div>
+                        </div>`;
+                    inner.appendChild(scoreDisplay);
+
+                    // Big clock countdown block — built via DOM (not innerHTML) so deadline isn't escaped/corrupted
+                    const clockBlock = document.createElement('div');
+                    clockBlock.className = 'confirming-clock-block';
+
+                    const clockLabel = document.createElement('div');
+                    clockLabel.className = 'confirming-clock-label';
+                    clockLabel.textContent = '⏳ Time left for opponent to respond';
+                    clockBlock.appendChild(clockLabel);
+
+                    const clockDigits = document.createElement('div');
+                    clockDigits.className = 'confirming-clock-digits';
+
+                    // MIN unit
+                    const minUnit = document.createElement('div');
+                    minUnit.className = 'clock-unit';
+                    const minNum = document.createElement('span');
+                    minNum.className = 'clock-num';
+                    minNum.setAttribute('data-clock-part', 'min');
+                    if (deadline) minNum.setAttribute('data-deadline', deadline);
+                    minNum.textContent = deadline ? '--' : '??';
+                    const minLabel = document.createElement('div');
+                    minLabel.className = 'clock-unit-label';
+                    minLabel.textContent = 'min';
+                    minUnit.appendChild(minNum);
+                    minUnit.appendChild(minLabel);
+
+                    const sep = document.createElement('span');
+                    sep.className = 'clock-sep';
+                    sep.textContent = ':';
+
+                    // SEC unit
+                    const secUnit = document.createElement('div');
+                    secUnit.className = 'clock-unit';
+                    const secNum = document.createElement('span');
+                    secNum.className = 'clock-num';
+                    secNum.setAttribute('data-clock-part', 'sec');
+                    if (deadline) secNum.setAttribute('data-deadline', deadline);
+                    secNum.textContent = deadline ? '--' : '??';
+                    const secLabel = document.createElement('div');
+                    secLabel.className = 'clock-unit-label';
+                    secLabel.textContent = 'sec';
+                    secUnit.appendChild(secNum);
+                    secUnit.appendChild(secLabel);
+
+                    clockDigits.appendChild(minUnit);
+                    clockDigits.appendChild(sep);
+                    clockDigits.appendChild(secUnit);
+                    clockBlock.appendChild(clockDigits);
+
+                    // Progress bar
+                    const barWrap = document.createElement('div');
+                    barWrap.className = 'confirming-countdown-bar';
+                    const barFill = document.createElement('div');
+                    barFill.className = 'confirming-countdown-fill';
+                    if (deadline) {
+                        barFill.setAttribute('data-deadline', deadline);
+                        barFill.setAttribute('data-total', String(totalMs));
+                    }
+                    barFill.style.width = '100%';
+                    barWrap.appendChild(barFill);
+                    clockBlock.appendChild(barWrap);
+
+                    const autoWinNote = document.createElement('div');
+                    autoWinNote.className = 'confirming-auto-win-note';
+                    autoWinNote.innerHTML = '⚡ You <strong>auto-win</strong> when this hits zero';
+                    clockBlock.appendChild(autoWinNote);
+
+                    inner.appendChild(clockBlock);
+
+                    stateCard.appendChild(inner);
+                    item.appendChild(stateCard);
+
                 } else {
-                    // Opponent declared — urgent response needed
-                    const urgentEl = createElementSafe('div', { class: 'confirm-countdown urgent' }, '');
-                    const urgLabel = document.createElement('div');
-                    urgLabel.style.cssText = 'font-size:0.7rem;letter-spacing:1.5px;text-transform:uppercase;color:#ff4444;margin-bottom:4px;animation:pulse 1.5s infinite;';
-                    urgLabel.textContent = '⚠️ RESPONSE REQUIRED';
-                    urgentEl.appendChild(urgLabel);
-                    const urgScore = document.createElement('div');
-                    urgScore.style.cssText = 'font-size:0.85rem;color:#ccc;';
-                    urgScore.textContent = 'They declared ';
-                    const urgStrong = document.createElement('strong');
-                    urgStrong.style.color = '#fff';
-                    urgStrong.textContent = `${myScore ?? '?'} – ${oppScore ?? '?'}`;
-                    urgScore.appendChild(urgStrong);
-                    urgentEl.appendChild(urgScore);
-                    const urgTimer = document.createElement('div');
-                    urgTimer.style.cssText = 'font-size:0.75rem;color:#ff8800;margin-top:4px;';
-                    urgTimer.textContent = 'You auto-lose in ';
-                    const urgTimerStrong = document.createElement('strong');
-                    urgTimerStrong.className = 'countdown-timer';
-                    urgTimerStrong.dataset.deadline = m.score_confirm_deadline;
-                    urgTimerStrong.textContent = '...';
-                    urgTimer.appendChild(urgTimerStrong);
-                    urgentEl.appendChild(urgTimer);
-                    actionsDiv.appendChild(urgentEl);
-                    const confirmBtn = createElementSafe('button', { class: 'btn btn-green', style: 'margin-top:8px;animation:pulse 1.5s infinite;' }, '✅ Confirm or Dispute');
-                    confirmBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
-                    actionsDiv.appendChild(confirmBtn);
+                    // ── URGENT STATE: Opponent declared, I need to respond ─
+                    const stateCard = document.createElement('div');
+                    stateCard.className = 'match-state-urgent';
+
+                    const inner = document.createElement('div');
+                    inner.className = 'urgent-inner';
+
+                    // Header
+                    const urgHeader = document.createElement('div');
+                    urgHeader.className = 'urgent-header';
+
+                    const alarm = document.createElement('div');
+                    alarm.className = 'urgent-alarm';
+                    alarm.textContent = '⚠️';
+
+                    const urgText = document.createElement('div');
+                    urgText.className = 'urgent-text-group';
+                    const urgLabel = createElementSafe('div', { class: 'urgent-label' }, '⚡ Action required');
+                    const urgTitle = createElementSafe('div', { class: 'urgent-title' }, `${opponentName} posted results`);
+                    const urgSub   = createElementSafe('div', { class: 'urgent-sub' }, 'Confirm or dispute before time runs out');
+                    urgText.appendChild(urgLabel);
+                    urgText.appendChild(urgTitle);
+                    urgText.appendChild(urgSub);
+
+                    urgHeader.appendChild(alarm);
+                    urgHeader.appendChild(urgText);
+                    inner.appendChild(urgHeader);
+
+                    // Score display — opponent's declared perspective (from my view)
+                    const iWinning = m.declared_winner_id && m.declared_winner_id !== currentUser.id;
+                    const scoreDisplay = document.createElement('div');
+                    scoreDisplay.className = 'urgent-score-display';
+                    scoreDisplay.innerHTML = `
+                        <div class="urgent-score-team">
+                            <div class="urgent-score-team-name">${escapeHtml(myTeam)}</div>
+                            <div class="urgent-score-num ${iWinning ? '' : 'winning'}">${myScore ?? '?'}</div>
+                        </div>
+                        <div class="urgent-score-sep">—</div>
+                        <div class="urgent-score-team">
+                            <div class="urgent-score-team-name">${escapeHtml(oppTeam)}</div>
+                            <div class="urgent-score-num ${iWinning ? 'winning' : ''}">${oppScore ?? '?'}</div>
+                        </div>`;
+                    inner.appendChild(scoreDisplay);
+
+                    // Big red clock — built via DOM so deadline string is never escaped/corrupted
+                    const urgClockBlock = document.createElement('div');
+                    urgClockBlock.className = 'urgent-clock-block';
+
+                    const urgClockLabel = document.createElement('div');
+                    urgClockLabel.className = 'urgent-clock-label';
+                    urgClockLabel.textContent = '⚠️ Time left to respond';
+                    urgClockBlock.appendChild(urgClockLabel);
+
+                    const urgClockDigits = document.createElement('div');
+                    urgClockDigits.className = 'urgent-clock-digits';
+
+                    const urgMinUnit = document.createElement('div');
+                    urgMinUnit.className = 'clock-unit';
+                    const urgMinNum = document.createElement('span');
+                    urgMinNum.className = 'clock-num urgent-red';
+                    urgMinNum.setAttribute('data-clock-part', 'min');
+                    if (deadline) urgMinNum.setAttribute('data-deadline', deadline);
+                    urgMinNum.textContent = deadline ? '--' : '??';
+                    const urgMinLabel = document.createElement('div');
+                    urgMinLabel.className = 'clock-unit-label';
+                    urgMinLabel.style.color = '#883333';
+                    urgMinLabel.textContent = 'min';
+                    urgMinUnit.appendChild(urgMinNum);
+                    urgMinUnit.appendChild(urgMinLabel);
+
+                    const urgSepEl = document.createElement('span');
+                    urgSepEl.className = 'urgent-clock-sep';
+                    urgSepEl.textContent = ':';
+
+                    const urgSecUnit = document.createElement('div');
+                    urgSecUnit.className = 'clock-unit';
+                    const urgSecNum = document.createElement('span');
+                    urgSecNum.className = 'clock-num urgent-red';
+                    urgSecNum.setAttribute('data-clock-part', 'sec');
+                    if (deadline) urgSecNum.setAttribute('data-deadline', deadline);
+                    urgSecNum.textContent = deadline ? '--' : '??';
+                    const urgSecLabel = document.createElement('div');
+                    urgSecLabel.className = 'clock-unit-label';
+                    urgSecLabel.style.color = '#883333';
+                    urgSecLabel.textContent = 'sec';
+                    urgSecUnit.appendChild(urgSecNum);
+                    urgSecUnit.appendChild(urgSecLabel);
+
+                    urgClockDigits.appendChild(urgMinUnit);
+                    urgClockDigits.appendChild(urgSepEl);
+                    urgClockDigits.appendChild(urgSecUnit);
+                    urgClockBlock.appendChild(urgClockDigits);
+
+                    const urgBarWrap = document.createElement('div');
+                    urgBarWrap.className = 'urgent-bar';
+                    const urgBarFill = document.createElement('div');
+                    urgBarFill.className = 'urgent-bar-fill';
+                    if (deadline) {
+                        urgBarFill.setAttribute('data-deadline', deadline);
+                        urgBarFill.setAttribute('data-total', String(totalMs));
+                    }
+                    urgBarFill.style.width = '100%';
+                    urgBarWrap.appendChild(urgBarFill);
+                    urgClockBlock.appendChild(urgBarWrap);
+
+                    const urgAutoLoseNote = document.createElement('div');
+                    urgAutoLoseNote.className = 'urgent-auto-lose-note';
+                    urgAutoLoseNote.innerHTML = "If you don't respond, you <strong>automatically lose</strong>";
+                    urgClockBlock.appendChild(urgAutoLoseNote);
+
+                    inner.appendChild(urgClockBlock);
+
+                    // Action button
+                    const actionBtn = document.createElement('button');
+                    actionBtn.className = 'urgent-action-btn';
+                    actionBtn.innerHTML = '⚡ Confirm or Dispute Now';
+                    actionBtn.addEventListener('click', e => { e.stopPropagation(); openReportResultModal(m.id); });
+                    inner.appendChild(actionBtn);
+
+                    stateCard.appendChild(inner);
+                    item.appendChild(stateCard);
                 }
-                item.appendChild(actionsDiv);
 
             } else if (m.status === 'penalty_shootout') {
                 const actionsDiv = createElementSafe('div', { class: 'match-actions' });
                 const penaltyEl = createElementSafe('div', { style: 'font-size:0.82rem;color:#ffb400;padding:6px 0;line-height:1.5;' }, '');
-                penaltyEl.innerHTML = `⚽ <strong>Penalty Shootout!</strong><br><span style="color:#888;font-size:0.75rem;">Go to eFootball → create a Friends Match room → play Penalties → upload result here</span>`;
+                penaltyEl.innerHTML = `⚽ <strong>Penalty Shootout!</strong><br><span style="color:#888;font-size:0.75rem;">Go to eFootball → create a new Friends room → play Penalties → upload result here</span>`;
                 actionsDiv.appendChild(penaltyEl);
-                const penBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Penalty Result');
-                penBtn.addEventListener('click', (e) => { e.stopPropagation(); openReportResultModal(m.id); });
-                actionsDiv.appendChild(penBtn);
+                if (m.screenshot_url) {
+                    const pendingEl = document.createElement('div');
+                    pendingEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,180,0,0.08);border:1px solid rgba(255,180,0,0.2);border-radius:10px;margin-top:6px;';
+                    pendingEl.innerHTML = `<span style="font-size:1.1rem;">⏳</span><div><div style="font-size:0.8rem;font-weight:700;color:#ffb400;">Pending Payout</div><div style="font-size:0.7rem;color:#888;margin-top:1px;">Admin is reviewing your penalty result</div></div>`;
+                    actionsDiv.appendChild(pendingEl);
+                } else {
+                    const penBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Penalty Result');
+                    penBtn.addEventListener('click', e => { e.stopPropagation(); openReportResultModal(m.id); });
+                    actionsDiv.appendChild(penBtn);
+                }
                 item.appendChild(actionsDiv);
 
             } else if (m.status === 'disputed') {
-                item.appendChild(createElementSafe('div', { class: 'match-actions' }, '⚖️ Disputed — admin reviewing'));
+                item.appendChild(createElementSafe('div', { style: 'font-size:0.8rem;color:#ff8888;padding:10px 0;' }, '⚖️ Disputed — an admin is reviewing. Usually resolved within 24 hours.'));
+
             } else if (m.status === 'completed') {
-                const winnerText = m.winner_id === currentUser.id ? '🏆 You won!' : (m.winner ? `${m.winner.username} won` : 'Completed');
-                const settlementNote = m.settlement_method === 'auto_declaration' && m.winner_id !== currentUser.id
-                    ? ' (auto — you didn\'t respond)' : '';
-                item.appendChild(createElementSafe('div', { class: 'match-detail' }, winnerText + settlementNote));
+                const youWon = m.winner_id === currentUser.id;
+                const isCreator = m.creator_id === currentUser.id;
+                const myScore  = isCreator ? m.declared_score_creator : m.declared_score_joiner;
+                const oppScore = isCreator ? m.declared_score_joiner  : m.declared_score_creator;
+                const hasScore = myScore != null && oppScore != null;
+                const oppName  = isCreator
+                    ? (m.joiner?.username  || 'Opponent')
+                    : (m.creator?.username || 'Opponent');
+
+                const settlementLabels = {
+                    'dual_upload_auto':    'AI verified',
+                    'dual_upload_gemini':  'AI arbitrated',
+                    'gemini_arbitration':  'AI arbitrated',
+                    'mutual_confirmation': 'Both confirmed',
+                    'auto_declaration':    'Auto-settled',
+                    'challenge_timeout':   'Challenge expired',
+                    'opponent_no_upload':  'Opponent forfeited',
+                    'forfeit':             'Opponent forfeited',
+                    'admin_override':      'Admin decision',
+                    'admin_approved':      'Admin approved',
+                    'penalty_shootout':    'Penalty shootout',
+                };
+                const settlementLabel = settlementLabels[m.settlement_method] || 'Settled';
+
+                const card = document.createElement('div');
+                card.style.cssText = `
+                    margin-top:12px;
+                    border-radius:14px;
+                    overflow:hidden;
+                    border:1px solid ${youWon ? 'rgba(0,255,65,0.25)' : 'rgba(255,255,255,0.07)'};
+                    background:${youWon ? 'linear-gradient(135deg,rgba(0,255,65,0.07),rgba(0,255,65,0.02))' : 'rgba(255,255,255,0.02)'};
+                `;
+
+                // Top row: emoji + result label + settlement method
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display:flex;align-items:center;gap:10px;padding:14px 16px 10px;';
+
+                const emoji = document.createElement('div');
+                emoji.style.cssText = `font-size:1.8rem;line-height:1;flex-shrink:0;`;
+                emoji.textContent = youWon ? '🏆' : '😔';
+
+                const textGroup = document.createElement('div');
+                textGroup.style.cssText = 'flex:1;min-width:0;';
+
+                const resultLabel = document.createElement('div');
+                resultLabel.style.cssText = `font-size:1rem;font-weight:800;color:${youWon ? 'var(--neon)' : '#888'};`;
+                resultLabel.textContent = youWon ? 'You won!' : `${escapeHtml(oppName)} won`;
+
+                const settleBadge = document.createElement('div');
+                settleBadge.style.cssText = 'font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;color:#444;margin-top:2px;';
+                settleBadge.textContent = settlementLabel;
+
+                textGroup.appendChild(resultLabel);
+                textGroup.appendChild(settleBadge);
+                topRow.appendChild(emoji);
+                topRow.appendChild(textGroup);
+
+                if (youWon && m.winner_prize) {
+                    const prizeTag = document.createElement('div');
+                    prizeTag.style.cssText = 'background:rgba(0,255,65,0.1);border:1px solid rgba(0,255,65,0.2);border-radius:8px;padding:5px 10px;text-align:center;flex-shrink:0;';
+                    prizeTag.innerHTML = `<div style="font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;color:#3a7a3a;">Won</div><div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--neon);letter-spacing:1px;">KES ${m.winner_prize}</div>`;
+                    topRow.appendChild(prizeTag);
+                }
+
+                card.appendChild(topRow);
+
+                // Score strip (if available)
+                if (hasScore) {
+                    const scoreStrip = document.createElement('div');
+                    scoreStrip.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 16px 14px;border-top:1px solid rgba(255,255,255,0.05);';
+
+                    const myScoreEl = document.createElement('div');
+                    myScoreEl.style.cssText = 'text-align:center;flex:1;';
+                    myScoreEl.innerHTML = `<div style="font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;color:#333;margin-bottom:3px;">${escapeHtml(myTeam || 'You')}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:${youWon ? 'var(--neon)' : '#666'};line-height:1;">${myScore}</div>`;
+
+                    const sepEl = document.createElement('div');
+                    sepEl.style.cssText = 'font-family:"Bebas Neue",sans-serif;font-size:1.4rem;color:#2a2a2a;';
+                    sepEl.textContent = '—';
+
+                    const oppScoreEl = document.createElement('div');
+                    oppScoreEl.style.cssText = 'text-align:center;flex:1;';
+                    oppScoreEl.innerHTML = `<div style="font-size:0.55rem;letter-spacing:1.5px;text-transform:uppercase;color:#333;margin-bottom:3px;">${escapeHtml(oppTeam || oppName)}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:${!youWon ? '#cc4444' : '#666'};line-height:1;">${oppScore}</div>`;
+
+                    scoreStrip.appendChild(myScoreEl);
+                    scoreStrip.appendChild(sepEl);
+                    scoreStrip.appendChild(oppScoreEl);
+                    card.appendChild(scoreStrip);
+                }
+
+                item.appendChild(card);
             }
 
             container.appendChild(item);
+        });
+
+        // After rendering, update ring progress immediately
+        tickAllClocks();
+    }
+
+    // ── Master tick: drives ALL countdown clocks every second ──────────────
+    function tickAllClocks() {
+        const now = Date.now();
+
+        // 1. SVG ring (confirming card)
+        document.querySelectorAll('.confirming-ring-progress[data-deadline]').forEach(ring => {
+            const deadline  = new Date(ring.dataset.deadline);
+            const total     = parseFloat(ring.dataset.total) || (30 * 60 * 1000);
+            const remaining = Math.max(0, deadline - now);
+            const pct       = remaining / total;
+            const circ      = parseFloat(ring.getAttribute('stroke-dasharray')) || 110;
+            ring.style.strokeDashoffset = (circ * (1 - pct)).toFixed(2);
+            if (remaining < 5 * 60 * 1000) {
+                ring.style.stroke = '#ff4444';
+                ring.style.filter = 'drop-shadow(0 0 3px rgba(255,68,68,0.6))';
+            }
+        });
+
+        // 2. Green progress bar (confirming)
+        document.querySelectorAll('.confirming-countdown-fill[data-deadline]').forEach(bar => {
+            const deadline  = new Date(bar.dataset.deadline);
+            const total     = parseFloat(bar.dataset.total) || (30 * 60 * 1000);
+            const remaining = Math.max(0, deadline - now);
+            bar.style.width  = ((remaining / total) * 100).toFixed(1) + '%';
+            if (remaining < 5 * 60 * 1000)
+                bar.style.background = 'linear-gradient(90deg,#ff4444,rgba(255,68,68,0.5))';
+        });
+
+        // 3. Red progress bar (urgent)
+        document.querySelectorAll('.urgent-bar-fill[data-deadline]').forEach(bar => {
+            const deadline  = new Date(bar.dataset.deadline);
+            const total     = parseFloat(bar.dataset.total) || (30 * 60 * 1000);
+            const remaining = Math.max(0, deadline - now);
+            bar.style.width  = ((remaining / total) * 100).toFixed(1) + '%';
+        });
+
+        // 4. Big clock digits  [data-clock-part="min|sec"]
+        document.querySelectorAll('[data-clock-part][data-deadline]').forEach(el => {
+            const raw = el.getAttribute('data-deadline');
+            if (!raw) return;
+            const deadline  = new Date(raw);
+            const remaining = Math.max(0, deadline - now);
+            const totalSecs = Math.floor(remaining / 1000);
+            const mins = Math.floor(totalSecs / 60);
+            const secs = totalSecs % 60;
+            const part = el.getAttribute('data-clock-part');
+            el.textContent = part === 'min'
+                ? String(mins).padStart(2, '0')
+                : String(secs).padStart(2, '0');
+            // Last 5 min → turn red
+            if (remaining < 5 * 60 * 1000 && !el.classList.contains('urgent-red')) {
+                el.style.color      = '#ff4444';
+                el.style.textShadow = '0 0 24px rgba(255,68,68,0.5)';
+            }
+            // Last 60 sec → pulse
+            if (remaining < 60 * 1000) el.style.animation = 'pulse 0.5s infinite';
+        });
+
+        // 5. Legacy .countdown-timer[data-deadline] spans (modal step-3, etc.)
+        document.querySelectorAll('.countdown-timer[data-deadline]').forEach(el => {
+            const raw = el.getAttribute('data-deadline');
+            if (!raw) return;
+            const deadline  = new Date(raw);
+            const remaining = deadline - now;
+            if (remaining <= 0) {
+                el.textContent  = 'any moment now';
+                el.style.color  = '#ff4444';
+            } else {
+                const totalSecs = Math.floor(remaining / 1000);
+                const m = Math.floor(totalSecs / 60);
+                const s = totalSecs % 60;
+                el.textContent = m > 0 ? `${m}m ${String(s).padStart(2,'0')}s` : `${s}s`;
+                if (remaining < 5 * 60 * 1000) el.style.color = '#ff6666';
+            }
+        });
+    }
+
+    setInterval(tickAllClocks, 1000);
+    tickAllClocks(); // run immediately on load
+
+    // ══════════════════════════════════════════════════════════════
+    // CONFIRM-ACTION BANNER — shows when opponent has declared and
+    // it's the current player's turn to confirm or dispute.
+    // ══════════════════════════════════════════════════════════════
+    let _bannerMatchId     = null;
+    let _bannerDeadline    = null;
+    let _bannerTotalMs     = 30 * 60 * 1000;
+    let _bannerDismissed   = false;
+    let _bannerVisible     = false;
+
+    function showConfirmBanner({ matchId, deadline, myTeam, oppTeam, myScore, oppScore, iWon }) {
+        _bannerMatchId   = matchId;
+        _bannerDeadline  = new Date(deadline);
+        _bannerDismissed = false;
+        _bannerVisible   = true;
+
+        // Populate score
+        document.getElementById('banner-my-team').textContent  = (myTeam  || 'YOU').toUpperCase().slice(0, 14);
+        document.getElementById('banner-opp-team').textContent = (oppTeam || 'OPP').toUpperCase().slice(0, 14);
+        document.getElementById('banner-my-score').textContent  = myScore  ?? '?';
+        document.getElementById('banner-opp-score').textContent = oppScore ?? '?';
+
+        const resultEl = document.getElementById('banner-result-line');
+        if (iWon === true) {
+            resultEl.textContent = '🏆 They say YOU won — confirm to collect';
+            resultEl.className   = 'banner-result-line win';
+        } else if (iWon === false) {
+            resultEl.textContent = '😔 They say they won — dispute if incorrect';
+            resultEl.className   = 'banner-result-line lose';
+        } else {
+            resultEl.textContent = '🤝 They declared a draw';
+            resultEl.className   = 'banner-result-line';
+        }
+
+        // Wire buttons (re-bind each time to avoid stale matchId closure)
+        const confirmBtn = document.getElementById('banner-confirm-btn');
+        const disputeBtn = document.getElementById('banner-dispute-btn');
+        confirmBtn.onclick = () => { hideConfirmBanner(); openReportResultModal(matchId); };
+        disputeBtn.onclick = () => { hideConfirmBanner(); openReportResultModal(matchId); };
+
+        // Dismiss button just hides for this session
+        document.getElementById('banner-dismiss-btn').onclick = () => {
+            _bannerDismissed = true;
+            hideConfirmBanner();
+        };
+
+        document.getElementById('confirm-action-banner').classList.remove('expired');
+        document.getElementById('confirm-action-banner').classList.add('visible');
+
+        // Kick the clock immediately
+        tickBannerClock();
+    }
+
+    function hideConfirmBanner() {
+        _bannerVisible = false;
+        document.getElementById('confirm-action-banner').classList.remove('visible');
+    }
+
+    function tickBannerClock() {
+        const banner = document.getElementById('confirm-action-banner');
+        if (!_bannerVisible || !_bannerDeadline) return;
+
+        const now       = Date.now();
+        const remaining = Math.max(0, _bannerDeadline - now);
+        const totalSecs = Math.floor(remaining / 1000);
+        const mins      = Math.floor(totalSecs / 60);
+        const secs      = totalSecs % 60;
+
+        const minEl  = document.getElementById('banner-min');
+        const secEl  = document.getElementById('banner-sec');
+        const fillEl = document.getElementById('banner-progress-fill');
+
+        if (minEl) minEl.textContent = String(mins).padStart(2, '0');
+        if (secEl) secEl.textContent = String(secs).padStart(2, '0');
+
+        if (fillEl) {
+            const pct = (remaining / _bannerTotalMs) * 100;
+            fillEl.style.width = Math.max(0, pct).toFixed(1) + '%';
+        }
+
+        // Under 5 minutes — intensify
+        if (remaining < 5 * 60 * 1000 && remaining > 0) {
+            if (minEl) minEl.style.textShadow = '0 0 28px rgba(255,68,68,0.8)';
+            if (secEl) secEl.style.textShadow = '0 0 28px rgba(255,68,68,0.8)';
+        }
+
+        // Under 60 seconds — pulse
+        if (remaining < 60 * 1000 && remaining > 0) {
+            if (minEl) minEl.style.animation = 'pulse 0.5s infinite';
+            if (secEl) secEl.style.animation = 'pulse 0.5s infinite';
+        }
+
+        // Expired
+        if (remaining === 0) {
+            if (minEl) minEl.textContent = '00';
+            if (secEl) secEl.textContent = '00';
+            banner.classList.add('expired');
+        }
+    }
+
+    // Plug banner tick into the master 1-second interval
+    const _origTickAllClocks = tickAllClocks;
+    // We do it by extending the interval — call tickBannerClock every second too
+    setInterval(tickBannerClock, 1000);
+
+    // ── Check matches and show banner if needed ──────────────────
+    // Called after loadMyFriendMatches() resolves
+    function checkAndShowConfirmBanner(matches) {
+        if (!matches || !Array.isArray(matches)) return;
+        if (_bannerDismissed) return;
+
+        // Find the first match where I need to respond (opponent declared, not me)
+        const urgent = matches.find(m =>
+            m.status === 'awaiting_confirmation' &&
+            m.declared_score_by &&
+            m.declared_score_by !== currentUser.id &&
+            m.score_confirm_deadline
+        );
+
+        if (!urgent) {
+            hideConfirmBanner();
+            return;
+        }
+
+        // Already showing for same match? Just update clock
+        if (_bannerVisible && _bannerMatchId === urgent.id) return;
+
+        const isCreator = urgent.creator_id === currentUser.id;
+        const myTeam    = isCreator ? urgent.creator_team : urgent.joiner_team;
+        const oppTeam   = isCreator ? urgent.joiner_team  : urgent.creator_team;
+        const myScore   = isCreator ? urgent.declared_score_creator : urgent.declared_score_joiner;
+        const oppScore  = isCreator ? urgent.declared_score_joiner  : urgent.declared_score_creator;
+        const iWon      = urgent.declared_winner_id
+            ? urgent.declared_winner_id === currentUser.id
+            : null;
+        const oppName   = isCreator
+            ? (urgent.joiner?.username  || 'Opponent')
+            : (urgent.creator?.username || 'Opponent');
+
+        document.getElementById('banner-title').textContent = `${oppName} posted results`;
+        document.getElementById('banner-sub').textContent   = 'Confirm or dispute before time runs out';
+
+        showConfirmBanner({
+            matchId:  urgent.id,
+            deadline: urgent.score_confirm_deadline,
+            myTeam,
+            oppTeam,
+            myScore,
+            oppScore,
+            iWon
         });
     }
 
@@ -2306,9 +3909,9 @@
         const thumb = document.getElementById('screenshot-thumb'); if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
         const progress = document.getElementById('upload-progress'); if (progress) progress.classList.remove('visible');
         const fi = document.getElementById('screenshot-file-input'); if (fi) fi.value = '';
-        document.getElementById('declare-error-1').style.display = 'none';
-        document.getElementById('declare-error-2').style.display = 'none';
-        switchStep('report-result-modal', 1);
+        const err1 = document.getElementById('declare-error-1'); if (err1) err1.style.display = 'none';
+        const err2 = document.getElementById('declare-error-2'); if (err2) err2.style.display = 'none';
+        switchStep('report-result-modal', 2);
     }
     async function handleScreenshotSelected(file) {
         if (!file || !currentReportMatch) return;
@@ -2329,18 +3932,93 @@
             const formData = new FormData();
             formData.append('screenshot', file);
             formData.append('matchId', currentReportMatch.id);
-            const res = await fetchWithAuth('/screenshots/upload-and-verify', { method: 'POST', body: formData, headers: {} }, 30000);
-            if (!res || !res.ok) throw new Error('Upload failed');
-            const data = await res.json();
-            _declareUploadedUrl = data.screenshotUrl || data.url || data.publicUrl;
+
+            const res = await fetchWithAuth('/screenshots/upload-and-verify', { method: 'POST', body: formData, headers: {} }, 100000);
             if (progress) progress.classList.remove('visible');
-            if (icon) icon.textContent = '✅';
-            if (label) label.innerHTML = `<strong style="color:var(--neon)">✅ ${escapeHtml(file.name)}</strong>`;
+
+            // Always parse JSON regardless of status
+            let data = {};
+            try { data = await res.json(); } catch (_) {}
+
+            // 422: Gemini couldn't read score → sent to admin review
+            if (res.status === 422) {
+                if (icon) icon.textContent = '📋';
+                if (label) label.innerHTML = '<strong style="color:#ffaa00">📋 Sent for admin review</strong><br><span style="font-size:0.75rem;color:#aaa;">' + (data.instruction || 'An admin will review and settle the match.') + '</span>';
+                showError('declare-error-2', data.error || 'Could not read score. Sent to admin for review.');
+                showToast('info', '📋 Sent for Review', data.instruction || 'An admin will review your screenshot and settle the match.', 8000);
+                _declareUploadedUrl = 'pending_review';
+                return;
+            }
+
+            // 409 pendingPayout: already uploaded, waiting for admin
+            if (res.status === 409 && data.pendingPayout) {
+                if (icon) icon.textContent = '⏳';
+                if (label) label.innerHTML = '<strong style="color:#ffb400">⏳ Pending Payout</strong><br><span style="font-size:0.75rem;color:#aaa;">Your screenshot is already submitted. Admin is reviewing.</span>';
+                closeModal('report-result-modal');
+                showToast('info', '⏳ Already Submitted', 'Your screenshot is pending admin review. Do not resubmit.', 7000);
+                await loadMyFriendMatches();
+                return;
+            }
+
+            // Other errors (409 duplicate hash, 400 bad file, etc.)
+            if (!res.ok) {
+                const msg = data.error || 'Upload failed. Please try again.';
+                if (icon) icon.textContent = '❌';
+                if (label) label.innerHTML = '<strong style="color:#ff4455">❌ Upload failed</strong><br><span style="font-size:0.75rem;color:#aaa;">' + msg + '</span>';
+                showError('declare-error-2', msg);
+                return;
+            }
+
+            _declareUploadedUrl = data.screenshotUrl || null;
+
+            // Auto-settled: Gemini read score + winner paid
+            if (data.autoSettled) {
+                if (icon) icon.textContent = '🏆';
+                if (label) label.innerHTML = '<strong style="color:var(--neon)">🏆 Match settled!</strong><br><span style="font-size:0.75rem;color:#aaa;">Gemini detected the score. Winner has been paid.</span>';
+                closeModal('report-result-modal');
+                await loadMyFriendMatches();
+                await refreshBalance(3);
+                const s = data.ocrResult;
+                showToast('success', '🏆 Match Settled!', 'Score ' + (s?.score1 ?? '?') + '–' + (s?.score2 ?? '?') + ' detected. Winner paid!', 7000);
+                return;
+            }
+
+            // Score read, waiting for opponent to confirm
+            if (data.ocrResult && data.ocrResult.score1 !== null && data.ocrResult.score1 !== undefined) {
+                const s = data.ocrResult;
+                if (icon) icon.textContent = '✅';
+                if (label) label.innerHTML = '<strong style="color:var(--neon)">✅ Score read: ' + s.score1 + '–' + s.score2 + '</strong><br><span style="font-size:0.75rem;color:#aaa;">Opponent has 2 hours to confirm.</span>';
+                const recap = document.getElementById('declared-score-recap');
+                const resultRecap = document.getElementById('declared-result-recap');
+                if (recap) recap.textContent = s.score1 + '  —  ' + s.score2;
+                if (resultRecap) {
+                    const isCreator = currentReportMatch.creator_id === currentUser.id;
+                    const myScore  = isCreator ? s.score1 : s.score2;
+                    const oppScore = isCreator ? s.score2 : s.score1;
+                    if (myScore > oppScore)      { resultRecap.textContent = '🏆 You won!'; resultRecap.style.color = 'var(--neon)'; }
+                    else if (myScore < oppScore) { resultRecap.textContent = '😔 You lost'; resultRecap.style.color = '#ff6666'; }
+                    else                         { resultRecap.textContent = '🤝 Draw'; resultRecap.style.color = '#ffb400'; }
+                }
+                const countdownEl = document.getElementById('declare-countdown');
+                if (countdownEl && data.confirmDeadline) { countdownEl.setAttribute('data-deadline', data.confirmDeadline); tickAllClocks(); }
+                setTimeout(async () => {
+                    switchStep('report-result-modal', 3);
+                    await loadMyFriendMatches();
+                    showToast('info', '⏳ Score Declared', 'Score ' + s.score1 + '–' + s.score2 + ' detected. Waiting for opponent.', 7000);
+                }, 1200);
+                return;
+            }
+
+            // Fallback: response OK but no actionable score
+            if (icon) icon.textContent = '⚠️';
+            if (label) label.innerHTML = '<strong style="color:#ffaa00">⚠️ Unclear result</strong><br><span style="font-size:0.75rem;color:#aaa;">Try uploading a clearer screenshot.</span>';
+
         } catch (err) {
             if (progress) progress.classList.remove('visible');
-            showError('declare-error-2', 'Upload failed. Try again.');
-            _declareUploadedUrl = null;
-            if (icon) icon.textContent = '📲';
+            if (icon) icon.textContent = '❌';
+            const errMsg = err.message || 'Upload failed. Please try again.';
+            if (label) label.innerHTML = '<strong style="color:#ff4455">❌ Error</strong><br><span style="font-size:0.75rem;color:#aaa;">' + errMsg + '</span>';
+            showError('declare-error-2', errMsg);
         }
     }
     async function _uploadHelper(file, onSuccess) {
@@ -2373,12 +4051,12 @@
         if (!currentReportMatch) return;
         const btn = document.getElementById('declare-submit-btn');
         showError('declare-error-2', '');
-        if (!_declareUploadedUrl) { showError('declare-error-2', 'Please wait for the screenshot to finish uploading.'); return; }
+        // Screenshot optional — don't block submission if skipped or timed out
         btn.disabled = true; btn.textContent = 'Declaring...';
         try {
             const res = await fetchWithAuth('/friends/declare-score', {
                 method: 'POST',
-                body: JSON.stringify({ matchId: currentReportMatch.id, myScore: _declareMyScore, opponentScore: _declareOppScore, screenshotUrl: _declareUploadedUrl })
+                body: JSON.stringify({ matchId: currentReportMatch.id, myScore: _declareMyScore, opponentScore: _declareOppScore, screenshotUrl: (_declareUploadedUrl && _declareUploadedUrl !== 'skipped') ? _declareUploadedUrl : null })
             }, 15000);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
@@ -2405,7 +4083,7 @@
             const countdownEl = document.getElementById('declare-countdown');
             if (countdownEl && data.confirmDeadline) {
                 countdownEl.setAttribute('data-deadline', data.confirmDeadline);
-                tickCountdowns();
+                tickAllClocks();
             }
             switchStep('report-result-modal', 3);
             await loadMyFriendMatches();
@@ -2474,62 +4152,41 @@
             currentReportMatch = match;
             resetReportModal();
             const isCreator = match.creator_id === currentUser.id;
-            const myTeamLabel = document.getElementById('my-team-label');
-            const oppTeamLabel = document.getElementById('opp-team-label');
+            const myTeam = isCreator ? match.creator_team : match.joiner_team;
+            const oppTeam = isCreator ? match.joiner_team : match.creator_team;
             const disputeMyLabel = document.getElementById('dispute-my-label');
-            if (myTeamLabel) myTeamLabel.textContent = (isCreator ? match.creator_team : match.joiner_team) || 'MY GOALS';
-            if (oppTeamLabel) oppTeamLabel.textContent = (isCreator ? match.joiner_team : match.creator_team) || 'OPP GOALS';
-            if (disputeMyLabel) disputeMyLabel.textContent = (isCreator ? match.creator_team : match.joiner_team) || 'MY GOALS';
-            const detailsDiv = document.getElementById('report-match-details');
-            if (detailsDiv) detailsDiv.innerHTML = `<div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div><div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>`;
-            // Show confirmation step if opponent declared and we haven't confirmed yet
+            if (disputeMyLabel) disputeMyLabel.textContent = myTeam || 'MY GOALS';
+            // Populate details in both possible containers
+            const detailsHtml = `
+                <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Your team</span><span class="match-detail-value" style="color:#ccc;">${escapeHtml(myTeam || '—')}</span></div>
+                <div class="match-detail-row"><span class="match-detail-label">Opponent</span><span class="match-detail-value" style="color:#ccc;">${escapeHtml(oppTeam || '—')}</span></div>`;
+            document.querySelectorAll('#report-match-details').forEach(el => { el.innerHTML = detailsHtml; });
+            // Show confirmation step if opponent has already uploaded/declared
             if (match.status === 'awaiting_confirmation' && match.declared_score_by !== currentUser.id) {
-                const myDeclared = isCreator ? match.declared_score_creator : match.declared_score_joiner;
-                const oppDeclared = isCreator ? match.declared_score_joiner : match.declared_score_creator;
+                const myDeclared  = isCreator ? match.declared_score_creator : match.declared_score_joiner;
+                const oppDeclared = isCreator ? match.declared_score_joiner  : match.declared_score_creator;
                 const cd = document.getElementById('confirm-score-display');
                 const cr = document.getElementById('confirm-result-display');
                 if (cd) cd.textContent = `${myDeclared ?? '?'}  —  ${oppDeclared ?? '?'}`;
                 if (cr) {
                     if (match.declared_winner_id === currentUser.id) { cr.textContent = '🏆 They say YOU won'; cr.style.color = 'var(--neon)'; }
                     else if (match.declared_winner_id) { cr.textContent = '😔 They say they won'; cr.style.color = '#ff6666'; }
-                    else { cr.textContent = '🤝 They declared a draw'; cr.style.color = '#ffb400'; }
+                    else { cr.textContent = '🤝 Draw declared'; cr.style.color = '#ffb400'; }
                 }
                 switchStep('report-result-modal', 'confirm');
+                document.getElementById('report-result-modal').classList.add('open');
+                return;
             }
+            // Default: go straight to screenshot upload (step 2) — Gemini reads the score
+            switchStep('report-result-modal', 2);
             document.getElementById('report-result-modal').classList.add('open');
         });
     }
     function openChallengeUploadModal(matchId) { openReportResultModal(matchId); }
 
-    // ── Countdown timers for awaiting_confirmation cards ────────────────────
-    // Updates all .countdown-timer elements every second
-    function formatCountdown(ms) {
-        if (ms <= 0) return 'now';
-        const totalSecs = Math.floor(ms / 1000);
-        const mins = Math.floor(totalSecs / 60);
-        const secs = totalSecs % 60;
-        return mins > 0
-            ? `${mins}m ${String(secs).padStart(2,'0')}s`
-            : `${secs}s`;
-    }
-
-    function tickCountdowns() {
-        const timers = document.querySelectorAll('.countdown-timer[data-deadline]');
-        timers.forEach(el => {
-            const deadline = new Date(el.dataset.deadline);
-            const remaining = deadline - Date.now();
-            if (remaining <= 0) {
-                el.textContent = 'any moment now';
-                el.style.color = '#ff4444';
-            } else {
-                el.textContent = formatCountdown(remaining);
-                // Turn red in last 5 minutes
-                if (remaining < 5 * 60 * 1000) el.style.color = '#ff6666';
-            }
-        });
-    }
-    setInterval(tickCountdowns, 1000);
-    tickCountdowns();
+    // tickCountdowns replaced by tickAllClocks above
     // ─────────────────────────────────────────────────────────────────────────
 
     // --- Real-time match status polling (unchanged) ---
