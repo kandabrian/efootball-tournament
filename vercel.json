@@ -1,7 +1,19 @@
 {
   "version": 2,
   "builds": [
-    { "src": "app.js", "use": "@vercel/node" }
+    {
+      "src": "app.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "index.html",
+          "login.html",
+          "dashboard.html",
+          "admin.html",
+          "war-room.html"
+        ]
+      }
+    }
   ],
   "routes": [
     { "src": "/(.*)", "dest": "app.js" }
