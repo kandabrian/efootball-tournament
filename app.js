@@ -224,6 +224,12 @@ app.use((req, res, next) => {
 // ============================================================
 app.set('trust proxy', 1);
 
+// Strip /api prefix so frontend calls like /api/auth/login match backend routes like /auth/login
+app.use((req, res, next) => {
+    if (req.url.startsWith('/api/')) req.url = req.url.slice(4);
+    next();
+});
+
 const allowedOrigins = [
     process.env.FRONTEND_URL,
     process.env.APP_SERVER_URL,
