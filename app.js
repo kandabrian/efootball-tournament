@@ -2412,6 +2412,10 @@ setTimeout(purgeExpiredScreenshots, 15000); // initial check 15s after boot
 // ============================================================
 // SERVER START
 // ============================================================
+
+// Export app for Vercel serverless functions
+module.exports = app;
+
 const host = '::';
 const finalPort = process.env.PORT || 8100;
 
