@@ -6,6 +6,11 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "app.js" },
+    { "src": "/login", "dest": "/login.html" },
+    { "src": "/dashboard", "dest": "/dashboard.html" },
+    { "src": "/admin", "dest": "/admin.html" },
+    { "src": "/war-room", "dest": "/war-room.html" },
+    { "src": "/", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }

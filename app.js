@@ -227,6 +227,7 @@ app.set('trust proxy', 1);
 const allowedOrigins = [
     process.env.FRONTEND_URL,
     process.env.APP_SERVER_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
     'http://localhost:5500',
     'http://127.0.0.1:5500',
     'http://localhost:3000'
@@ -235,7 +236,8 @@ const allowedOrigins = [
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+        // Allow same-origin Vercel requests (no origin header) and listed origins
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development' || (process.env.VERCEL_URL && origin.includes('vercel.app'))) {
             callback(null, true);
         } else {
             console.warn("⚠️  CORS blocked origin:", origin);
