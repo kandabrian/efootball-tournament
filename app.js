@@ -267,7 +267,7 @@ app.use((req, res, next) => {
     );
     next();
 });
-app.use(express.static('public'));
+app.use(express.static(__dirname));
 console.log("✅ Middleware configured.");
 
 // ============================================================
@@ -297,11 +297,11 @@ app.get('/debug/config', adminLimiter, (req, res) => {
     });
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'signup.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/war-room', (req, res) => res.sendFile(path.join(__dirname, 'public', 'war-room.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
+app.get('/war-room', (req, res) => res.sendFile(path.join(__dirname, 'war-room.html')));
 
 // ============================================================
 // AUTH ROUTES
