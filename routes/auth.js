@@ -59,6 +59,7 @@ router.post('/signup', async (req, res) => {
         });
 
         if (error) {
+            console.error('❌ Supabase signUp error:', JSON.stringify(error, null, 2));
             return sendGenericError(res, 400, 'Signup failed. Please try again.', error);
         }
 

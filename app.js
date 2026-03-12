@@ -138,7 +138,6 @@ app.use((req, res, next) => {
         .filter(Boolean).join(' ');
 
     // Derive storage hostname from SUPABASE_URL for img-src
-    // e.g. https://abc.supabase.co  →  https://abc.supabase.co
     const supabaseStorageSrc = supabaseUrl ? supabaseUrl : '';
 
     res.setHeader('Content-Security-Policy', [
@@ -242,8 +241,13 @@ app.use('/auth',        authRoutes);
 
 app.use('/profile', profileRoutes);
 
-app.use('/wallet/deposit', limiters.depositLimiter);
-app.use('/wallet',         walletRoutes);
+// FIX: use app.post (not app.use) so the depositLimiter only applies to
+// POST /wallet/deposit (the actual STK push initiation) and NOT to
+// GET /wallet/deposit/status (the polling endpoint). Using app.use here
+// caused every status poll to consume from the 5-request limit, resulting
+// in 429 errors within seconds of initiating a deposit.
+app.post('/wallet/deposit', limiters.depositLimiter);
+app.use('/wallet',          walletRoutes);
 
 app.use('/wallet/withdrawals', (req, _res, next) => {
     req.processMpesaWithdrawal = (id) => processMpesaWithdrawal(supabaseAdmin, id);

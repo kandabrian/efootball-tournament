@@ -372,7 +372,12 @@ async function loadTournaments() {
         const noTourney = document.createElement('div');
         noTourney.className = 'tournament-card';
         noTourney.style.cssText = 'text-align:center;padding:28px;color:#444;font-size:0.82rem;';
-        noTourney.innerHTML = '<div style="font-size:2rem;margin-bottom:8px;opacity:0.3;">🏆</div>No active tournaments right now.<br><span style="font-size:0.72rem;color:#333;">Check back soon!</span>';
+        const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;margin-bottom:8px;opacity:0.3;'; icon.textContent = '🏆';
+        noTourney.appendChild(icon);
+        noTourney.appendChild(document.createTextNode('No active tournaments right now.'));
+        noTourney.appendChild(document.createElement('br'));
+        const sub = document.createElement('span'); sub.style.cssText = 'font-size:0.72rem;color:#333;'; sub.textContent = 'Check back soon!';
+        noTourney.appendChild(sub);
         container.appendChild(noTourney);
     }
 }
@@ -384,7 +389,12 @@ function renderTournaments(tournaments) {
         const noTourney = document.createElement('div');
         noTourney.className = 'tournament-card';
         noTourney.style.cssText = 'text-align:center;padding:28px;color:#444;font-size:0.82rem;';
-        noTourney.innerHTML = '<div style="font-size:2rem;margin-bottom:8px;opacity:0.3;">🏆</div>No active tournaments right now.<br><span style="font-size:0.72rem;color:#333;">Check back soon!</span>';
+        const icon2 = document.createElement('div'); icon2.style.cssText = 'font-size:2rem;margin-bottom:8px;opacity:0.3;'; icon2.textContent = '🏆';
+        noTourney.appendChild(icon2);
+        noTourney.appendChild(document.createTextNode('No active tournaments right now.'));
+        noTourney.appendChild(document.createElement('br'));
+        const sub2 = document.createElement('span'); sub2.style.cssText = 'font-size:0.72rem;color:#333;'; sub2.textContent = 'Check back soon!';
+        noTourney.appendChild(sub2);
         container.appendChild(noTourney);
         return;
     }
@@ -906,11 +916,15 @@ function renderMyMatches(matches) {
 
     if (!matches || matches.length === 0) {
         const emptyDiv = createElementSafe('div', { class: 'empty-state' });
-        emptyDiv.innerHTML = `
-            <div class="empty-state-icon">⚽</div>
-            <div class="empty-state-text">No matches yet.<br>Challenge a friend to win KES!</div>
-            <button class="empty-state-cta" onclick="openCreateMatchModal()">⚔️ Create Challenge</button>
-        `;
+        const iconDiv = createElementSafe('div', { class: 'empty-state-icon' }, '⚽');
+        const textDiv = document.createElement('div');
+        textDiv.className = 'empty-state-text';
+        textDiv.textContent = 'No matches yet. Challenge a friend to win KES!';
+        const ctaBtn = createElementSafe('button', { class: 'empty-state-cta' }, '⚔️ Create Challenge');
+        ctaBtn.addEventListener('click', () => openCreateMatchModal());
+        emptyDiv.appendChild(iconDiv);
+        emptyDiv.appendChild(textDiv);
+        emptyDiv.appendChild(ctaBtn);
         container.appendChild(emptyDiv);
         return;
     }
@@ -1044,7 +1058,7 @@ async function handleScreenshotSelected(file) {
         thumb.classList.add('visible');
     }
     if (icon) icon.textContent = '⏳';
-    if (label) label.innerHTML = '<strong>Uploading...</strong>';
+    if (label) { label.textContent = ''; const s = document.createElement('strong'); s.textContent = 'Uploading...'; label.appendChild(s); }
     if (progress) progress.classList.add('visible');
     if (progressFill) progressFill.classList.add('indeterminate');
 
@@ -1066,7 +1080,12 @@ async function handleScreenshotSelected(file) {
         if (!res.ok) throw new Error(data.error || 'Upload failed');
 
         if (icon) icon.textContent = '✅';
-        if (label) label.innerHTML = '<strong>Screenshot submitted for admin review</strong><br><span style="font-size:0.75rem;color:#aaa;">An admin will settle the match shortly.</span>';
+        if (label) {
+            label.textContent = '';
+            const s = document.createElement('strong'); s.textContent = 'Screenshot submitted for admin review'; label.appendChild(s);
+            label.appendChild(document.createElement('br'));
+            const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.75rem;color:#aaa;'; sm.textContent = 'An admin will settle the match shortly.'; label.appendChild(sm);
+        }
 
         setTimeout(() => {
             closeModal('report-result-modal');
@@ -1078,7 +1097,12 @@ async function handleScreenshotSelected(file) {
         if (progress) progress.classList.remove('visible');
         if (progressFill) progressFill.classList.remove('indeterminate');
         if (icon) icon.textContent = '❌';
-        if (label) label.innerHTML = '<strong style="color:#ff4455">❌ Upload failed</strong><br><span style="font-size:0.75rem;color:#aaa;">' + err.message + '</span>';
+        if (label) {
+            label.textContent = '';
+            const s = document.createElement('strong'); s.style.color = '#ff4455'; s.textContent = '❌ Upload failed'; label.appendChild(s);
+            label.appendChild(document.createElement('br'));
+            const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.75rem;color:#aaa;'; sm.textContent = err.message; label.appendChild(sm);
+        }
         showError('declare-error-2', err.message);
     }
 }
@@ -1097,16 +1121,30 @@ function openReportResultModal(matchId) {
         const error = document.getElementById('declare-error-2');
         if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
         if (icon) icon.textContent = '📲';
-        if (label) label.innerHTML = '<strong>Tap to upload screenshot</strong><br><span style="font-size:0.78rem;color:#555;">Take it directly from eFootball</span>';
+        if (label) {
+            label.textContent = '';
+            const s = document.createElement('strong'); s.textContent = 'Tap to upload screenshot'; label.appendChild(s);
+            label.appendChild(document.createElement('br'));
+            const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from eFootball'; label.appendChild(sm);
+        }
         if (progress) progress.classList.remove('visible');
         if (error) error.style.display = 'none';
 
-        const detailsHtml = `
-            <div class="match-detail-row"><span class="match-detail-label">Wager</span><span class="match-detail-value">KES ${match.wager_amount}</span></div>
-            <div class="match-detail-row"><span class="match-detail-label">Winner prize</span><span class="match-detail-value neon">KES ${match.winner_prize}</span></div>
-            <div class="match-detail-row"><span class="match-detail-label">Your team</span><span class="match-detail-value" style="color:#ccc;">${escapeHtml(match.creator_team || '—')}</span></div>
-            <div class="match-detail-row"><span class="match-detail-label">Opponent</span><span class="match-detail-value" style="color:#ccc;">${escapeHtml(match.joiner_team || '—')}</span></div>`;
-        document.querySelectorAll('#report-match-details-mini').forEach(el => { el.innerHTML = detailsHtml; });
+        document.querySelectorAll('#report-match-details-mini').forEach(el => {
+            el.textContent = '';
+            const rows = [
+                ['Wager', `KES ${match.wager_amount}`, ''],
+                ['Winner prize', `KES ${match.winner_prize}`, 'neon'],
+                ['Your team', match.creator_team || '—', 'color:#ccc;'],
+                ['Opponent', match.joiner_team || '—', 'color:#ccc;'],
+            ];
+            rows.forEach(([label, value, style]) => {
+                const row = document.createElement('div'); row.className = 'match-detail-row';
+                const lbl = document.createElement('span'); lbl.className = 'match-detail-label'; lbl.textContent = label;
+                const val = document.createElement('span'); val.className = `match-detail-value${style === 'neon' ? ' neon' : ''}`; if (style && style !== 'neon') val.style.cssText = style; val.textContent = value;
+                row.appendChild(lbl); row.appendChild(val); el.appendChild(row);
+            });
+        });
 
         switchStep('report-result-modal', 1);
         document.getElementById('report-result-modal').classList.add('open');
@@ -1129,7 +1167,12 @@ function resetReportModal() {
     const error = document.getElementById('declare-error-2');
     if (thumb) { thumb.classList.remove('visible'); thumb.src = ''; }
     if (icon) icon.textContent = '📲';
-    if (label) label.innerHTML = '<strong>Tap to upload screenshot</strong><br><span style="font-size:0.78rem;color:#555;">Take it directly from eFootball</span>';
+    if (label) {
+        label.textContent = '';
+        const s = document.createElement('strong'); s.textContent = 'Tap to upload screenshot'; label.appendChild(s);
+        label.appendChild(document.createElement('br'));
+        const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from eFootball'; label.appendChild(sm);
+    }
     if (progress) progress.classList.remove('visible');
     if (error) error.style.display = 'none';
 }
