@@ -1,9 +1,40 @@
 {
   "version": 2,
   "builds": [
-    { "src": "app.js", "use": "@vercel/node" }
+    {
+      "src": "app.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "includeFiles": [
+          "public/**",
+          "public/js/**",
+          "routes/**",
+          "jobs/**",
+          "screenshot-verifier.js"
+        ]
+      }
+    }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "app.js" }
-  ]
+    {
+      "src": "/(.*)",
+      "dest": "app.js"
+    }
+  ],
+  "functions": {
+    "app.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "crons": [
+    {
+      "path": "/cron/resolve-matches",
+      "schedule": "*/2 * * * *"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }

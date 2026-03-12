@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>War Room | Vumbua eFootball</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';">
+    <!-- STRONG CSP: no unsafe-inline -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -154,6 +155,29 @@
         .vs-text { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; color: #2a2a2a; letter-spacing: 2px; }
         .vs-line { width: 1px; height: 20px; background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.07), transparent); }
 
+        /* Result Badge */
+        .result-badge {
+            display: none; text-align: center; padding: 20px;
+            border-radius: 14px; animation: resultPop 0.5s cubic-bezier(0.16,1,0.3,1);
+        }
+        @keyframes resultPop {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .result-badge.won {
+            display: block; background: linear-gradient(135deg, rgba(0,255,65,0.15), rgba(0,255,65,0.05));
+            border: 2px solid var(--neon); box-shadow: 0 0 30px var(--neon-glow);
+        }
+        .result-badge.lost {
+            display: block; background: linear-gradient(135deg, rgba(255,68,68,0.12), rgba(255,68,68,0.03));
+            border: 2px solid rgba(255,68,68,0.4);
+        }
+        .result-badge-title { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; letter-spacing: 4px; line-height: 1; }
+        .result-badge.won .result-badge-title { color: var(--neon); text-shadow: 0 0 20px var(--neon-glow); }
+        .result-badge.lost .result-badge-title { color: #ff6666; }
+        .result-badge-amount { font-size: 0.9rem; color: rgba(255,255,255,0.6); margin-top: 8px; font-weight: 600; }
+        .result-badge.won .result-badge-amount { color: var(--neon); }
+
         /* Match code */
         .match-code-strip {
             background: rgba(0,0,0,0.35); border: 1px solid var(--border);
@@ -210,7 +234,7 @@
             <span class="wr-logo">VUMBUA · EFOOTBALL</span>
             <div class="wr-title">WAR ROOM</div>
         </div>
-        <div class="live-badge">
+        <div class="live-badge" id="live-badge">
             <span class="live-dot"></span>
             MATCH LIVE
         </div>
@@ -218,7 +242,23 @@
 
     <div class="elapsed-pill">Started · <span id="elapsed-display">00:00</span> ago</div>
 
-    <div class="wager-banner">
+    <!-- 30-min result submission countdown -->
+    <div id="deadline-strip" style="display:none;background:rgba(255,180,0,0.08);border:1px solid rgba(255,180,0,0.25);border-radius:12px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+            <div style="font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:#a07020;font-weight:600;margin-bottom:2px;">Submit Result In</div>
+            <div id="deadline-display" style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#ffb400;letter-spacing:3px;line-height:1;">--:--</div>
+            <div style="font-size:0.62rem;color:#555;margin-top:3px;">After 30 min, wagers are forfeited to platform</div>
+        </div>
+        <div style="font-size:2rem;opacity:0.55;">⏱️</div>
+    </div>
+
+    <!-- Result Badge (WON/LOST) -->
+    <div id="result-badge" class="result-badge">
+        <div class="result-badge-title" id="result-badge-title">WON</div>
+        <div class="result-badge-amount" id="result-badge-amount">KES 0 credited to wallet</div>
+    </div>
+
+    <div class="wager-banner" id="wager-banner">
         <div>
             <div class="wager-label">Prize Pool at Stake</div>
             <div class="wager-amount" id="prize-display">KES —</div>
@@ -227,7 +267,7 @@
         <div class="wager-icon">🏆</div>
     </div>
 
-    <div class="teams-arena">
+    <div class="teams-arena" id="teams-arena">
         <div class="team-card home">
             <div class="team-role">Home</div>
             <span class="team-shield">🏟️</span>
@@ -252,198 +292,20 @@
             <div class="code-label">Match Code</div>
             <div class="code-value" id="code-display">—</div>
         </div>
-        <button class="code-copy-btn" onclick="copyCode()">Copy</button>
+        <button class="code-copy-btn" id="copy-code-btn">Copy</button>
     </div>
 
-    <div class="war-actions">
-        <button class="btn-report" id="btn-report" onclick="goReport()">
-            📸 Report Result &amp; Upload Screenshot
-        </button>
-        <button class="btn-back" onclick="goBack()">← Back to Dashboard</button>
-        <button class="btn-back" onclick="forfeitMatch()" style="border-color:rgba(255,68,68,0.3);color:#ff6666;margin-top:4px">
+    <div class="war-actions" id="war-actions">
+        <button class="btn-report" id="btn-report">📸 Report Result &amp; Upload Screenshot</button>
+        <button class="btn-back" id="back-btn">← Back to Dashboard</button>
+        <button class="btn-back" id="forfeit-btn" style="border-color:rgba(255,68,68,0.3);color:#ff6666;margin-top:4px">
             🏳️ Forfeit Match
         </button>
     </div>
 
 </div>
 
-<script>
-    function escapeHtml(s) {
-        if (!s) return '—';
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-    }
-    function qs(id) { return document.getElementById(id); }
-
-    const authToken = sessionStorage.getItem('supabaseToken');
-    if (!authToken) { window.location.href = '/login'; }
-
-    const rawData = sessionStorage.getItem('warRoomData');
-    if (!rawData) { window.location.href = '/dashboard'; }
-
-    let matchData = {};
-    try { matchData = JSON.parse(rawData); } catch(e) { window.location.href = '/dashboard'; }
-
-    const { matchId, matchCode, creatorTeam, creatorUsername, joinerTeam, joinerUsername,
-            wagerAmount, winnerPrize, startedAt, currentUserId, creatorId } = matchData;
-
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const API = isLocal ? 'http://localhost:3000' : '/api';
-
-    const isCreator = currentUserId === creatorId;
-    qs('home-team').textContent   = escapeHtml(creatorTeam || 'Unknown FC');
-    qs('home-player').textContent = escapeHtml(creatorUsername || '—');
-    qs('away-team').textContent   = escapeHtml(joinerTeam || 'Unknown FC');
-    qs('away-player').textContent = escapeHtml(joinerUsername || '—');
-
-    if (isCreator) {
-        qs('home-player').classList.add('you-badge');
-        qs('home-player').textContent = '👤 ' + escapeHtml(creatorUsername) + ' (You)';
-    } else {
-        qs('away-player').classList.add('you-badge');
-        qs('away-player').textContent = '👤 ' + escapeHtml(joinerUsername) + ' (You)';
-    }
-
-    qs('prize-display').textContent = winnerPrize ? `KES ${winnerPrize}` : `KES ${(wagerAmount||0)*2}`;
-    qs('wager-sub').textContent = wagerAmount ? `KES ${wagerAmount} staked each · Winner takes all` : 'Winner takes all';
-
-    qs('code-display').textContent = matchCode || '—';
-    if (!matchCode) qs('match-code-strip').style.display = 'none';
-
-    const startTime = startedAt ? new Date(startedAt) : new Date();
-    function updateElapsed() {
-        const diff = Math.max(0, Math.floor((Date.now() - startTime.getTime()) / 1000));
-        const m = Math.floor(diff / 60).toString().padStart(2, '0');
-        const s = (diff % 60).toString().padStart(2, '0');
-        qs('elapsed-display').textContent = `${m}:${s}`;
-    }
-    updateElapsed();
-    setInterval(updateElapsed, 1000);
-
-    // ── Live status polling ──────────────────────────────────────────────────
-    // Polls /friends/match-status every 10s so the war room reacts to:
-    // draw → penalty_shootout, opponent forfeit, dispute, completion
-    let lastStatus = 'active';
-    async function pollMatchStatus() {
-        if (!matchId) return;
-        try {
-            const res = await fetch(`${API}/friends/match-status/${matchId}`, {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            if (res.status === 401) { window.location.href = '/login'; return; }
-            if (!res.ok) return;
-            const data = await res.json();
-
-            if (data.status === lastStatus) return; // nothing changed
-            lastStatus = data.status;
-
-            if (data.status === 'awaiting_confirmation') {
-                // Someone declared the score - redirect to dashboard to confirm/dispute
-                showStatusBanner('📋 SCORE DECLARED',
-                    data.iDeclared
-                        ? 'Waiting for your opponent to confirm. Check the dashboard.'
-                        : `Your opponent declared ${data.myDeclaredScore ?? '?'}-${data.opponentDeclaredScore ?? '?'}. Open the dashboard to confirm or dispute.`,
-                    '#ffb400');
-                // Redirect to dashboard after 3 seconds so they can act
-                if (!data.iDeclared) {
-                    setTimeout(() => { window.location.href = '/dashboard'; }, 3000);
-                }
-
-            } else if (data.status === 'penalty_shootout') {
-                // Show penalty instructions banner
-                showStatusBanner(`⚽ IT'S A DRAW — PENALTIES!`,
-                    `Match drew ${data.drawScore || ''}. Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
-                    '#ffd700');
-                const reportBtn = qs('btn-report');
-                if (reportBtn) reportBtn.textContent = '📸 Upload Penalty Result';
-
-            } else if (data.status === 'completed') {
-                clearInterval(statusPollTimer);
-                if (data.youWon) {
-                    showStatusBanner('🏆 YOU WON!',
-                        `KES ${data.winnerPrize || winnerPrize} has been credited to your wallet.`,
-                        '#00ff41');
-                } else if (data.settlementMethod === 'forfeit') {
-                    showStatusBanner('🏳️ MATCH FORFEITED',
-                        data.statusMessage || 'Match was forfeited.',
-                        '#ff8800');
-                } else {
-                    showStatusBanner('❌ YOU LOST',
-                        'Better luck next time.',
-                        '#ff4444');
-                }
-                setTimeout(() => { window.location.href = '/dashboard'; }, 4000);
-
-            } else if (data.status === 'disputed') {
-                clearInterval(statusPollTimer);
-                showStatusBanner('⚠️ MATCH DISPUTED',
-                    'An admin is reviewing this match. Check back later.',
-                    '#ff8800');
-            }
-        } catch (err) {
-            console.warn('Status poll error:', err.message);
-        }
-    }
-
-    function showStatusBanner(title, message, color) {
-        let banner = qs('status-banner');
-        if (!banner) {
-            banner = document.createElement('div');
-            banner.id = 'status-banner';
-            banner.style.cssText = `
-                position:fixed; top:0; left:0; right:0; z-index:999;
-                padding:16px 20px; text-align:center;
-                font-family:'Outfit',sans-serif; font-weight:700;
-                border-bottom:2px solid currentColor;
-                animation: slideDown 0.4s ease;
-            `;
-            document.body.prepend(banner);
-        }
-        banner.style.background = `rgba(0,0,0,0.95)`;
-        banner.style.color = color;
-        banner.style.borderColor = color;
-        banner.innerHTML = `<div style="font-size:1.1rem;letter-spacing:2px">${escapeHtml(title)}</div>
-                            <div style="font-size:0.8rem;font-weight:400;margin-top:4px;color:#ccc">${escapeHtml(message)}</div>`;
-    }
-
-    const statusPollTimer = setInterval(pollMatchStatus, 10000);
-    pollMatchStatus(); // run immediately on load
-    // ────────────────────────────────────────────────────────────────────────
-
-    function copyCode() {
-        if (!matchCode) return;
-        navigator.clipboard.writeText(matchCode).then(() => {
-            const btn = document.querySelector('.code-copy-btn');
-            btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = 'Copy', 2000);
-        });
-    }
-
-    async function forfeitMatch() {
-        if (!confirm('Are you sure you want to forfeit? Your opponent will win the wager.')) return;
-        try {
-            const res = await fetch(`${API}/friends/forfeit`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ matchId })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                showStatusBanner('🏳️ FORFEITED', 'You forfeited. Returning to dashboard...', '#ff8800');
-                setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
-            } else {
-                alert(data.error || 'Failed to forfeit');
-            }
-        } catch (err) {
-            alert('Network error. Try again.');
-        }
-    }
-
-    function goReport() {
-        sessionStorage.setItem('openReportMatchId', matchId);
-        window.location.href = '/dashboard';
-    }
-
-    function goBack() { window.location.href = '/dashboard'; }
-</script>
+<!-- External script – no inline handlers -->
+<script src="/js/war-room.js"></script>
 </body>
 </html>

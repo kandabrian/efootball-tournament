@@ -1,19 +1,21 @@
-# Secret Environment Variables (Crucial!)
+# Secret Environment Variables — NEVER commit these
 .env
+.env.local
+.env.production
 
-# Dependencies (Too large for GitHub)
+# Dependencies
 node_modules/
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # Mac/Windows system files
 .DS_Store
-thumbs.db
+Thumbs.db
 
-# Build folders (if you use them later)
+# Build output
 dist/
 build/
-

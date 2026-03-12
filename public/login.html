@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | Vumbua eFootball [v2.1-FIXED]</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -184,89 +184,7 @@
     <div class="switch-link">Bado haujajisajili? <a href="/">Jiunge sasa</a></div>
 </div>
 
-<script>
-    function escapeHtml(unsafe) {
-        if (unsafe === null || unsafe === undefined) return '';
-        return String(unsafe)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
 
-    // Auto-detect: Use localhost for local dev, Koyeb URL for production
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const API = isLocal 
-        ? 'http://localhost:3000' 
-        : '/api';
-    
-    // Debug: Log API URL to console
-    console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
-    console.log('🔍 API URL:', API);
-
-    // Redirect if session exists
-    if (sessionStorage.getItem('supabaseToken')) { 
-        window.location.href = '/dashboard'; 
-    }
-
-    const errorEl = document.getElementById('error-msg');
-    const btn = document.getElementById('submit-btn');
-
-    function showError(msg) { 
-        errorEl.textContent = escapeHtml(msg); 
-        errorEl.style.display = 'block';
-        errorEl.classList.remove('shake');
-        void errorEl.offsetWidth;
-        errorEl.classList.add('shake');
-    }
-
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        errorEl.style.display = 'none';
-
-        const phone = document.getElementById('login-phone').value.trim();
-        const password = document.getElementById('login-password').value;
-
-        // Format phone
-        let cleanPhone = phone.replace(/\s+/g, '');
-        if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
-        if (cleanPhone.startsWith('0')) {
-            cleanPhone = '254' + cleanPhone.substring(1);
-        } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-            cleanPhone = '254' + cleanPhone;
-        }
-        if (!/^254[17]\d{8}$/.test(cleanPhone)) {
-            return showError("Namba ya simu si sahihi.");
-        }
-        cleanPhone = '+' + cleanPhone;
-
-        btn.disabled = true; 
-        btn.textContent = 'Inaload...';
-
-        try {
-            const res = await fetch(`${API}/auth/login`, {
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: cleanPhone, password })
-            });
-
-            const result = await res.json();
-
-            if (res.ok) {
-                sessionStorage.setItem('supabaseToken', result.session.access_token);
-                sessionStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
-                window.location.href = '/dashboard';
-            } else {
-                showError(result.error || 'Namba ya simu au password si sahihi.');
-            }
-        } catch (err) { 
-            showError('Network error. Check connection yako.'); 
-        } finally { 
-            btn.disabled = false; 
-            btn.textContent = 'Enter Uwanja →'; 
-        }
-    });
-</script>
+<script src="/js/login.js"></script>
 </body>
 </html>

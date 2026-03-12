@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin | Vumbua eFootball</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';">
+    <!-- FIXED CSP: added Supabase domain to img-src -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://wqnnuqudxsnxldlgxhwr.supabase.co; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -34,6 +35,7 @@
         tr:last-child td { border-bottom: none; }
         .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
         .status-pending { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); }
+        .status-pending_review { background: rgba(255,180,0,0.1); color: #ffb400; border: 1px solid rgba(255,180,0,0.2); }
         .status-paid { background: rgba(0,255,65,0.1); color: #00ff41; border: 1px solid rgba(0,255,65,0.2); }
         .status-rejected { background: rgba(255,68,68,0.1); color: #ff4444; border: 1px solid rgba(255,68,68,0.2); }
         .status-open { background: rgba(0,255,65,0.1); color: #00ff41; border: 1px solid rgba(0,255,65,0.2); }
@@ -316,7 +318,7 @@
         <div id="login-section" class="login-box">
             <h1>VUMBUA ADMIN</h1>
             <input type="password" id="admin-key" placeholder="Enter Admin Key">
-            <button onclick="login()">Access Dashboard</button>
+            <button id="btn-admin-login">Access Dashboard</button>
             <div id="login-error" class="error">Invalid key</div>
         </div>
 
@@ -324,7 +326,7 @@
         <div id="dashboard" class="dashboard">
             <div class="header">
                 <h1>Admin Dashboard</h1>
-                <button onclick="logout()">Logout</button>
+                <button id="btn-admin-logout">Logout</button>
             </div>
 
             <!-- Tabs -->
@@ -339,12 +341,12 @@
             <div id="withdrawals-tab" class="tab-pane active">
                 <div class="top-bar" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
                     <div style="display:flex;gap:10px;align-items:center;">
-                        <select id="wd-status-filter" style="background:#1a1a20;border:1px solid #2a2a30;color:#fff;padding:8px 14px;border-radius:10px;font-size:0.85rem;" onchange="loadWithdrawals()">
+                        <select id="wd-status-filter" style="background:#1a1a20;border:1px solid #2a2a30;color:#fff;padding:8px 14px;border-radius:10px;font-size:0.85rem;">
                             <option value="pending">Pending</option>
                             <option value="paid">Paid</option>
                             <option value="rejected">Rejected</option>
                         </select>
-                        <button onclick="loadWithdrawals()" class="btn btn-blue" style="padding:8px 16px;">&#8635; Refresh</button>
+                        <button id="btn-refresh-withdrawals" class="btn btn-blue" style="padding:8px 16px;">&#8635; Refresh</button>
                     </div>
                     <div id="wd-summary" style="font-size:0.85rem;color:#888;"></div>
                 </div>
@@ -356,7 +358,7 @@
             <div id="tournaments-tab" class="tab-pane" style="display: none;">
                 <div class="top-bar">
                     <h2>Tournaments</h2>
-                    <button class="btn-create" onclick="openTournamentModal()">+ Create Tournament</button>
+                    <button class="btn-create" id="btn-open-tournament-modal">+ Create Tournament</button>
                 </div>
                 <div class="table-container">
                     <table id="tournaments-table">
@@ -378,12 +380,13 @@
                             <option value="pending">Pending</option>
                             <option value="active">Active</option>
                             <option value="awaiting_confirmation">Awaiting Confirm</option>
+                            <option value="pending_review">Pending Review</option>
                             <option value="disputed">Disputed</option>
                             <option value="completed">Completed</option>
                             <option value="cancelled">Cancelled</option>
                             <option value="expired">Expired</option>
                         </select>
-                        <button onclick="loadFriendMatches()" class="btn btn-blue" style="padding:6px 14px;">🔄 Refresh</button>
+                        <button id="btn-refresh-friend-matches" class="btn btn-blue" style="padding:6px 14px;">🔄 Refresh</button>
                     </div>
                 </div>
                 <div id="fm-loading" style="text-align:center;padding:14px;color:#888;display:none;">⏳ Loading...</div>
@@ -411,7 +414,7 @@
     </div>
 
     <!-- Tournament Modal -->
-    <div id="tournament-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('tournament-modal')">
+    <div id="tournament-modal" class="modal-overlay">
         <div class="modal-content">
             <h3 id="tournament-modal-title">Create Tournament</h3>
             <input type="text" id="tournament-name" placeholder="Tournament Name">
@@ -425,20 +428,20 @@
                 <option value="closed">Closed</option>
             </select>
             <div class="modal-actions">
-                <button class="btn btn-green" id="tournament-save" onclick="saveTournament()">Save</button>
-                <button class="btn btn-red" onclick="closeModal('tournament-modal')">Cancel</button>
+                <button class="btn btn-green" id="tournament-save">Save</button>
+                <button class="btn btn-red" data-close-modal="tournament-modal">Cancel</button>
             </div>
         </div>
     </div>
 
     <!-- Delete Tournament Modal -->
-    <div id="delete-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('delete-modal')">
+    <div id="delete-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Confirm Delete</h3>
             <p>Are you sure you want to delete this tournament?</p>
             <div class="modal-actions">
-                <button class="btn btn-red" onclick="confirmDelete()">Delete</button>
-                <button class="btn" onclick="closeModal('delete-modal')">Cancel</button>
+                <button class="btn btn-red" id="btn-confirm-delete">Delete</button>
+                <button class="btn" data-close-modal="delete-modal">Cancel</button>
             </div>
         </div>
     </div>
@@ -452,16 +455,16 @@
         <div class="lb-toolbar">
             <div class="lb-title" id="lb-title">Screenshot Evidence</div>
             <div class="lb-mode-btns">
-                <button class="lb-mode-btn active" id="lb-btn-single" onclick="lbSetMode('single')">Single</button>
-                <button class="lb-mode-btn" id="lb-btn-compare" onclick="lbSetMode('compare')">Compare ⇔</button>
+                <button class="lb-mode-btn active" id="lb-btn-single">Single</button>
+                <button class="lb-mode-btn" id="lb-btn-compare">Compare ⇔</button>
             </div>
             <div class="lb-zoom-btns">
-                <button class="lb-zoom-btn" onclick="lbZoom(-0.25)" title="Zoom out">−</button>
+                <button class="lb-zoom-btn" id="btn-lb-zoom-out" title="Zoom out">−</button>
                 <div class="lb-zoom-level" id="lb-zoom-label">100%</div>
-                <button class="lb-zoom-btn" onclick="lbZoom(+0.25)" title="Zoom in">+</button>
-                <button class="lb-zoom-btn" onclick="lbResetZoom()" title="Reset zoom" style="font-size:0.7rem;width:auto;padding:0 7px;">Reset</button>
+                <button class="lb-zoom-btn" id="btn-lb-zoom-in" title="Zoom in">+</button>
+                <button class="lb-zoom-btn" id="btn-lb-zoom-reset" title="Reset zoom" style="font-size:0.7rem;width:auto;padding:0 7px;">Reset</button>
             </div>
-            <button class="lb-close-btn" onclick="lbClose()" title="Close (Esc)">✕</button>
+            <button class="lb-close-btn" id="btn-lb-close" title="Close (Esc)">✕</button>
         </div>
 
         <!-- Image area -->
@@ -497,7 +500,7 @@
          ADMIN FORCE-WINNER OVERRIDE MODAL
          Works on any active / stuck / disputed match
     ══════════════════════════════════════════════════════════ -->
-    <div id="override-modal" class="modal-overlay" onclick="if(event.target===this)closeModal('override-modal')">
+    <div id="override-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="dispute-header">
                 <h3>⚡ FORCE WINNER</h3>
@@ -521,7 +524,7 @@
             <!-- Screenshot evidence -->
             <div class="ovr-evidence" id="ovr-evidence-section">
                 <div class="ovr-evidence-title">📸 Screenshot Evidence
-                    <button onclick="lbOpenFromOverride()" style="margin-left:auto;padding:3px 10px;border-radius:6px;border:1px solid #2a2a30;background:#0d0d10;color:#4aadff;font-size:0.65rem;cursor:pointer;font-family:'Outfit',sans-serif;" title="Open full evidence viewer">⛶ Compare</button>
+                    <button id="btn-lb-from-override" style="margin-left:auto;padding:3px 10px;border-radius:6px;border:1px solid #2a2a30;background:#0d0d10;color:#4aadff;font-size:0.65rem;cursor:pointer;font-family:'Outfit',sans-serif;" title="Open full evidence viewer">⛶ Compare</button>
                 </div>
                 <div class="ovr-ss-grid">
                     <div class="ovr-ss-card">
@@ -547,7 +550,7 @@
 
             <!-- Player selection -->
             <div class="override-player-btns" id="ovr-player-btns">
-                <button class="ovr-player-btn" id="ovr-btn-creator" onclick="selectOverrideWinner('creator')">
+                <button class="ovr-player-btn" id="ovr-btn-creator">
                     <div class="ovr-dot blue"></div>
                     <div class="ovr-player-info">
                         <div class="ovr-player-role blue">🔵 Creator</div>
@@ -556,7 +559,7 @@
                     </div>
                     <span class="ovr-check">✅</span>
                 </button>
-                <button class="ovr-player-btn" id="ovr-btn-joiner" onclick="selectOverrideWinner('joiner')">
+                <button class="ovr-player-btn" id="ovr-btn-joiner">
                     <div class="ovr-dot orange"></div>
                     <div class="ovr-player-info">
                         <div class="ovr-player-role orange">🟠 Joiner</div>
@@ -565,7 +568,7 @@
                     </div>
                     <span class="ovr-check">✅</span>
                 </button>
-                <button class="ovr-draw-btn" id="ovr-btn-draw" onclick="selectOverrideWinner('draw')">
+                <button class="ovr-draw-btn" id="ovr-btn-draw">
                     ↩ <span>Refund Both (Draw / No Contest)</span>
                     <span class="ovr-check" style="margin-left:auto;">✅</span>
                 </button>
@@ -575,16 +578,16 @@
             <label class="override-notes-label">Reason / Evidence (required)</label>
             <textarea class="override-notes-input" id="ovr-notes" placeholder="e.g. Player A's screenshot clearly shows final score 3–1. Confirmed via video evidence shared in support chat."></textarea>
 
-            <button class="override-submit-btn" id="ovr-submit-btn" onclick="submitOverride()" disabled>
+            <button class="override-submit-btn" id="ovr-submit-btn" disabled>
                 Select a winner above to continue
             </button>
             <div style="text-align:center;margin-top:10px;">
-                <button class="btn" onclick="closeModal('override-modal')" style="background:#1a1a22;color:#555;padding:8px 20px;border-radius:9px;">Cancel</button>
+                <button class="btn" data-close-modal="override-modal" style="background:#1a1a22;color:#555;padding:8px 20px;border-radius:9px;">Cancel</button>
             </div>
         </div>
     </div>
 
-    <div id="dispute-modal" class="modal-overlay" onclick="if(event.target===this)closeModal('dispute-modal')">
+    <div id="dispute-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="dispute-header">
                 <h3>RESOLVE DISPUTE</h3>
@@ -674,1247 +677,39 @@
 
                 <!-- ⑦ Verdict buttons -->
                 <div class="dispute-actions">
-                    <button class="da-btn da-creator" id="dsp-btn-c" onclick="resolveDispute('creator')">🔵 <span id="dsp-btn-c-label">Creator</span> Wins</button>
-                    <button class="da-btn da-refund"  onclick="resolveDispute('draw')">↩ Refund Both</button>
-                    <button class="da-btn da-joiner"  id="dsp-btn-j" onclick="resolveDispute('joiner')">🟠 <span id="dsp-btn-j-label">Joiner</span> Wins</button>
+                    <button class="da-btn da-creator" id="dsp-btn-c">🔵 <span id="dsp-btn-c-label">Creator</span> Wins</button>
+                    <button class="da-btn da-refund" id="btn-resolve-draw">↩ Refund Both</button>
+                    <button class="da-btn da-joiner"  id="dsp-btn-j">🟠 <span id="dsp-btn-j-label">Joiner</span> Wins</button>
                 </div>
                 <div style="text-align:center;margin-top:10px;">
-                    <button class="btn" onclick="closeModal('dispute-modal')" style="background:#1a1a22;color:#555;padding:8px 20px;border-radius:9px;">Cancel</button>
+                    <button class="btn" data-close-modal="dispute-modal" style="background:#1a1a22;color:#555;padding:8px 20px;border-radius:9px;">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Paid / Reject Modals -->
-    <div id="paid-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('paid-modal')">
+    <div id="paid-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Mark as Paid</h3>
             <input type="text" id="mpesa-code" placeholder="M-PESA Transaction Code">
             <div class="modal-actions">
-                <button class="btn btn-green" onclick="submitPaid()">Confirm</button>
-                <button class="btn btn-red" onclick="closeModal('paid-modal')">Cancel</button>
+                <button class="btn btn-green" id="btn-submit-paid">Confirm</button>
+                <button class="btn btn-red" data-close-modal="paid-modal">Cancel</button>
             </div>
         </div>
     </div>
-    <div id="reject-modal" class="modal-overlay" onclick="if(event.target === this) closeModal('reject-modal')">
+    <div id="reject-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Reject Withdrawal</h3>
             <textarea id="reject-reason" placeholder="Reason for rejection (optional)" rows="3"></textarea>
             <div class="modal-actions">
-                <button class="btn btn-red" onclick="submitReject()">Reject</button>
-                <button class="btn" onclick="closeModal('reject-modal')">Cancel</button>
+                <button class="btn btn-red" id="btn-submit-reject">Reject</button>
+                <button class="btn" data-close-modal="reject-modal">Cancel</button>
             </div>
         </div>
     </div>
 
-    <script>
-        // --- Escape function for XSS prevention ---
-        function escapeHtml(unsafe) {
-            if (unsafe === null || unsafe === undefined) return '';
-            return String(unsafe)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
-        // --- Helper to safely create elements with text content ---
-        function createElementSafe(tag, attributes = {}, textContent = '') {
-            const el = document.createElement(tag);
-            Object.entries(attributes).forEach(([key, value]) => el.setAttribute(key, value));
-            if (textContent) el.textContent = escapeHtml(textContent);
-            return el;
-        }
-
-        // --- State ---
-        let adminKey = localStorage.getItem('adminKey');
-        let currentWithdrawalId = null;
-        let currentTournamentId = null;
-        let currentFriendMatchId = null;
-
-        // Check login
-        if (adminKey) {
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'block';
-            loadWithdrawals();
-            loadFriendMatches();
-        }
-
-        // --- Tab switching ---
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                const tabName = tab.dataset.tab;
-                document.querySelectorAll('.tab-pane').forEach(pane => pane.style.display = 'none');
-                document.getElementById(tabName + '-tab').style.display = 'block';
-                if (tabName === 'withdrawals') loadWithdrawals();
-                else if (tabName === 'tournaments') loadTournaments();
-                else if (tabName === 'analytics') loadAnalytics();
-                else loadFriendMatches();
-            });
-        });
-
-        // --- Login ---
-        function login() {
-            const key = document.getElementById('admin-key').value;
-            if (!key) return;
-            adminKey = key;
-            localStorage.setItem('adminKey', key);
-            // Test the key by fetching withdrawals
-            fetchWithdrawals('pending').then(data => {
-                if (data.error) throw new Error(data.error);
-                document.getElementById('login-section').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                loadWithdrawals();
-            }).catch(() => {
-                document.getElementById('login-error').style.display = 'block';
-                localStorage.removeItem('adminKey');
-                adminKey = null;
-            });
-        }
-
-        function logout() {
-            localStorage.removeItem('adminKey');
-            adminKey = null;
-            document.getElementById('login-section').style.display = 'block';
-            document.getElementById('dashboard').style.display = 'none';
-        }
-
-        // Auto-detect: Use localhost for local dev, Koyeb URL for production
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API = isLocal 
-            ? 'http://localhost:3000' 
-            : '/api';
-        console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
-        console.log('🔍 API URL:', API);
-
-        async function adminFetch(url, options = {}) {
-            const headers = {
-                'Content-Type': 'application/json',
-                'x-admin-key': adminKey,
-                ...options.headers
-            };
-            const fullUrl = url.startsWith('http') ? url : `${API}${url}`;
-            const res = await fetch(fullUrl, { ...options, headers });
-            if (res.status === 403) {
-                alert('Session expired');
-                logout();
-                return null;
-            }
-            return res;
-        }
-
-        // ========== WITHDRAWALS ==========
-        async function fetchWithdrawals(status = 'pending') {
-            const res = await adminFetch(`/admin/withdrawals?status=${status}`);
-            return res ? await res.json() : [];
-        }
-
-        async function loadWithdrawals() {
-            const status = document.getElementById('wd-status-filter')?.value || 'pending';
-            const data = await fetchWithdrawals(status);
-            if (data) renderWithdrawals(data, status);
-        }
-
-        function renderWithdrawals(withdrawals, status = 'pending') {
-            const container = document.getElementById('withdrawal-cards');
-            container.innerHTML = '';
-            if (!withdrawals || withdrawals.length === 0) {
-                container.innerHTML = '<div style="text-align:center;padding:40px;color:#555;background:#111116;border:1px solid #1a1a20;border-radius:16px;"><div style="font-size:2rem;margin-bottom:8px;">📭</div><div>No ' + status + ' withdrawals</div></div>';
-                document.getElementById('wd-summary').textContent = '';
-                return;
-            }
-            const total = withdrawals.reduce((s, w) => s + parseFloat(w.amount), 0);
-            document.getElementById('wd-summary').textContent = withdrawals.length + ' request' + (withdrawals.length !== 1 ? 's' : '') + ' · Total: KES ' + total.toLocaleString();
-            withdrawals.forEach(w => {
-                const card = document.createElement('div');
-                card.style.cssText = 'background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:20px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;';
-                const info = document.createElement('div');
-                const topRow = document.createElement('div');
-                topRow.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;';
-                const nameEl = document.createElement('span');
-                nameEl.style.cssText = 'font-family:"Bebas Neue",sans-serif;font-size:1.4rem;letter-spacing:2px;color:#f0f0f0;';
-                nameEl.textContent = w.name || 'Unknown';
-                const amountEl = document.createElement('span');
-                amountEl.style.cssText = 'font-family:"Bebas Neue",sans-serif;font-size:1.6rem;color:#00ff41;letter-spacing:1px;';
-                amountEl.textContent = 'KES ' + parseFloat(w.amount).toLocaleString();
-                topRow.appendChild(nameEl);
-                topRow.appendChild(amountEl);
-                info.appendChild(topRow);
-                const phoneRow = document.createElement('div');
-                phoneRow.style.cssText = 'display:flex;align-items:center;gap:16px;flex-wrap:wrap;';
-                const phoneCopy = document.createElement('span');
-                phoneCopy.style.cssText = 'font-size:1.1rem;font-weight:700;color:#fff;background:#1a1a20;padding:6px 14px;border-radius:8px;letter-spacing:1px;cursor:pointer;';
-                phoneCopy.textContent = w.phone;
-                phoneCopy.title = 'Click to copy';
-                phoneCopy.addEventListener('click', () => {
-                    navigator.clipboard.writeText(w.phone);
-                    phoneCopy.style.background = 'rgba(0,255,65,0.2)';
-                    setTimeout(() => phoneCopy.style.background = '#1a1a20', 1000);
-                });
-                phoneRow.appendChild(phoneCopy);
-                const timeEl = document.createElement('span');
-                timeEl.style.cssText = 'font-size:0.75rem;color:#555;';
-                timeEl.textContent = new Date(w.created_at).toLocaleString('en-KE');
-                phoneRow.appendChild(timeEl);
-                info.appendChild(phoneRow);
-                card.appendChild(info);
-                const actions = document.createElement('div');
-                actions.style.cssText = 'display:flex;flex-direction:column;gap:8px;align-items:flex-end;';
-                if (status === 'pending') {
-                    const waBtn = document.createElement('a');
-                    const msg = encodeURIComponent('Vumbua withdrawal: KES ' + w.amount + ' to ' + w.phone + ' for ' + w.name);
-                    waBtn.href = 'https://wa.me/?text=' + msg;
-                    waBtn.target = '_blank';
-                    waBtn.style.cssText = 'background:#25d366;color:#000;padding:8px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;text-decoration:none;text-align:center;';
-                    waBtn.textContent = '📲 WhatsApp Note';
-                    actions.appendChild(waBtn);
-                    const paidBtn = document.createElement('button');
-                    paidBtn.className = 'btn btn-green';
-                    paidBtn.style.cssText = 'padding:8px 20px;font-size:0.85rem;';
-                    paidBtn.textContent = '✅ Mark Paid';
-                    paidBtn.addEventListener('click', () => openPaidModal(w.id));
-                    actions.appendChild(paidBtn);
-                    const rejectBtn = document.createElement('button');
-                    rejectBtn.className = 'btn btn-red';
-                    rejectBtn.style.cssText = 'padding:8px 20px;font-size:0.85rem;';
-                    rejectBtn.textContent = '✗ Reject';
-                    rejectBtn.addEventListener('click', () => openRejectModal(w.id));
-                    actions.appendChild(rejectBtn);
-                } else {
-                    const statusBadge = document.createElement('span');
-                    statusBadge.className = 'status-badge status-' + status;
-                    statusBadge.textContent = status;
-                    actions.appendChild(statusBadge);
-                    if (w.mpesa_code) {
-                        const codeEl = document.createElement('div');
-                        codeEl.style.cssText = 'font-size:0.75rem;color:#555;';
-                        codeEl.textContent = 'Code: ' + w.mpesa_code;
-                        actions.appendChild(codeEl);
-                    }
-                }
-                card.appendChild(actions);
-                container.appendChild(card);
-            });
-        }
-
-        function openPaidModal(id) { currentWithdrawalId = id; document.getElementById('mpesa-code').value = ''; document.getElementById('paid-modal').classList.add('open'); }
-        async function submitPaid() {
-            const mpesaCode = document.getElementById('mpesa-code').value.trim();
-            if (!mpesaCode) return alert('Enter M-PESA code');
-            const res = await adminFetch(`/admin/withdrawals/${currentWithdrawalId}/paid`, { method: 'PATCH', body: JSON.stringify({ mpesaCode }) });
-            if (res && res.ok) { closeModal('paid-modal'); loadWithdrawals(); } else alert('Failed');
-        }
-        function openRejectModal(id) { currentWithdrawalId = id; document.getElementById('reject-reason').value = ''; document.getElementById('reject-modal').classList.add('open'); }
-        async function submitReject() {
-            const reason = document.getElementById('reject-reason').value.trim();
-            const res = await adminFetch(`/admin/withdrawals/${currentWithdrawalId}/reject`, { method: 'PATCH', body: JSON.stringify({ reason }) });
-            if (res && res.ok) { closeModal('reject-modal'); loadWithdrawals(); } else alert('Failed');
-        }
-
-        // ========== TOURNAMENTS ==========
-        async function loadTournaments() {
-            const res = await adminFetch('/admin/tournaments');
-            if (!res) return;
-            const data = await res.json();
-            renderTournaments(data);
-        }
-
-        function renderTournaments(tournaments) {
-            const tbody = document.querySelector('#tournaments-table tbody');
-            tbody.innerHTML = '';
-            if (!tournaments || tournaments.length === 0) {
-                const row = document.createElement('tr');
-                const td = createElementSafe('td', { colspan: '7', style: 'text-align:center; color:#888;' }, 'No tournaments');
-                row.appendChild(td);
-                tbody.appendChild(row);
-                return;
-            }
-            tournaments.forEach(t => {
-                const row = document.createElement('tr');
-                row.appendChild(createElementSafe('td', {}, t.name));
-                row.appendChild(createElementSafe('td', {}, `KES ${t.entry_fee}`));
-                const start = new Date(t.start_time).toLocaleString();
-                row.appendChild(createElementSafe('td', {}, start));
-                row.appendChild(createElementSafe('td', {}, t.max_players));
-                row.appendChild(createElementSafe('td', {}, t.room_code || '—'));
-                const statusTd = document.createElement('td');
-                const statusClass = t.status === 'open' ? 'status-open' : t.status === 'live' ? 'status-live' : 'status-closed';
-                const badge = createElementSafe('span', { class: `status-badge ${statusClass}` }, t.status);
-                statusTd.appendChild(badge);
-                row.appendChild(statusTd);
-                const actionsTd = document.createElement('td');
-                actionsTd.className = 'actions';
-                const editBtn = createElementSafe('button', { class: 'btn btn-yellow' }, 'Edit');
-                editBtn.addEventListener('click', () => editTournament(t.id));
-                actionsTd.appendChild(editBtn);
-                const deleteBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Delete');
-                deleteBtn.addEventListener('click', () => openDeleteModal(t.id));
-                actionsTd.appendChild(deleteBtn);
-                row.appendChild(actionsTd);
-                tbody.appendChild(row);
-            });
-        }
-
-        function openTournamentModal() {
-            currentTournamentId = null;
-            document.getElementById('tournament-modal-title').innerText = 'Create Tournament';
-            document.getElementById('tournament-name').value = '';
-            document.getElementById('tournament-fee').value = '';
-            document.getElementById('tournament-start').value = '';
-            document.getElementById('tournament-max').value = '';
-            document.getElementById('tournament-room').value = '';
-            document.getElementById('tournament-status').value = 'open';
-            document.getElementById('tournament-modal').classList.add('open');
-        }
-
-        async function editTournament(id) {
-            currentTournamentId = id;
-            const res = await adminFetch(`/admin/tournaments/${id}`);
-            if (!res) return;
-            const t = await res.json();
-            document.getElementById('tournament-modal-title').innerText = 'Edit Tournament';
-            document.getElementById('tournament-name').value = t.name;
-            document.getElementById('tournament-fee').value = t.entry_fee;
-            const start = new Date(t.start_time);
-            const year = start.getFullYear();
-            const month = String(start.getMonth() + 1).padStart(2, '0');
-            const day = String(start.getDate()).padStart(2, '0');
-            const hours = String(start.getHours()).padStart(2, '0');
-            const mins = String(start.getMinutes()).padStart(2, '0');
-            document.getElementById('tournament-start').value = `${year}-${month}-${day}T${hours}:${mins}`;
-            document.getElementById('tournament-max').value = t.max_players;
-            document.getElementById('tournament-room').value = t.room_code || '';
-            document.getElementById('tournament-status').value = t.status;
-            document.getElementById('tournament-modal').classList.add('open');
-        }
-
-        async function saveTournament() {
-            const name = document.getElementById('tournament-name').value.trim();
-            const fee = parseFloat(document.getElementById('tournament-fee').value);
-            const start = document.getElementById('tournament-start').value;
-            const max = parseInt(document.getElementById('tournament-max').value);
-            const room = document.getElementById('tournament-room').value.trim();
-            const status = document.getElementById('tournament-status').value;
-
-            if (!name || !fee || !start || !max) return alert('Please fill all required fields');
-
-            const payload = {
-                name,
-                entry_fee: fee,
-                start_time: new Date(start).toISOString(),
-                max_players: max,
-                room_code: room || null,
-                status
-            };
-
-            let res;
-            if (currentTournamentId) {
-                res = await adminFetch(`/admin/tournaments/${currentTournamentId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify(payload)
-                });
-            } else {
-                res = await adminFetch('/admin/tournaments', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-            }
-
-            if (res && res.ok) {
-                closeModal('tournament-modal');
-                loadTournaments();
-            } else {
-                alert('Save failed');
-            }
-        }
-
-        function openDeleteModal(id) {
-            currentTournamentId = id;
-            document.getElementById('delete-modal').classList.add('open');
-        }
-
-        async function confirmDelete() {
-            const res = await adminFetch(`/admin/tournaments/${currentTournamentId}`, { method: 'DELETE' });
-            if (res && res.ok) {
-                closeModal('delete-modal');
-                loadTournaments();
-            } else {
-                alert('Delete failed');
-            }
-        }
-
-        // ========== FRIEND MATCHES ==========
-        let _dspCreatorId = null, _dspJoinerId = null;
-
-        async function loadFriendMatches() {
-            const status = document.getElementById('fm-status-filter').value;
-            const url = status === 'all' ? '/admin/friend-matches' : '/admin/friend-matches?status=' + encodeURIComponent(status);
-            const loading = document.getElementById('fm-loading');
-            if (loading) loading.style.display = 'block';
-            try {
-                const res = await adminFetch(url);
-                if (!res) return;
-                if (!res.ok) {
-                    const e = await res.json().catch(() => ({}));
-                    renderFriendMatches(null, (e.error || 'Server error ' + res.status));
-                    return;
-                }
-                const data = await res.json();
-                renderFriendMatches(Array.isArray(data) ? data : []);
-            } catch(e) {
-                renderFriendMatches(null, 'Network error: ' + e.message);
-            } finally {
-                if (loading) loading.style.display = 'none';
-            }
-        }
-
-        function renderFriendMatches(matches, errorMsg) {
-            const tbody = document.querySelector('#friend-matches-table tbody');
-            tbody.innerHTML = '';
-            const cols = 9;
-            if (errorMsg) {
-                const row = document.createElement('tr');
-                row.appendChild(createElementSafe('td', { colspan: String(cols), style: 'text-align:center;color:#ff4444;padding:20px;' }, '⚠️ ' + errorMsg));
-                tbody.appendChild(row);
-                return;
-            }
-            if (!matches || matches.length === 0) {
-                const row = document.createElement('tr');
-                row.appendChild(createElementSafe('td', { colspan: String(cols), style: 'text-align:center;color:#888;padding:24px;' }, 'No matches found'));
-                tbody.appendChild(row);
-                return;
-            }
-            matches.forEach(m => {
-                const row = document.createElement('tr');
-                row.appendChild(createElementSafe('td', { style: 'font-family:monospace;font-size:0.78rem;color:#aaa;' }, m.match_code || '—'));
-                const cname = m.creator?.username || (m.creator_id ? m.creator_id.substring(0,8)+'…' : '—');
-                const jname = m.joiner?.username  || (m.joiner_id  ? m.joiner_id.substring(0,8)+'…'  : '—');
-                row.appendChild(createElementSafe('td', {}, cname));
-                row.appendChild(createElementSafe('td', {}, jname));
-                const hasScore = m.declared_score_creator !== null && m.declared_score_creator !== undefined
-                              && m.declared_score_joiner  !== null && m.declared_score_joiner  !== undefined;
-                const scoreStr = hasScore ? (m.declared_score_creator + ' – ' + m.declared_score_joiner) : '—';
-                row.appendChild(createElementSafe('td', { style: 'font-weight:700;' }, scoreStr));
-                row.appendChild(createElementSafe('td', {}, 'KES ' + (m.wager_amount || 0)));
-                row.appendChild(createElementSafe('td', { style: 'color:#00ff41;font-weight:600;' }, 'KES ' + (m.winner_prize || 0)));
-                const statusTd = document.createElement('td');
-                const sc = m.status === 'pending' ? 'status-pending'
-                         : m.status === 'active'  ? 'status-live'
-                         : m.status === 'awaiting_confirmation' ? 'status-pending'
-                         : m.status === 'disputed' ? 'status-disputed'
-                         : 'status-closed';
-                statusTd.appendChild(createElementSafe('span', { class: 'status-badge ' + sc }, m.status || '—'));
-                row.appendChild(statusTd);
-                const ca = m.created_at ? new Date(m.created_at).toLocaleString('en-KE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
-                row.appendChild(createElementSafe('td', { style: 'font-size:0.72rem;color:#666;' }, ca));
-                const actionsTd = document.createElement('td');
-                actionsTd.className = 'actions';
-                if (m.status === 'disputed') {
-                    const btn = createElementSafe('button', { class: 'btn btn-yellow' }, '⚖️ Resolve');
-                    btn.addEventListener('click', () => openDisputeModal(m));
-                    actionsTd.appendChild(btn);
-                } else if (m.status === 'awaiting_confirmation') {
-                    const btn = createElementSafe('button', { class: 'btn btn-blue' }, '👁 View');
-                    btn.addEventListener('click', () => openDisputeModal(m));
-                    actionsTd.appendChild(btn);
-                }
-                // ⚡ Override button — shown on all non-terminal matches
-                if (!['completed','cancelled','expired'].includes(m.status)) {
-                    const ovrBtn = createElementSafe('button', { class: 'btn btn-orange', style: 'margin-left:4px;' }, '⚡ Override');
-                    ovrBtn.addEventListener('click', () => openOverrideModal(m));
-                    actionsTd.appendChild(ovrBtn);
-                }
-                if (['completed','cancelled','expired'].includes(m.status) && m.status !== 'disputed' && m.status !== 'awaiting_confirmation') {
-                    if (!actionsTd.hasChildNodes()) actionsTd.appendChild(createElementSafe('span', { style: 'color:#333;' }, '—'));
-                }
-                row.appendChild(actionsTd);
-                tbody.appendChild(row);
-            });
-        }
-
-        function openDisputeModal(m) {
-            currentFriendMatchId = m.id;
-            _dspCreatorId = m.creator_id;
-            _dspJoinerId  = m.joiner_id;
-            document.getElementById('dsp-loading').style.display = 'block';
-            document.getElementById('dsp-body').style.display = 'none';
-            document.getElementById('dispute-modal').classList.add('open');
-
-            const fmt = dt => dt ? new Date(dt).toLocaleString('en-KE',{dateStyle:'short',timeStyle:'short'}) : '—';
-            const cname = m.creator?.username || (m.creator_id ? m.creator_id.substring(0,8)+'…' : 'Creator');
-            const jname = m.joiner?.username  || (m.joiner_id  ? m.joiner_id.substring(0,8)+'…'  : 'Joiner');
-            const cteam = m.creator_team || '—';
-            const jteam = m.joiner_team  || '—';
-
-            // ① Meta strip
-            document.getElementById('dsp-code').textContent   = m.match_code || '—';
-            document.getElementById('dsp-wager').textContent  = m.wager_amount || '—';
-            document.getElementById('dsp-prize').textContent  = m.winner_prize || '—';
-            document.getElementById('dsp-method').textContent = m.settlement_method || 'manual';
-            document.getElementById('dsp-time').textContent   = fmt(m.disputed_at || m.created_at);
-            document.getElementById('dsp-btn-c-label').textContent = cname;
-            document.getElementById('dsp-btn-j-label').textContent = jname;
-
-            // ② Dispute reason
-            const reasonBox = document.getElementById('dsp-reason-box');
-            const reasonTxt = m.dispute_reason || 'No reason recorded';
-            document.getElementById('dsp-reason-text').textContent = reasonTxt;
-            // Who disputed?
-            let whoDisputed = '';
-            if (m.disputer_id === m.creator_id) whoDisputed = cname + ' (Creator) raised this dispute';
-            else if (m.disputer_id === m.joiner_id) whoDisputed = jname + ' (Joiner) raised this dispute';
-            if (whoDisputed) {
-                const who = document.createElement('div');
-                who.style.cssText = 'font-size:0.7rem;color:#888;margin-top:5px;';
-                who.textContent = '👤 ' + whoDisputed;
-                reasonBox.appendChild(who);
-            }
-
-            // ③ Score comparison block
-            // Declarers score (from declared_score_creator / declared_score_joiner)
-            const cs = m.declared_score_creator, cj = m.declared_score_joiner;
-            // Disputer's counter-claim (may be null if they didn't provide one)
-            const dc = m.disputer_declared_creator, dj = m.disputer_declared_joiner;
-
-            // Determine who declared (and therefore whose score is "official claim")
-            const declarerId = m.declared_score_by;
-            const creatorDeclared = declarerId === m.creator_id;
-
-            // Official declared score
-            const offC = cs, offJ = cj;   // always from declared_score_* fields
-            // Counter score — from disputer if they submitted one
-            const cntC = dc !== null && dc !== undefined ? dc : null;
-            const cntJ = dj !== null && dj !== undefined ? dj : null;
-
-            // Score compare
-            const scC = document.getElementById('sc-cscore');
-            const scJ = document.getElementById('sc-jscore');
-            document.getElementById('sc-cname').textContent = cname;
-            document.getElementById('sc-jname').textContent = jname;
-            document.getElementById('sc-cteam').textContent = cteam;
-            document.getElementById('sc-jteam').textContent = jteam;
-
-            // Show declared score perspective
-            if (offC !== null && offC !== undefined && offJ !== null && offJ !== undefined) {
-                scC.textContent = offC; scC.className = 'sc-score-big ' + (offC > offJ ? 'win' : offC < offJ ? 'loss' : 'unk');
-                scJ.textContent = offJ; scJ.className = 'sc-score-big ' + (offJ > offC ? 'win' : offJ < offC ? 'loss' : 'unk');
-                document.getElementById('sc-clabel').textContent = creatorDeclared ? 'Declared (Creator)' : 'Declared (Joiner)';
-                document.getElementById('sc-jlabel').textContent = creatorDeclared ? 'Declared (Joiner)' : 'Declared (Creator)';
-            } else {
-                scC.textContent = '?'; scC.className = 'sc-score-big unk';
-                scJ.textContent = '?'; scJ.className = 'sc-score-big unk';
-            }
-
-            // Agree / Disagree verdict tag
-            const verdictEl = document.getElementById('sc-verdict');
-            if (cntC !== null && cntJ !== null && offC !== null && offJ !== null) {
-                const scoresMatch = String(cntC) === String(offC) && String(cntJ) === String(offJ);
-                verdictEl.textContent  = scoresMatch ? '✓ Agree' : '✗ Disagree';
-                verdictEl.className    = 'sc-verdict ' + (scoresMatch ? 'agree' : 'disagree');
-            } else {
-                verdictEl.textContent = 'No counter';
-                verdictEl.className   = 'sc-verdict';
-                verdictEl.style.color = '#333';
-            }
-
-            // ④ Player cards
-            document.getElementById('dsp-cname').textContent = cname;
-            document.getElementById('dsp-jname').textContent = jname;
-            document.getElementById('dsp-cteam').textContent = cteam;
-            document.getElementById('dsp-jteam').textContent = jteam;
-
-            // Creator card score
-            const cScoreEl = document.getElementById('dsp-cscore');
-            if (offC !== null && offC !== undefined && offJ !== null && offJ !== undefined) {
-                cScoreEl.textContent = offC + ' — ' + offJ;
-                cScoreEl.className = 'dp-score-val ' + (offC > offJ ? 'win' : offC < offJ ? 'loss' : 'unk');
-            } else { cScoreEl.textContent = '?'; cScoreEl.className = 'dp-score-val unk'; }
-            const cBadge = document.getElementById('dsp-c-declared-badge');
-            if (creatorDeclared) { cBadge.style.display = ''; cBadge.className = 'dp-badge declared'; cBadge.textContent = 'Declared'; }
-            else                 { cBadge.style.display = ''; cBadge.className = 'dp-badge'; cBadge.textContent = 'Opponent declared'; cBadge.style.cssText += 'color:#888;background:rgba(255,255,255,0.04);border:1px solid #2a2a2a;'; }
-
-            // Joiner card score — show their counter-claim if provided, else declared from their POV
-            const jScoreEl = document.getElementById('dsp-jscore');
-            if (cntC !== null && cntJ !== null) {
-                jScoreEl.textContent = cntC + ' — ' + cntJ;
-                jScoreEl.className = 'dp-score-val ' + (cntJ > cntC ? 'win' : cntJ < cntC ? 'loss' : 'unk');
-                const jBadge = document.getElementById('dsp-j-disputed-badge');
-                jBadge.style.display = '';
-                jBadge.className = 'dp-badge disputed';
-                jBadge.textContent = 'Counter-claim';
-            } else if (offC !== null && offC !== undefined) {
-                jScoreEl.textContent = offC + ' — ' + offJ;
-                jScoreEl.className = 'dp-score-val unk';
-                const jBadge = document.getElementById('dsp-j-disputed-badge');
-                jBadge.style.display = '';
-                jBadge.className = 'dp-badge';
-                jBadge.textContent = 'No counter submitted';
-                jBadge.style.cssText += 'color:#555;background:transparent;border:1px solid #222;';
-            } else { jScoreEl.textContent = '?'; jScoreEl.className = 'dp-score-val unk'; }
-
-            // Screenshots
-            const cImg = m.creator_screenshot_url || m.declared_screenshot_url || m.screenshot_url
-                      || m.confirmer_screenshot_url || m.draw_screenshot_url || m.penalty_screenshot_url || null;
-            const jImg = m.joiner_screenshot_url || m.disputer_screenshot_url || m.challenge_screenshot_url || null;
-            const cImgDiv = document.getElementById('dsp-cimg');
-            const jImgDiv = document.getElementById('dsp-jimg');
-            const cLink = document.getElementById('dsp-cimg-link');
-            const jLink = document.getElementById('dsp-jimg-link');
-
-            if (cImg) {
-                const img = document.createElement('img');
-                img.className = 'dp-img'; img.src = cImg; img.title = 'Click to open evidence viewer';
-                img.addEventListener('click', () => openLightboxCompare(cImg, jImg,
-                    '🔵 ' + cname + ' (Creator)', '🟠 ' + jname + ' (Joiner)'));
-                cImgDiv.innerHTML = ''; cImgDiv.appendChild(img);
-                cLink.href = cImg; cLink.style.display = 'block';
-            } else {
-                cImgDiv.innerHTML = '<div class="dp-noimg">No screenshot provided</div>';
-                cLink.style.display = 'none';
-            }
-            if (jImg) {
-                const img = document.createElement('img');
-                img.className = 'dp-img'; img.src = jImg; img.title = 'Click to open evidence viewer';
-                img.addEventListener('click', () => openLightboxCompare(cImg, jImg,
-                    '🔵 ' + cname + ' (Creator)', '🟠 ' + jname + ' (Joiner)'));
-                jImgDiv.innerHTML = ''; jImgDiv.appendChild(img);
-                jLink.href = jImg; jLink.style.display = 'block';
-            } else {
-                jImgDiv.innerHTML = '<div class="dp-noimg">No screenshot provided</div>';
-                jLink.style.display = 'none';
-            }
-
-            // ⑤ Timeline
-            const tlContainer = document.getElementById('dsp-timeline-rows');
-            tlContainer.innerHTML = '';
-            const tlEvents = [
-                { dot:'green',  time: m.created_at,   text: '<strong>Match created</strong> by ' + cname },
-                { dot:'blue',   time: m.started_at,   text: '<strong>' + jname + '</strong> joined — match started' },
-                m.declared_score_by ? { dot:'yellow', time: m.declared_at || m.score_declared_at,
-                    text: '<strong>Score declared</strong> (' + offC + '–' + offJ + ') by ' +
-                          (declarerId === m.creator_id ? cname : jname) } : null,
-                m.disputed_at ? { dot:'red', time: m.disputed_at,
-                    text: '<strong>Dispute raised</strong>' + (reasonTxt !== 'No reason recorded' ? ': "' + reasonTxt + '"' : '') } : null,
-            ].filter(Boolean);
-            tlEvents.forEach(ev => {
-                const row = document.createElement('div');
-                row.className = 'tl-row';
-                const dot = document.createElement('div');
-                dot.className = 'tl-dot ' + ev.dot;
-                const body = document.createElement('div');
-                body.className = 'tl-body'; body.innerHTML = ev.text;
-                const time = document.createElement('div');
-                time.className = 'tl-time'; time.textContent = fmt(ev.time);
-                row.appendChild(dot); row.appendChild(body); row.appendChild(time);
-                tlContainer.appendChild(row);
-            });
-
-            // ⑥ Clear notes field
-            document.getElementById('dsp-admin-notes').value = '';
-
-            document.getElementById('dsp-loading').style.display = 'none';
-            document.getElementById('dsp-body').style.display = 'block';
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // EVIDENCE LIGHTBOX — zoom, pan, side-by-side compare
-        // ══════════════════════════════════════════════════════════════
-        const _lb = {
-            scale: 1, minScale: 0.25, maxScale: 8,
-            panX: 0, panY: 0,
-            dragging: false, lastX: 0, lastY: 0,
-            mode: 'single',   // 'single' | 'compare'
-            leftSrc: null, rightSrc: null,
-            leftLabel: '🔵 Creator', rightLabel: '🟠 Joiner'
-        };
-
-        function openLightbox(src, title) {
-            _lb.leftSrc  = null;
-            _lb.rightSrc = null;
-            lbSetMode('single');
-            document.getElementById('lightbox-img').src = src;
-            document.getElementById('lb-title').textContent = title || 'Screenshot Evidence';
-            lbResetZoom();
-            document.getElementById('lightbox').classList.add('open');
-        }
-
-        // Called from override and dispute modals — passes both screenshots
-        function openLightboxCompare(leftSrc, rightSrc, leftLabel, rightLabel) {
-            _lb.leftSrc    = leftSrc  || null;
-            _lb.rightSrc   = rightSrc || null;
-            _lb.leftLabel  = leftLabel  || '🔵 Creator';
-            _lb.rightLabel = rightLabel || '🟠 Joiner';
-
-            // Populate compare panes
-            const lWrap = document.getElementById('lb-cmp-left-wrap');
-            const rWrap = document.getElementById('lb-cmp-right-wrap');
-            document.getElementById('lb-cmp-left-label').textContent  = leftLabel  || '🔵 Creator';
-            document.getElementById('lb-cmp-right-label').textContent = rightLabel || '🟠 Joiner';
-
-            lWrap.innerHTML = leftSrc
-                ? '<img src="' + escapeHtml(leftSrc)  + '" draggable="false" style="max-width:100%;max-height:100%;object-fit:contain;">'
-                : '<div class="lb-no-img">No screenshot</div>';
-            rWrap.innerHTML = rightSrc
-                ? '<img src="' + escapeHtml(rightSrc) + '" draggable="false" style="max-width:100%;max-height:100%;object-fit:contain;">'
-                : '<div class="lb-no-img">No screenshot</div>';
-
-            // Default: if both screenshots exist open compare, else single
-            if (leftSrc && rightSrc) {
-                lbSetMode('compare');
-                document.getElementById('lightbox-img').src = leftSrc;
-            } else {
-                document.getElementById('lightbox-img').src = leftSrc || rightSrc || '';
-                lbSetMode('single');
-            }
-            document.getElementById('lb-title').textContent = 'Screenshot Evidence';
-            lbResetZoom();
-            document.getElementById('lightbox').classList.add('open');
-        }
-
-        function lbClose() {
-            document.getElementById('lightbox').classList.remove('open');
-            document.getElementById('lightbox-img').src = '';
-        }
-
-        function lbSetMode(mode) {
-            _lb.mode = mode;
-            const singleEl  = document.getElementById('lb-single');
-            const compareEl = document.getElementById('lb-compare');
-            const btnS = document.getElementById('lb-btn-single');
-            const btnC = document.getElementById('lb-btn-compare');
-            if (mode === 'compare') {
-                singleEl.style.display  = 'none';
-                compareEl.classList.add('active');
-                btnS.classList.remove('active');
-                btnC.classList.add('active');
-            } else {
-                singleEl.style.display  = '';
-                compareEl.classList.remove('active');
-                btnS.classList.add('active');
-                btnC.classList.remove('active');
-            }
-        }
-
-        function lbApplyTransform() {
-            const img = document.getElementById('lightbox-img');
-            img.style.transform = `translate(${_lb.panX}px, ${_lb.panY}px) scale(${_lb.scale})`;
-            document.getElementById('lb-zoom-label').textContent = Math.round(_lb.scale * 100) + '%';
-        }
-
-        function lbZoom(delta) {
-            _lb.scale = Math.min(_lb.maxScale, Math.max(_lb.minScale, _lb.scale + delta));
-            lbApplyTransform();
-        }
-
-        function lbResetZoom() {
-            _lb.scale = 1; _lb.panX = 0; _lb.panY = 0;
-            lbApplyTransform();
-        }
-
-        // Scroll to zoom
-        document.getElementById('lightbox').addEventListener('wheel', e => {
-            if (_lb.mode !== 'single') return;
-            e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.15 : 0.15;
-            _lb.scale = Math.min(_lb.maxScale, Math.max(_lb.minScale, _lb.scale + delta));
-            lbApplyTransform();
-        }, { passive: false });
-
-        // Drag to pan
-        const lbSingle = document.getElementById('lb-single');
-        lbSingle.addEventListener('mousedown', e => {
-            if (e.button !== 0) return;
-            _lb.dragging = true; _lb.lastX = e.clientX; _lb.lastY = e.clientY;
-            lbSingle.classList.add('grabbing');
-        });
-        window.addEventListener('mousemove', e => {
-            if (!_lb.dragging) return;
-            _lb.panX += e.clientX - _lb.lastX;
-            _lb.panY += e.clientY - _lb.lastY;
-            _lb.lastX = e.clientX; _lb.lastY = e.clientY;
-            lbApplyTransform();
-        });
-        window.addEventListener('mouseup', () => {
-            _lb.dragging = false;
-            lbSingle.classList.remove('grabbing');
-        });
-
-        // Keyboard shortcuts
-        window.addEventListener('keydown', e => {
-            if (!document.getElementById('lightbox').classList.contains('open')) return;
-            if (e.key === 'Escape') lbClose();
-            if (e.key === '+' || e.key === '=') lbZoom(+0.25);
-            if (e.key === '-') lbZoom(-0.25);
-            if (e.key === '0') lbResetZoom();
-            if (e.key === 'c' || e.key === 'C') lbSetMode(_lb.mode === 'compare' ? 'single' : 'compare');
-        });
-
-        async function resolveDispute(side) {
-            const adminNotes = (document.getElementById('dsp-admin-notes').value || '').trim();
-            const body = side === 'draw'
-                ? { resolution: 'draw', adminNotes }
-                : { winnerId: side === 'creator' ? _dspCreatorId : _dspJoinerId, adminNotes };
-            const label = side === 'creator' ? 'Creator wins' : side === 'joiner' ? 'Joiner wins' : 'Refund both';
-            if (!confirm(label + ' — are you sure?')) return;
-            document.querySelectorAll('.da-btn').forEach(b => b.disabled = true);
-            const res = await adminFetch('/admin/resolve-dispute/' + currentFriendMatchId, {
-                method: 'POST', body: JSON.stringify(body)
-            });
-            if (res && res.ok) {
-                closeModal('dispute-modal');
-                loadFriendMatches();
-            } else {
-                alert('Failed to resolve. Check server logs.');
-                document.querySelectorAll('.da-btn').forEach(b => b.disabled = false);
-            }
-        }
-
-        // ========== UI Helpers ==========
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('open');
-            if (modalId === 'paid-modal' || modalId === 'reject-modal') currentWithdrawalId = null;
-            if (modalId === 'tournament-modal') currentTournamentId = null;
-            if (modalId === 'dispute-modal') currentFriendMatchId = null;
-        }
-
-        // Attach filter change listener
-        document.getElementById('fm-status-filter').addEventListener('change', loadFriendMatches);
-
-        // ══════════════════════════════════════════════════════════════
-        // FORCE WINNER OVERRIDE — admin modal JS
-        // ══════════════════════════════════════════════════════════════
-        let _ovrMatch       = null;
-        let _ovrSelection   = null;  // 'creator' | 'joiner' | 'draw'
-
-        function lbOpenFromOverride() {
-            if (!_ovrMatch) return;
-            const m = _ovrMatch;
-            const cImg = m.creator_screenshot_url || m.declared_screenshot_url || m.screenshot_url
-                      || m.confirmer_screenshot_url || m.draw_screenshot_url || m.penalty_screenshot_url || null;
-            const jImg = m.joiner_screenshot_url || m.disputer_screenshot_url || m.challenge_screenshot_url || null;
-            const cname = (m.creator?.username || 'Creator') + ' (Creator)';
-            const jname = (m.joiner?.username  || 'Joiner')  + ' (Joiner)';
-            openLightboxCompare(cImg, jImg, '🔵 ' + cname, '🟠 ' + jname);
-        }
-
-        function openOverrideModal(m) {
-            _ovrMatch     = m;
-            _ovrSelection = null;
-
-            // Populate summary
-            document.getElementById('ovr-code').textContent   = m.match_code || '—';
-            document.getElementById('ovr-status').textContent = m.status || '—';
-            document.getElementById('ovr-prize').textContent  = m.winner_prize || '—';
-
-            const cs = m.declared_score_creator, cj = m.declared_score_joiner;
-            document.getElementById('ovr-score').textContent =
-                (cs !== null && cs !== undefined && cj !== null && cj !== undefined)
-                ? cs + ' — ' + cj : 'Not declared yet';
-
-            // Player names / teams
-            const cname = m.creator?.username || (m.creator_id ? m.creator_id.substring(0,8)+'…' : 'Creator');
-            const jname = m.joiner?.username  || (m.joiner_id  ? m.joiner_id.substring(0,8)+'…'  : 'Joiner (not joined yet)');
-            document.getElementById('ovr-cname').textContent = cname;
-            document.getElementById('ovr-jname').textContent = jname;
-            document.getElementById('ovr-cteam').textContent = m.creator_team || '—';
-            document.getElementById('ovr-jteam').textContent = m.joiner_team  || '—';
-
-            // Disable joiner button if match has no joiner yet
-            const joinerBtn = document.getElementById('ovr-btn-joiner');
-            if (!m.joiner_id) {
-                joinerBtn.disabled = true;
-                joinerBtn.style.opacity = '0.3';
-                joinerBtn.title = 'No joiner yet';
-            } else {
-                joinerBtn.disabled = false;
-                joinerBtn.style.opacity = '';
-                joinerBtn.title = '';
-            }
-
-            // ── Populate screenshots ──────────────────────────────────
-            // All these columns come back in the match object from select('*')
-            const ssFields = [
-                { url: m.creator_screenshot_url,     tag: 'Creator upload (dual)',  side: 'c' },
-                { url: m.declared_screenshot_url,    tag: 'Declared result',        side: 'c' },
-                { url: m.screenshot_url,             tag: 'Original upload',        side: 'c' },
-                { url: m.confirmer_screenshot_url,   tag: 'Confirmer screenshot',   side: 'c' },
-                { url: m.first_upload_screenshot_url,tag: 'First OCR upload',       side: 'c' },
-                { url: m.draw_screenshot_url,        tag: 'Draw screenshot',        side: 'c' },
-                { url: m.penalty_screenshot_url,     tag: 'Penalty result',         side: 'c' },
-            ];
-            const ssFieldsJ = [
-                { url: m.joiner_screenshot_url,      tag: 'Joiner upload (dual)',   side: 'j' },
-                { url: m.disputer_screenshot_url,    tag: 'Disputer screenshot',    side: 'j' },
-                { url: m.challenge_screenshot_url,   tag: 'Challenge screenshot',   side: 'j' },
-            ];
-
-            // ── Show OCR data beneath each screenshot if available ────
-            function ocrBadge(ocrRaw) {
-                if (!ocrRaw) return '';
-                try {
-                    const d = JSON.parse(ocrRaw);
-                    const score = (d.score1 != null && d.score2 != null) ? `${d.score1}–${d.score2}` : '?–?';
-                    const conf  = d.confidence != null ? d.confidence + '%' : '?';
-                    const fraud = d.fraudScore  != null ? d.fraudScore      : '?';
-                    const fraudColor = fraud >= 60 ? '#ff4444' : fraud >= 30 ? '#ffaa44' : '#00ff41';
-                    return `<div style="padding:5px 8px 7px;font-size:0.65rem;color:#888;display:flex;gap:10px;flex-wrap:wrap;">
-                        <span>⚽ Score: <b style="color:#fff">${score}</b></span>
-                        <span>🎯 Conf: <b style="color:#4aadff">${conf}</b></span>
-                        <span>🚨 Fraud: <b style="color:${fraudColor}">${fraud}</b></span>
-                    </div>`;
-                } catch { return ''; }
-            }
-
-            function populateSsCard(fields, wrapId, linkId, tagId, ocrRaw) {
-                const wrap = document.getElementById(wrapId);
-                const link = document.getElementById(linkId);
-                const tag  = document.getElementById(tagId);
-                const found = fields.find(f => f.url);
-                if (found) {
-                    const img = document.createElement('img');
-                    img.className = 'ovr-ss-img';
-                    img.src = found.url;
-                    img.title = 'Click to enlarge';
-                    img.addEventListener('click', () => openLightbox(found.url));
-                    img.onerror = () => { wrap.innerHTML = '<div class="ovr-ss-none" style="color:#ff6644">⚠️ Image failed to load</div>'; };
-                    wrap.innerHTML = '';
-                    wrap.appendChild(img);
-                    link.href = found.url;
-                    link.style.display = '';
-                    tag.textContent = found.tag;
-                    // OCR badge — show score/confidence/fraud under image
-                    if (ocrRaw) {
-                        try {
-                            const d = JSON.parse(ocrRaw);
-                            const score = (d.score1 != null && d.score2 != null) ? d.score1 + '\u2013' + d.score2 : '?\u2013?';
-                            const conf  = d.confidence != null ? d.confidence + '%' : '?';
-                            const fraud = d.fraudScore  != null ? d.fraudScore      : '?';
-                            const fc    = fraud >= 60 ? '#ff4444' : fraud >= 30 ? '#ffaa44' : '#00ff41';
-                            const badge = document.createElement('div');
-                            badge.style.cssText = 'padding:5px 8px 7px;font-size:0.65rem;color:#888;display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid #1a1a22;';
-                            badge.innerHTML = '<span>⚽ <b style="color:#fff">' + score + '</b></span><span>🎯 <b style="color:#4aadff">' + conf + '</b></span><span>🚨 Fraud: <b style="color:' + fc + '">' + fraud + '</b></span>';
-                            wrap.parentElement.appendChild(badge);
-                        } catch(e) {}
-                    }
-                } else {
-                    wrap.innerHTML = '<div class="ovr-ss-none">No screenshot</div>';
-                    link.style.display = 'none';
-                    tag.textContent = '';
-                }
-            }
-            populateSsCard(ssFields,  'ovr-ss-c-wrap', 'ovr-ss-c-link', 'ovr-ss-c-tag', m.creator_ocr_data);
-            populateSsCard(ssFieldsJ, 'ovr-ss-j-wrap', 'ovr-ss-j-link', 'ovr-ss-j-tag', m.joiner_ocr_data);
-
-            // Reset state
-            ['ovr-btn-creator','ovr-btn-joiner','ovr-btn-draw'].forEach(id => {
-                const el = document.getElementById(id);
-                el.classList.remove('selected','blue','orange');
-            });
-            document.getElementById('ovr-notes').value = '';
-            const submitBtn = document.getElementById('ovr-submit-btn');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Select a winner above to continue';
-
-            document.getElementById('override-modal').classList.add('open');
-        }
-
-        function selectOverrideWinner(side) {
-            _ovrSelection = side;
-
-            // Reset all buttons
-            document.getElementById('ovr-btn-creator').classList.remove('selected','blue','orange');
-            document.getElementById('ovr-btn-joiner').classList.remove('selected','blue','orange');
-            document.getElementById('ovr-btn-draw').classList.remove('selected');
-
-            if (side === 'creator') {
-                document.getElementById('ovr-btn-creator').classList.add('selected','blue');
-            } else if (side === 'joiner') {
-                document.getElementById('ovr-btn-joiner').classList.add('selected','orange');
-            } else {
-                document.getElementById('ovr-btn-draw').classList.add('selected');
-            }
-
-            const submitBtn = document.getElementById('ovr-submit-btn');
-            submitBtn.disabled = false;
-
-            if (side === 'draw') {
-                submitBtn.textContent = '↩ Confirm: Refund Both Players';
-                submitBtn.style.background = 'linear-gradient(135deg,#555,#333)';
-            } else {
-                const name = side === 'creator'
-                    ? (document.getElementById('ovr-cname').textContent)
-                    : (document.getElementById('ovr-jname').textContent);
-                submitBtn.textContent = '⚡ Confirm: ' + name + ' Wins';
-                submitBtn.style.background = side === 'creator'
-                    ? 'linear-gradient(135deg,#0077dd,#0055aa)'
-                    : 'linear-gradient(135deg,#dd6600,#aa4400)';
-            }
-        }
-
-        async function submitOverride() {
-            if (!_ovrMatch || !_ovrSelection) return;
-
-            const notes = (document.getElementById('ovr-notes').value || '').trim();
-            if (!notes) {
-                alert('Please enter a reason / evidence note before submitting.');
-                document.getElementById('ovr-notes').focus();
-                return;
-            }
-
-            const sideLabel = _ovrSelection === 'draw' ? 'Refund both players'
-                : _ovrSelection === 'creator' ? document.getElementById('ovr-cname').textContent + ' wins'
-                : document.getElementById('ovr-jname').textContent + ' wins';
-
-            if (!confirm('ADMIN OVERRIDE — ' + sideLabel + '\n\nThis is permanent and cannot be undone. Continue?')) return;
-
-            const submitBtn = document.getElementById('ovr-submit-btn');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Processing…';
-
-            const body = _ovrSelection === 'draw'
-                ? { resolution: 'draw', adminNotes: notes }
-                : {
-                    winnerId:   _ovrSelection === 'creator' ? _ovrMatch.creator_id : _ovrMatch.joiner_id,
-                    adminNotes: notes
-                  };
-
-            const res = await adminFetch('/admin/force-winner/' + _ovrMatch.id, {
-                method: 'POST',
-                body: JSON.stringify(body)
-            });
-
-            if (res && res.ok) {
-                const data = await res.json();
-                closeModal('override-modal');
-                loadFriendMatches();
-                alert('✅ Done! ' + (data.message || 'Override applied.'));
-            } else {
-                let errMsg = 'Failed to apply override. Check server logs.';
-                try { const d = await res.json(); errMsg = d.error || errMsg; } catch(e) {}
-                alert('❌ ' + errMsg);
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Retry';
-            }
-        }
-
-        // ========== ANALYTICS ==========
-        let analyticsLoaded = false;
-
-        async function loadAnalytics() {
-            const container = document.getElementById('analytics-content');
-            if (analyticsLoaded) return; // already loaded, don't re-fetch
-            container.innerHTML = '<div style="text-align:center;padding:60px;color:#555;"><div style="font-size:2rem;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block;">⚙️</div><div style="margin-top:8px;">Crunching numbers...</div></div>';
-
-            const res = await adminFetch('/admin/analytics');
-            if (!res) return;
-            const d = await res.json();
-            if (d.error) {
-                container.innerHTML = '<div style="color:#ff4444;padding:20px;">Error: ' + escapeHtml(d.error) + '</div>';
-                return;
-            }
-
-            analyticsLoaded = true;
-            renderAnalytics(d);
-        }
-
-        function fmt(n, decimals = 0) {
-            if (n === null || n === undefined) return '—';
-            return Number(n).toLocaleString('en-KE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-        }
-
-        function growthBadge(pct) {
-            if (pct === null || pct === undefined) return '';
-            const n = parseFloat(pct);
-            const color = n >= 0 ? '#00ff41' : '#ff4444';
-            const arrow = n >= 0 ? '▲' : '▼';
-            return `<span style="font-size:0.72rem;color:${color};font-weight:700;margin-left:8px;">${arrow} ${Math.abs(n)}% vs last mo.</span>`;
-        }
-
-        function renderAnalytics(d) {
-            const { revenue, matches, users, withdrawals, platform, dailyChart } = d;
-
-            // Build chart SVG inline
-            const chartHtml = buildBarChart(dailyChart);
-
-            const html = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-                <div>
-                    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#00ff41;letter-spacing:2px;">ANALYTICS</div>
-                    <div style="font-size:0.72rem;color:#555;margin-top:2px;">Generated ${new Date(d.generatedAt).toLocaleString('en-KE')}</div>
-                </div>
-                <button onclick="analyticsLoaded=false;loadAnalytics();" style="background:#1a1a20;border:1px solid #2a2a30;color:#aaa;padding:8px 18px;border-radius:10px;cursor:pointer;font-size:0.8rem;">↻ Refresh</button>
-            </div>
-
-            <!-- ── TOP KPI GRID ── -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:28px;">
-
-                ${kpiCard('💰', 'ALL-TIME REVENUE', 'KES ' + fmt(revenue.allTimeFees), null, '#00ff41')}
-                ${kpiCard('📅', 'MTD REVENUE', 'KES ' + fmt(revenue.mtdFees), growthBadge(revenue.feesGrowthPct), '#00ff41')}
-                ${kpiCard('🔄', 'ALL-TIME VOLUME', 'KES ' + fmt(revenue.allTimeVolume), null, '#aaa')}
-                ${kpiCard('📈', 'MTD VOLUME', 'KES ' + fmt(revenue.mtdVolume), growthBadge(revenue.volumeGrowthPct), '#aaa')}
-                ${kpiCard('⚽', 'TOTAL MATCHES', fmt(matches.totalCompleted), null, '#aaa')}
-                ${kpiCard('📅', 'MATCHES THIS MONTH', fmt(matches.mtdCompleted), null, '#aaa')}
-                ${kpiCard('👥', 'TOTAL USERS', fmt(users.total), null, '#aaa')}
-                ${kpiCard('🆕', 'NEW TODAY', fmt(users.newToday), null, '#ffb400')}
-                ${kpiCard('🔥', 'ACTIVE (7 DAYS)', fmt(users.active7Days), null, '#ffb400')}
-                ${kpiCard('💎', 'AVG WAGER', 'KES ' + fmt(matches.avgWager, 0), null, '#aaa')}
-                ${kpiCard('⚖️', 'DISPUTE RATE', matches.disputeRate + '%', null, parseFloat(matches.disputeRate) > 5 ? '#ff4444' : '#00ff41')}
-                ${kpiCard('🏦', 'PLATFORM FLOAT', 'KES ' + fmt(platform.totalFloat), null, '#aaa')}
-            </div>
-
-            <!-- ── CHART ── -->
-            <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:24px;margin-bottom:24px;">
-                <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">DAILY VOLUME — LAST 30 DAYS (KES)</div>
-                ${chartHtml}
-            </div>
-
-            <!-- ── SECOND ROW CARDS ── -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px;">
-
-                <!-- Revenue breakdown -->
-                <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:22px;">
-                    <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">💰 REVENUE BREAKDOWN</div>
-                    ${statRow('All-time fees collected', 'KES ' + fmt(revenue.allTimeFees, 2), '#00ff41')}
-                    ${statRow('MTD fees', 'KES ' + fmt(revenue.mtdFees, 2), '#00ff41')}
-                    ${statRow('Last month fees', 'KES ' + fmt(revenue.lastMonthFees, 2))}
-                    ${statRow('MoM growth', revenue.feesGrowthPct !== null ? revenue.feesGrowthPct + '%' : '—', parseFloat(revenue.feesGrowthPct) >= 0 ? '#00ff41' : '#ff4444')}
-                    ${statRow('Platform float (held)', 'KES ' + fmt(platform.totalFloat, 2))}
-                    ${statRow('Wallets with balance', fmt(users.walletsWithFunds))}
-                </div>
-
-                <!-- Match stats -->
-                <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:22px;">
-                    <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">⚽ MATCH STATS</div>
-                    ${statRow('Total completed', fmt(matches.totalCompleted))}
-                    ${statRow('MTD completed', fmt(matches.mtdCompleted))}
-                    ${statRow('Average wager', 'KES ' + fmt(matches.avgWager, 0))}
-                    ${statRow('Dispute rate', matches.disputeRate + '%', parseFloat(matches.disputeRate) > 5 ? '#ff4444' : '#00ff41')}
-                    ${statRow('Disputed (open)', fmt(matches.disputedCount))}
-                    ${statRow('Auto-settled', fmt(matches.settlementMethods?.auto || 0))}
-                    ${statRow('Challenge timeout', fmt(matches.settlementMethods?.challenge_timeout || 0))}
-                    ${statRow('Penalty shootouts', fmt(matches.settlementMethods?.penalty_shootout || 0))}
-                    ${statRow('Forfeits', fmt(matches.settlementMethods?.forfeit || 0))}
-                </div>
-
-                <!-- Withdrawal stats -->
-                <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:22px;">
-                    <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">💸 WITHDRAWALS</div>
-                    ${statRow('All-time paid out', 'KES ' + fmt(withdrawals.allTimeVolume, 2))}
-                    ${statRow('MTD paid out', 'KES ' + fmt(withdrawals.mtdVolume, 2))}
-                    ${statRow('Pending count', fmt(withdrawals.pendingCount), withdrawals.pendingCount > 10 ? '#ff4444' : '#ffb400')}
-                    ${statRow('Pending volume', 'KES ' + fmt(withdrawals.pendingVolume, 2), '#ffb400')}
-                    ${statRow('Avg processing time', withdrawals.avgProcessingHrs !== null ? withdrawals.avgProcessingHrs + ' hrs' : '—')}
-                </div>
-
-                <!-- User stats -->
-                <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:22px;">
-                    <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">👥 USERS</div>
-                    ${statRow('Total registered', fmt(users.total))}
-                    ${statRow('New today', fmt(users.newToday), '#ffb400')}
-                    ${statRow('New this month', fmt(users.newMtd))}
-                    ${statRow('Active last 7 days', fmt(users.active7Days), '#00ff41')}
-                    ${statRow('Wallets with balance', fmt(users.walletsWithFunds))}
-                </div>
-
-                <!-- Platform health -->
-                <div style="background:#111116;border:1px solid #1e1e24;border-radius:16px;padding:22px;">
-                    <div style="font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:16px;">🏟️ PLATFORM HEALTH</div>
-                    ${statRow('Active tournaments', fmt(platform.activeTournaments))}
-                    ${statRow('Live pool value', 'KES ' + fmt(platform.livePoolValue, 2))}
-                    ${statRow('Platform float', 'KES ' + fmt(platform.totalFloat, 2))}
-                    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e1e24;">
-                        <div style="font-size:0.65rem;color:#555;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">SETTLEMENT MIX</div>
-                        ${renderSettlementBar(matches.settlementMethods, matches.totalCompleted)}
-                    </div>
-                </div>
-
-            </div>
-            `;
-
-            document.getElementById('analytics-content').innerHTML = html;
-        }
-
-        function kpiCard(icon, label, value, extra = null, valueColor = '#f0f0f0') {
-            return `<div style="background:#111116;border:1px solid #1e1e24;border-radius:14px;padding:20px;">
-                <div style="font-size:0.62rem;letter-spacing:2px;text-transform:uppercase;color:#444;margin-bottom:8px;">${icon} ${label}</div>
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:${valueColor};letter-spacing:1px;line-height:1;">${value}</div>
-                ${extra ? '<div style="margin-top:4px;">' + extra + '</div>' : ''}
-            </div>`;
-        }
-
-        function statRow(label, value, valueColor = '#f0f0f0') {
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1a1a20;">
-                <span style="font-size:0.78rem;color:#888;">${label}</span>
-                <span style="font-size:0.85rem;font-weight:700;color:${valueColor};">${value}</span>
-            </div>`;
-        }
-
-        function renderSettlementBar(methods, total) {
-            if (!methods || total === 0) return '<div style="color:#555;font-size:0.75rem;">No data</div>';
-            const colors = { auto: '#00ff41', challenge_timeout: '#ffb400', penalty_shootout: '#0088ff', forfeit: '#ff4444', draw_refund: '#aa88ff', manual: '#666' };
-            const labels = { auto: 'Auto', challenge_timeout: 'Timeout', penalty_shootout: 'Pens', forfeit: 'Forfeit', draw_refund: 'Draw', manual: 'Manual' };
-            let bars = '';
-            let legend = '';
-            for (const [key, count] of Object.entries(methods)) {
-                const pct = ((count / total) * 100).toFixed(1);
-                const color = colors[key] || '#666';
-                bars += `<div style="flex:${pct};min-width:2px;background:${color};height:100%;border-radius:2px;" title="${labels[key]||key}: ${count} (${pct}%)"></div>`;
-                legend += `<div style="display:flex;align-items:center;gap:5px;font-size:0.68rem;color:#888;"><div style="width:8px;height:8px;background:${color};border-radius:2px;flex-shrink:0;"></div>${labels[key]||key} <span style="color:#aaa;font-weight:700;">${count}</span></div>`;
-            }
-            return `
-                <div style="display:flex;gap:3px;height:10px;border-radius:5px;overflow:hidden;margin-bottom:10px;">${bars}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;">${legend}</div>`;
-        }
-
-        function buildBarChart(dailyChart) {
-            if (!dailyChart || dailyChart.length === 0) return '<div style="color:#555;text-align:center;padding:20px;">No data</div>';
-
-            const maxVol = Math.max(...dailyChart.map(d => d.volume), 1);
-            const barW = 100 / dailyChart.length;
-            let bars = '';
-            let xLabels = '';
-            let tooltips = '';
-
-            dailyChart.forEach((day, i) => {
-                const heightPct = maxVol > 0 ? (day.volume / maxVol) * 100 : 0;
-                const x = i * barW;
-                const barColor = day.volume > 0 ? '#00ff41' : '#1a1a20';
-                const opacity = day.volume > 0 ? '0.85' : '1';
-                bars += `<rect x="${x + barW * 0.1}%" y="${100 - heightPct}%" width="${barW * 0.8}%" height="${heightPct}%" fill="${barColor}" opacity="${opacity}" rx="2">
-                    <title>${day.date}: KES ${fmt(day.volume)} volume, ${day.matches} matches</title>
-                </rect>`;
-
-                // Show label every 7 days
-                if (i % 7 === 0 || i === dailyChart.length - 1) {
-                    const label = day.date.substring(5); // MM-DD
-                    xLabels += `<text x="${(x + barW / 2)}%" y="98%" text-anchor="middle" fill="#444" font-size="9" font-family="monospace">${label}</text>`;
-                }
-            });
-
-            // Y-axis labels
-            const yLabels = [0, 0.25, 0.5, 0.75, 1].map(pct => {
-                const val = maxVol * pct;
-                const y = 100 - pct * 100;
-                return `<text x="0" y="${y}%" dominant-baseline="middle" fill="#333" font-size="9" font-family="monospace">KES ${val >= 1000 ? (val/1000).toFixed(0)+'k' : val.toFixed(0)}</text>`;
-            }).join('');
-
-            // Grid lines
-            const gridLines = [0.25, 0.5, 0.75, 1].map(pct => {
-                const y = 100 - pct * 100;
-                return `<line x1="0" y1="${y}%" x2="100%" y2="${y}%" stroke="#1a1a20" stroke-width="1"/>`;
-            }).join('');
-
-            return `<div style="position:relative;width:100%;">
-                <svg viewBox="0 0 600 180" preserveAspectRatio="none" style="width:100%;height:180px;overflow:visible;">
-                    ${gridLines}
-                    ${bars}
-                    ${xLabels}
-                </svg>
-            </div>`;
-        }
-    </script>
+<script src="/js/admin.js"></script>
 </body>
 </html>
