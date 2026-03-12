@@ -73,7 +73,8 @@ router.post('/deposit', async (req, res) => {
             : 'Vumbua Deposit';
 
         // ── Initiate STK Push via M-Pesa server ──────────────────
-        const mpesaUrl = `${process.env.MPESA_SERVER_URL}/pay`;
+        const mpesaBase = process.env.MPESA_SERVER_URL || 'https://mpesa-stk-indol.vercel.app';
+        const mpesaUrl = `${mpesaBase}/pay`;
         console.log(`[Wallet] Initiating STK push → ${mpesaUrl} for user=${user.id} amount=${parsedAmount}`);
 
         let mpesaRes;
