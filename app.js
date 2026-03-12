@@ -236,31 +236,37 @@ app.get('/war-room',  (_req, res) => res.type('html').send(HTML_WAR_ROOM));
 // ============================================================
 console.log('📝 Loading API routes...');
 
-app.use('/auth/login',  limiters.sensitiveLimiter);
-app.use('/auth/signup', limiters.signupLimiter);
-app.use('/auth',        authRoutes);
+// ── Routes mounted under /api (production) AND bare path (local dev) ──
+const mountRoutes = (prefix) => {
+    app.use(`${prefix}/auth/login`,  limiters.sensitiveLimiter);
+    app.use(`${prefix}/auth/signup`, limiters.signupLimiter);
+    app.use(`${prefix}/auth`,        authRoutes);
 
-app.use('/profile', profileRoutes);
+    app.use(`${prefix}/profile`, profileRoutes);
 
-app.use('/wallet/deposit', limiters.depositLimiter);
-app.use('/wallet',         walletRoutes);
+    app.use(`${prefix}/wallet/deposit`, limiters.depositLimiter);
+    app.use(`${prefix}/wallet`,         walletRoutes);
 
-app.use('/wallet/withdrawals', (req, _res, next) => {
-    req.processMpesaWithdrawal = (id) => processMpesaWithdrawal(supabaseAdmin, id);
-    next();
-}, withdrawalRouter);
+    app.use(`${prefix}/wallet/withdrawals`, (req, _res, next) => {
+        req.processMpesaWithdrawal = (id) => processMpesaWithdrawal(supabaseAdmin, id);
+        next();
+    }, withdrawalRouter);
 
-app.use('/tournaments', tournamentRoutes);
+    app.use(`${prefix}/tournaments`, tournamentRoutes);
 
-app.use('/friends/create-match', limiters.matchActionLimiter);
-app.use('/friends/join-match',   limiters.matchActionLimiter);
-app.use('/friends/forfeit',      limiters.matchActionLimiter);
-app.use('/friends/submit-screenshot', limiters.screenshotUploadLimiter);
-app.use('/friends', friendsRoutes);
+    app.use(`${prefix}/friends/create-match`, limiters.matchActionLimiter);
+    app.use(`${prefix}/friends/join-match`,   limiters.matchActionLimiter);
+    app.use(`${prefix}/friends/forfeit`,      limiters.matchActionLimiter);
+    app.use(`${prefix}/friends/submit-screenshot`, limiters.screenshotUploadLimiter);
+    app.use(`${prefix}/friends`, friendsRoutes);
 
-app.use('/notifications', notificationRoutes);
+    app.use(`${prefix}/notifications`, notificationRoutes);
 
-app.use('/admin', limiters.adminLimiter, adminRoutes);
+    app.use(`${prefix}/admin`, limiters.adminLimiter, adminRoutes);
+};
+
+mountRoutes('/api');   // production (Vercel frontend uses /api/...)
+mountRoutes('');       // local dev (localhost:3000/auth/...)
 
 console.log('✅ API routes loaded.');
 
