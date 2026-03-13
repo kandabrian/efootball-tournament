@@ -10,8 +10,7 @@
           "public/**",
           "public/js/**",
           "routes/**",
-          "jobs/**",
-          "screenshot-verifier.js"
+          "jobs/**"
         ]
       }
     }
