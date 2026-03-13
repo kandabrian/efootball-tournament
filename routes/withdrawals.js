@@ -13,7 +13,7 @@ const { normalizePhone, isValidUUID } = require('./helpers');
 // CONFIGURATION
 // ============================================================
 const WITHDRAWAL_CONFIG = {
-    MIN_AMOUNT:                    50,
+    MIN_AMOUNT:                    20,
     MAX_AMOUNT:                    50_000,
     DAILY_LIMIT:                   100_000,
     MIN_BALANCE:                   0,

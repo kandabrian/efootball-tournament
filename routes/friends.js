@@ -58,8 +58,8 @@ router.post('/create-match', async (req, res) => {
 
         const { wagerAmount, efootballCode } = req.body;
         const parsedWager = Number(wagerAmount);
-        if (!wagerAmount || isNaN(parsedWager) || parsedWager < 50)
-            return res.status(400).json({ error: 'Minimum wager is KES 50' });
+        if (!wagerAmount || isNaN(parsedWager) || parsedWager < 20)
+            return res.status(400).json({ error: 'Minimum wager is KES 20' });
         if (!efootballCode)
             return res.status(400).json({ error: 'eFootball room code is required' });
         if (!validateEFootballCode(efootballCode))
