@@ -492,6 +492,21 @@
         .toast-body { flex: 1; }
         .toast-title { font-weight: 800; font-size: 0.82rem; margin-bottom: 1px; }
         .toast-msg { font-size: 0.74rem; color: #aaa; font-weight: 400; }
+        /* ── Stats strip ── */
+        .stats-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; animation: slideUp 0.5s 0.18s ease both; }
+        .stat-pill { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 8px; text-align: center; }
+        .stat-pill-value { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; line-height: 1; letter-spacing: 1px; }
+        .stat-pill-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
+        .stat-pill.wins .stat-pill-value { color: var(--neon); }
+        .stat-pill.losses .stat-pill-value { color: #ff6666; }
+        .stat-pill.played .stat-pill-value { color: #ccc; }
+        /* ── Txn items ── */
+        .txn-item { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .txn-item:last-child { border-bottom: none; }
+        .txn-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .txn-type { font-weight: 700; font-size: 0.85rem; margin-bottom: 3px; }
+        .txn-date { font-size: 0.72rem; color: var(--muted); }
+        .txn-amount { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 1px; }
     </style>
 </head>
 <body>
@@ -539,7 +554,7 @@
                 </div>
             </div>
         </div>
-        <div class="wallet-actions" style="margin-bottom:24px;">
+        <div class="wallet-actions" style="margin-bottom:16px;">
             <button class="btn-action btn-deposit" id="btn-open-deposit">
                 <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                 Deposit
@@ -548,6 +563,22 @@
                 <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
                 Withdraw
             </button>
+        </div>
+
+        <!-- W / L / Played stats strip -->
+        <div class="stats-strip">
+            <div class="stat-pill wins">
+                <div class="stat-pill-value" id="stat-wins">—</div>
+                <div class="stat-pill-label">Wins</div>
+            </div>
+            <div class="stat-pill losses">
+                <div class="stat-pill-value" id="stat-losses">—</div>
+                <div class="stat-pill-label">Losses</div>
+            </div>
+            <div class="stat-pill played">
+                <div class="stat-pill-value" id="stat-played">—</div>
+                <div class="stat-pill-label">Played</div>
+            </div>
         </div>
 
         <div class="section-header" style="margin-bottom:12px;">
@@ -604,7 +635,9 @@
         <div class="my-matches-section">
             <div class="section-header">
                 <div class="section-title">MY MATCHES</div>
-                <span class="section-link" id="btn-refresh-friend-matches">Refresh ↻</span>
+                <span class="section-link" id="btn-refresh-friend-matches" style="display:flex;align-items:center;gap:6px;">
+                    <span id="match-count-label" style="color:#444;font-size:0.72rem;"></span>↻ Refresh
+                </span>
             </div>
             <div id="my-matches-list" class="matches-list">
                 <!-- Dynamically loaded -->
@@ -614,19 +647,19 @@
 </div>
 
 <div class="bottom-nav">
-    <div class="nav-item active">
+    <div class="nav-item active" id="nav-home-btn">
         <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
         <span class="nav-item-label">Home</span>
     </div>
-    <div class="nav-item">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-        <span class="nav-item-label">Chat</span>
-    </div>
-    <div class="nav-item">
+    <div class="nav-item" id="nav-matches-btn">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
         <span class="nav-item-label">Matches</span>
     </div>
-    <div class="nav-item">
+    <div class="nav-item" id="nav-history-btn">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span class="nav-item-label">History</span>
+    </div>
+    <div class="nav-item" id="nav-profile-btn">
         <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span class="nav-item-label">Profile</span>
     </div>
@@ -695,19 +728,66 @@
 <div class="modal-overlay" id="withdraw-modal">
     <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">WITHDRAW</div>
-        <p class="modal-subtitle">Send winnings to your M-PESA</p>
-        <div class="modal-input-group">
-            <label>Amount (KES)</label>
-            <input type="number" id="withdraw-amount" class="modal-input" placeholder="Enter amount" min="50">
+
+        <!-- STEP 1: Enter amount & phone -->
+        <div id="withdraw-step-1">
+            <div class="modal-title">WITHDRAW</div>
+            <p class="modal-subtitle">Send winnings to your M-PESA</p>
+
+            <!-- Balance chip -->
+            <div style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.15);border-radius:12px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:#555;">Available</span>
+                <span style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--neon);letter-spacing:1px;" id="withdraw-balance-display">KES 0</span>
+            </div>
+
+            <!-- Amount presets -->
+            <div class="modal-input-group">
+                <label>Amount (KES)</label>
+                <div class="amount-presets" style="margin-bottom:10px;">
+                    <button class="preset-btn withdraw-preset-btn" data-amount="100">100</button>
+                    <button class="preset-btn withdraw-preset-btn" data-amount="200">200</button>
+                    <button class="preset-btn withdraw-preset-btn" data-amount="500">500</button>
+                    <button class="preset-btn withdraw-preset-btn" data-amount="1000">1000</button>
+                </div>
+                <input type="number" id="withdraw-amount" class="modal-input" placeholder="Min KES 20" min="20">
+            </div>
+
+            <!-- Fee note (shows when amount >= 20) -->
+            <div id="withdraw-fee-note" style="display:none;background:rgba(0,255,65,0.05);border:1px solid rgba(0,255,65,0.12);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.8rem;color:#aaa;">
+                Withdrawal fee: <strong style="color:#ff9966;">KES 5</strong> &nbsp;·&nbsp; You receive: <strong style="color:var(--neon);" id="withdraw-receive-amount">KES 0</strong>
+                <span style="color:#444;font-size:0.7rem;display:block;margin-top:2px;">Processed within 5–10 minutes via M-PESA</span>
+            </div>
+
+            <!-- Phone input -->
+            <div class="modal-input-group">
+                <label>M-PESA Number</label>
+                <input type="tel" id="withdraw-phone" class="modal-input" placeholder="07XX XXX XXX">
+            </div>
+
+            <div class="balance-insufficient" id="withdraw-error"></div>
+            <button class="btn-mpesa" id="btn-process-withdraw">WITHDRAW NOW →</button>
+            <button class="btn-cancel" data-close-modal="withdraw-modal">Cancel</button>
         </div>
-        <div class="modal-input-group">
-            <label>M-PESA Number</label>
-            <input type="tel" id="withdraw-phone" class="modal-input" placeholder="07XX XXX XXX">
+
+        <!-- STEP 2: Success confirmation -->
+        <div id="withdraw-step-2" style="display:none;text-align:center;">
+            <div style="font-size:3.5rem;margin-bottom:16px;">✅</div>
+            <div class="modal-title" style="font-size:1.6rem;">REQUEST SENT!</div>
+            <p class="modal-subtitle" style="margin-bottom:24px;">Your withdrawal is being processed</p>
+
+            <div style="background:rgba(0,255,65,0.06);border:1px solid rgba(0,255,65,0.2);border-radius:16px;padding:20px;margin-bottom:24px;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--neon);letter-spacing:2px;margin-bottom:6px;" id="withdraw-success-amount">KES 0</div>
+                <div style="font-size:0.82rem;color:#aaa;" id="withdraw-success-phone">→ 07XX XXX XXX</div>
+                <div style="font-size:0.72rem;color:#444;margin-top:8px;">Estimated arrival: 5–10 minutes</div>
+            </div>
+
+            <div style="font-size:0.78rem;color:#555;margin-bottom:20px;line-height:1.6;">
+                You'll receive an M-PESA confirmation SMS once processed.<br>
+                Contact support if funds don't arrive within 30 minutes.
+            </div>
+
+            <button class="btn-cancel" data-close-modal="withdraw-modal">Close</button>
         </div>
-        <div class="balance-insufficient" id="withdraw-error"></div>
-        <button class="btn-mpesa" id="btn-process-withdraw">WITHDRAW NOW →</button>
-        <button class="btn-cancel" data-close-modal="withdraw-modal">Cancel</button>
     </div>
 </div>
 
@@ -777,12 +857,12 @@
         <div class="modal-input-group">
             <label style="color:#ccc;font-size:0.72rem;letter-spacing:2px;">YOUR WAGER (KES)</label>
             <div class="amount-presets" style="margin-bottom:10px;">
-                <button class="preset-btn">50</button>
+                <button class="preset-btn">20</button>
                 <button class="preset-btn">100</button>
                 <button class="preset-btn selected">200</button>
                 <button class="preset-btn">500</button>
             </div>
-            <input type="number" id="friend-wager-input" class="modal-input" value="200" min="50"
+            <input type="number" id="friend-wager-input" class="modal-input" value="200" min="20"
                 style="font-size:1.2rem;font-weight:700;text-align:center;background:rgba(0,0,0,0.5);">
         </div>
 
@@ -898,6 +978,26 @@
             <!-- No submit button – upload happens on file selection -->
             <button class="btn-cancel" data-close-modal="report-result-modal">← Close</button>
         </div>
+    </div>
+</div>
+
+<!-- ═══ TRANSACTION HISTORY MODAL ═══ -->
+<div class="modal-overlay" id="txn-modal">
+    <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+        <div class="modal-handle"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div class="modal-title" style="margin-bottom:0;">HISTORY</div>
+            <div id="txn-summary" style="font-size:0.72rem;color:var(--muted);"></div>
+        </div>
+        <p class="modal-subtitle">Deposits, withdrawals &amp; match results</p>
+        <div style="display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;">
+            <button class="txn-filter-btn active" data-filter="all" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid rgba(0,255,65,0.4);background:rgba(0,255,65,0.08);color:var(--neon);font-size:0.72rem;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;">All</button>
+            <button class="txn-filter-btn" data-filter="deposit" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:0.72rem;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Deposits</button>
+            <button class="txn-filter-btn" data-filter="withdrawal" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:0.72rem;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Withdrawals</button>
+            <button class="txn-filter-btn" data-filter="match" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:0.72rem;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Matches</button>
+        </div>
+        <div id="txn-list"><div style="text-align:center;padding:40px;color:#444;">Loading...</div></div>
+        <button class="btn-cancel" data-close-modal="txn-modal" style="margin-top:10px;">Close</button>
     </div>
 </div>
 

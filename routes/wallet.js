@@ -195,7 +195,7 @@ router.get('/transactions', async (req, res) => {
 
         const { data, error } = await req.supabaseAdmin
             .from('transactions')
-            .select('id, amount, type, status, description, mpesa_receipt, created_at')
+            .select('checkout_request_id, amount, status, mpesa_receipt, phone, created_at')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1);

@@ -227,6 +227,7 @@ async function loadDashboard() {
         document.getElementById('main-content').style.display = 'block';
         
         startBalanceAutoRefresh(120000);
+        startNotificationPolling();
         
         console.log('✅ Dashboard loaded successfully');
         
@@ -491,7 +492,8 @@ async function processDeposit() {
         }, 10000);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        currentCheckoutId = data.checkoutRequestId;
+        currentCheckoutId = data.checkoutRequestId || data.checkoutId;
+        depositPollCount = 0;
         switchStep('deposit-modal', 2);
         pollInterval = setInterval(() => checkDepositStatus(currentCheckoutId), 3000);
     } catch (err) {
@@ -501,20 +503,52 @@ async function processDeposit() {
     }
 }
 
+// ── Deposit status polling ─────────────────────────────────────────────────
+let depositPollCount = 0;
+const DEPOSIT_POLL_MAX = 40; // 40 × 3s = 2 minutes max
+
 async function checkDepositStatus(checkoutId) {
+    depositPollCount++;
+
+    // Update status text with elapsed time
+    const statusEl = document.getElementById('deposit-status-text');
+    const elapsed = depositPollCount * 3;
+    const dots = '.'.repeat((depositPollCount % 3) + 1);
+    if (statusEl) {
+        if (elapsed < 30) {
+            statusEl.textContent = `Waiting for M-PESA confirmation${dots}`;
+        } else {
+            statusEl.textContent = `Still waiting${dots} (${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')} elapsed)`;
+            statusEl.style.color = elapsed > 90 ? '#ffb400' : 'var(--muted)';
+        }
+    }
+
+    // Timeout after 2 minutes
+    if (depositPollCount >= DEPOSIT_POLL_MAX) {
+        clearInterval(pollInterval); pollInterval = null;
+        depositPollCount = 0;
+        switchStep('deposit-modal', 1);
+        showError('deposit-error', 'Payment timed out. If you were charged, your balance will update shortly.');
+        return;
+    }
+
     try {
-        const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${checkoutId}`, {}, 5000);
+        // Cache-bust with timestamp to avoid 304 responses
+        const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${encodeURIComponent(checkoutId)}&t=${Date.now()}`, {}, 5000);
         if (!res) return;
         const data = await res.json();
+
         if (data.status === 'completed') {
             clearInterval(pollInterval); pollInterval = null;
+            depositPollCount = 0;
             closeModal('deposit-modal');
             await refreshBalance();
-            alert('✅ Deposit successful! Your balance has been updated.');
+            showToast('success', '✅ Deposit Successful!', 'Your balance has been updated.', 5000);
         } else if (data.status === 'failed') {
             clearInterval(pollInterval); pollInterval = null;
+            depositPollCount = 0;
             switchStep('deposit-modal', 1);
-            showError('deposit-error', 'Payment failed or cancelled. Try again.');
+            showError('deposit-error', 'Payment failed or cancelled. Please try again.');
         }
     } catch (err) { /* keep polling */ }
 }
@@ -551,9 +585,10 @@ function updateWithdrawFeeNote() {
     const amt = parseInt(document.getElementById('withdraw-amount').value) || 0;
     const feeNote = document.getElementById('withdraw-fee-note');
     const receiveEl = document.getElementById('withdraw-receive-amount');
-    if (amt >= 50) {
+    const WITHDRAWAL_FEE = 5;
+    if (amt >= 20) {
         feeNote.style.display = 'block';
-        receiveEl.textContent = 'KES ' + amt.toLocaleString();
+        receiveEl.textContent = 'KES ' + Math.max(0, amt - WITHDRAWAL_FEE).toLocaleString();
     } else {
         feeNote.style.display = 'none';
     }
@@ -562,7 +597,7 @@ function updateWithdrawFeeNote() {
 async function processWithdraw() {
     const amount = parseInt(document.getElementById('withdraw-amount').value);
     const phone = document.getElementById('withdraw-phone').value.trim();
-    if (!amount || amount < 50) { showError('withdraw-error', 'Minimum withdrawal is KES 50'); return; }
+    if (!amount || amount < 20) { showError('withdraw-error', 'Minimum withdrawal is KES 20'); return; }
     if (amount > currentBalance) { showError('withdraw-error', 'Insufficient balance. Available: KES ' + currentBalance.toLocaleString()); return; }
     if (!phone) { showError('withdraw-error', 'Enter your M-PESA number'); return; }
 
@@ -592,10 +627,10 @@ async function processWithdraw() {
 
         await refreshBalance();
 
-        // Show success step
+        // Show success step — display NET amount after KES 5 fee
         document.getElementById('withdraw-step-1').style.display = 'none';
         document.getElementById('withdraw-step-2').style.display = 'block';
-        document.getElementById('withdraw-success-amount').textContent = 'KES ' + amount.toLocaleString();
+        document.getElementById('withdraw-success-amount').textContent = 'KES ' + Math.max(0, amount - 5).toLocaleString();
         document.getElementById('withdraw-success-phone').textContent = '→ ' + cleanPhone;
 
         // Update balance chip
@@ -748,7 +783,7 @@ async function createFriendMatch() {
     const btn = document.getElementById('create-friend-btn');
 
     if (!efootballCode) { showError('create-friend-error', 'Please enter your eFootball room code'); return; }
-    if (wagerAmount < 50) { showError('create-friend-error', 'Minimum wager is KES 50'); return; }
+    if (wagerAmount < 20) { showError('create-friend-error', 'Minimum wager is KES 20'); return; }
     if (wagerAmount > currentBalance) { showError('create-friend-error', 'Insufficient balance'); return; }
 
     btn.disabled = true;
@@ -904,13 +939,18 @@ async function loadMyFriendMatches() {
         const res = await fetchWithAuth('/friends/my-matches', {}, 8000);
         if (!res) return;
         const matches = await res.json();
+        // Update count label in header
+        const countLabel = document.getElementById('match-count-label');
+        if (countLabel && matches.length > 0) {
+            countLabel.textContent = `${matches.length} total ·`;
+        }
         renderMyMatches(matches);
     } catch (e) {
         console.warn('loadMyFriendMatches failed:', e);
     }
 }
 
-function renderMyMatches(matches) {
+function renderMyMatches(matches, showAll = false) {
     const container = document.getElementById('my-matches-list');
     container.innerHTML = '';
 
@@ -929,11 +969,8 @@ function renderMyMatches(matches) {
         return;
     }
 
-    const displayMatches = matches.slice(0, 3);
-    if (matches.length > 3) {
-        const moreEl = createElementSafe('div', { class: 'friend-info', style: 'text-align:center;font-size:0.75rem;margin-bottom:8px;' }, `Showing 3 of ${matches.length} matches`);
-        container.appendChild(moreEl);
-    }
+    const PREVIEW_COUNT = 3;
+    const displayMatches = showAll ? matches : matches.slice(0, PREVIEW_COUNT);
 
     displayMatches.forEach(m => {
         const item = createElementSafe('div', { class: 'match-item' });
@@ -941,14 +978,13 @@ function renderMyMatches(matches) {
         const opponentName = isCreator
             ? (m.joiner?.username || 'Waiting...')
             : (m.creator?.username || 'Unknown');
-        const opponentInitial = opponentName.charAt(0).toUpperCase();
-        const myTeam   = isCreator ? (m.creator_team || 'My Team') : (m.joiner_team || 'My Team');
-        const oppTeam  = isCreator ? (m.joiner_team  || 'Opponent') : (m.creator_team || 'Opponent');
+        const myTeam  = isCreator ? (m.creator_team || 'My Team') : (m.joiner_team  || 'My Team');
+        const oppTeam = isCreator ? (m.joiner_team  || '—')       : (m.creator_team || '—');
 
+        // Header row: code + status badge
         const headerDiv = createElementSafe('div', { class: 'match-header' });
         const codeDisplay = m.match_code ? m.match_code.replace('VUM-', '') : '—';
         headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, codeDisplay));
-
         const statusLabels = {
             pending:        'Waiting',
             active:         'Live',
@@ -965,12 +1001,34 @@ function renderMyMatches(matches) {
             completed:      'status-closed',
             cancelled:      'status-closed',
         };
-        const statusSpan = createElementSafe('span', { class: `match-status ${statusCssMap[m.status] || 'status-closed'}` }, statusLabels[m.status] || m.status);
-        headerDiv.appendChild(statusSpan);
+        headerDiv.appendChild(createElementSafe('span',
+            { class: `match-status ${statusCssMap[m.status] || 'status-closed'}` },
+            statusLabels[m.status] || m.status
+        ));
         item.appendChild(headerDiv);
 
-        item.appendChild(createElementSafe('div', { class: 'match-detail' }, `KES ${m.wager_amount} wager · Prize KES ${m.winner_prize}`));
+        // Teams row — always visible
+        const teamsRow = document.createElement('div');
+        teamsRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0 4px;font-size:0.82rem;';
+        const myTeamEl = document.createElement('span');
+        myTeamEl.style.cssText = 'color:#e0e0e0;font-weight:700;';
+        myTeamEl.textContent = escapeHtml(myTeam);
+        const vsEl = document.createElement('span');
+        vsEl.style.cssText = 'color:#444;font-size:0.7rem;font-weight:600;';
+        vsEl.textContent = 'vs';
+        const oppEl = document.createElement('span');
+        oppEl.style.cssText = 'color:#888;';
+        oppEl.textContent = escapeHtml(oppTeam) + (opponentName && opponentName !== 'Waiting...' ? ` (@${escapeHtml(opponentName)})` : '');
+        teamsRow.appendChild(myTeamEl);
+        teamsRow.appendChild(vsEl);
+        teamsRow.appendChild(oppEl);
+        item.appendChild(teamsRow);
 
+        // Wager/prize line
+        item.appendChild(createElementSafe('div', { class: 'match-detail' },
+            `KES ${m.wager_amount} wager · Prize KES ${m.winner_prize}`));
+
+        // Status-specific actions / results
         if (m.status === 'pending' && isCreator) {
             const actionsDiv = createElementSafe('div', { class: 'match-actions' });
             const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel & Refund');
@@ -980,26 +1038,70 @@ function renderMyMatches(matches) {
         } else if (m.status === 'active') {
             const userUploaded = isCreator ? !!m.creator_screenshot_url : !!m.joiner_screenshot_url;
             if (!userUploaded) {
-                const uploadBtn = createElementSafe('button', { class: 'btn btn-green' }, '📸 Upload Screenshot');
+                const uploadBtn = createElementSafe('button', { class: 'btn btn-green', style: 'margin-top:10px;' }, '📸 Upload Screenshot');
                 uploadBtn.addEventListener('click', e => { e.stopPropagation(); openReportResultModal(m.id); });
                 item.appendChild(uploadBtn);
             } else {
-                const pendingMsg = createElementSafe('div', { style: 'font-size:0.8rem;color:#ffb400;padding:8px 0;' }, '⏳ Screenshot submitted – waiting for admin review');
-                item.appendChild(pendingMsg);
+                item.appendChild(createElementSafe('div',
+                    { style: 'font-size:0.8rem;color:#ffb400;padding:8px 0;' },
+                    '⏳ Screenshot submitted – waiting for admin review'));
             }
         } else if (m.status === 'pending_review') {
-            const reviewMsg = createElementSafe('div', { style: 'font-size:0.8rem;color:#ffb400;padding:8px 0;' }, '⏳ Admin is reviewing your screenshot');
-            item.appendChild(reviewMsg);
+            item.appendChild(createElementSafe('div',
+                { style: 'font-size:0.8rem;color:#ffb400;padding:8px 0;' },
+                '⏳ Admin is reviewing your screenshot'));
         } else if (m.status === 'disputed') {
-            item.appendChild(createElementSafe('div', { style: 'font-size:0.8rem;color:#ff8888;padding:10px 0;' }, '⚖️ Disputed – an admin is reviewing.'));
+            item.appendChild(createElementSafe('div',
+                { style: 'font-size:0.8rem;color:#ff8888;padding:10px 0;' },
+                '⚖️ Disputed – an admin is reviewing.'));
         } else if (m.status === 'completed') {
             const youWon = m.winner_id === currentUser.id;
-            const resultDiv = createElementSafe('div', { style: `font-size:0.9rem;font-weight:700;color:${youWon ? '#00ff41' : '#ff6666'};padding:8px 0;` }, youWon ? '🏆 You won!' : '😔 You lost');
+            const resultDiv = document.createElement('div');
+            resultDiv.style.cssText = `display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:8px 12px;border-radius:10px;background:${youWon ? 'rgba(0,255,65,0.06)' : 'rgba(255,68,68,0.06)'};border:1px solid ${youWon ? 'rgba(0,255,65,0.15)' : 'rgba(255,68,68,0.15)'};`;
+            const resultLabel = createElementSafe('span',
+                { style: `font-size:0.9rem;font-weight:700;color:${youWon ? '#00ff41' : '#ff6666'};` },
+                youWon ? '🏆 You won!' : '😔 You lost');
+            const prizeLabel = createElementSafe('span',
+                { style: `font-size:0.82rem;font-weight:700;color:${youWon ? '#00ff41' : '#888'};` },
+                youWon ? `+KES ${m.winner_prize}` : `-KES ${m.wager_amount}`);
+            resultDiv.appendChild(resultLabel);
+            resultDiv.appendChild(prizeLabel);
             item.appendChild(resultDiv);
         }
 
         container.appendChild(item);
     });
+
+    // See all / Show less button
+    if (matches.length > PREVIEW_COUNT) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.style.cssText = `
+            width:100%; margin-top:4px; padding:12px;
+            background:none; border:1px solid rgba(255,255,255,0.07);
+            border-radius:14px; color:var(--neon); font-size:0.8rem;
+            font-weight:700; font-family:'Outfit',sans-serif;
+            cursor:pointer; letter-spacing:1px;
+            transition:background 0.2s, border-color 0.2s;
+        `;
+        toggleBtn.textContent = showAll
+            ? `↑ Show less`
+            : `↓ See all ${matches.length} matches`;
+        toggleBtn.addEventListener('mouseenter', () => {
+            toggleBtn.style.background = 'rgba(0,255,65,0.04)';
+            toggleBtn.style.borderColor = 'rgba(0,255,65,0.25)';
+        });
+        toggleBtn.addEventListener('mouseleave', () => {
+            toggleBtn.style.background = 'none';
+            toggleBtn.style.borderColor = 'rgba(255,255,255,0.07)';
+        });
+        toggleBtn.addEventListener('click', () => {
+            renderMyMatches(matches, !showAll);
+            if (showAll) {
+                document.querySelector('.my-matches-section')?.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+        container.appendChild(toggleBtn);
+    }
 }
 
 async function cancelPendingMatch(matchId) {
@@ -1258,6 +1360,7 @@ function openProfileModal() {
 document.getElementById('logoutBtn').addEventListener('click', () => {
     stopBalanceAutoRefresh();
     stopMatchStatusPolling();
+    stopNotificationPolling();
     if (supabaseRealtime && realtimeChannel) {
         supabaseRealtime.removeChannel(realtimeChannel);
         realtimeChannel = null;
@@ -1288,6 +1391,105 @@ function openWarRoom(data) {
     window.location.href = '/war-room';
 }
 
+// ── Transaction History ────────────────────────────────────────────────────
+async function openTransactionHistory() {
+    document.getElementById('txn-list').innerHTML = '<div style="text-align:center;padding:30px;color:#444;">Loading...</div>';
+    document.getElementById('txn-modal').classList.add('open');
+    try {
+        const res = await fetchWithAuth('/wallet/transactions?limit=20', {}, 8000);
+        if (!res || !res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        renderTransactions(data.transactions || []);
+    } catch (err) {
+        document.getElementById('txn-list').innerHTML = `<div style="text-align:center;padding:30px;color:#ff6666;">Failed to load transactions</div>`;
+    }
+}
+
+function renderTransactions(txns) {
+    const container = document.getElementById('txn-list');
+    container.innerHTML = '';
+    if (!txns.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:30px;color:#444;font-size:0.85rem;';
+        empty.textContent = 'No transactions yet.';
+        container.appendChild(empty);
+        return;
+    }
+    txns.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'txn-item';
+        // All transactions from this table are deposits
+        const statusColor = t.status === 'completed' ? '#00ff41' : t.status === 'failed' ? '#ff4455' : '#ffb400';
+        const date = new Date(t.created_at).toLocaleDateString('en-KE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+        const shortId = t.checkout_request_id ? t.checkout_request_id.slice(-8) : '—';
+        item.innerHTML = `
+            <div class="txn-row">
+                <div>
+                    <div class="txn-type">⬇️ Deposit</div>
+                    <div class="txn-date">${date}</div>
+                    ${t.mpesa_receipt ? `<div class="txn-receipt">${escapeHtml(t.mpesa_receipt)}</div>` : `<div class="txn-receipt">#${escapeHtml(shortId)}</div>`}
+                </div>
+                <div style="text-align:right;">
+                    <div class="txn-amount" style="color:#00ff41">+KES ${Number(t.amount).toLocaleString()}</div>
+                    <div class="txn-status" style="color:${statusColor}">${t.status}</div>
+                </div>
+            </div>`;
+        container.appendChild(item);
+    });
+}
+
+// ── Match Notifications ────────────────────────────────────────────────────
+let notifPollInterval = null;
+let lastNotifCount = 0;
+
+async function loadNotifications() {
+    try {
+        const res = await fetchWithAuth('/notifications', {}, 5000);
+        if (!res || !res.ok) return;
+        const notifs = await res.json();
+        const unread = notifs.filter(n => !n.read);
+
+        // Update badge
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+            badge.textContent = unread.length > 0 ? unread.length : '';
+            badge.style.display = unread.length > 0 ? 'flex' : 'none';
+        }
+
+        // Show toast for new notifications since last check
+        if (unread.length > lastNotifCount && lastNotifCount >= 0) {
+            const newest = unread[0];
+            const type = newest?.type || 'update';
+            const messages = {
+                match_joined:    ['⚔️ Opponent Joined!', 'Your match is now live. Go to war room!'],
+                match_completed: ['🏆 Match Settled!', 'Check your balance for results.'],
+                match_disputed:  ['⚠️ Match Disputed', 'An admin is reviewing your match.'],
+                screenshot_received: ['📸 Screenshot Received', 'Admin will settle shortly.'],
+            };
+            const [title, msg] = messages[type] || ['🔔 Match Update', 'Check your matches.'];
+            if (lastNotifCount >= 0) showToast('info', title, msg, 6000);
+        }
+        lastNotifCount = unread.length;
+
+        // Mark as read after showing
+        if (unread.length > 0) {
+            fetchWithAuth('/notifications/read', { method: 'PATCH', body: JSON.stringify({}) }, 3000).catch(() => {});
+        }
+    } catch (err) {
+        console.warn('Notification poll failed:', err.message);
+    }
+}
+
+function startNotificationPolling() {
+    if (notifPollInterval) clearInterval(notifPollInterval);
+    loadNotifications(); // immediate check
+    notifPollInterval = setInterval(loadNotifications, 15000);
+}
+
+function stopNotificationPolling() {
+    if (notifPollInterval) { clearInterval(notifPollInterval); notifPollInterval = null; }
+}
+
 window.onload = () => {
     if (!authToken) { window.location.href = '/login'; return; }
     loadDashboard().then(() => {
@@ -1306,6 +1508,7 @@ window.addEventListener('beforeunload', () => {
     if (matchStatusPollInterval) { clearInterval(matchStatusPollInterval); matchStatusPollInterval = null; }
     if (balanceRefreshInterval)  { clearInterval(balanceRefreshInterval);  balanceRefreshInterval = null; }
     if (matchesRefreshInterval)  { clearInterval(matchesRefreshInterval);  matchesRefreshInterval = null; }
+    if (notifPollInterval)       { clearInterval(notifPollInterval);       notifPollInterval = null; }
     if (supabaseRealtime && realtimeChannel) {
         supabaseRealtime.removeChannel(realtimeChannel);
     }
@@ -1318,6 +1521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     wire('nav-user-btn',               () => openProfileModal());
+    wire('nav-history-btn',            () => openTransactionHistory());
+    wire('nav-matches-btn',            () => document.querySelector('.my-matches-section')?.scrollIntoView({ behavior: 'smooth' }));
+    wire('nav-profile-btn',            () => openProfileModal());
     wire('btn-open-deposit',           () => openDepositModal());
     wire('btn-open-withdraw',          () => openWithdrawModal());
     wire('btn-load-tournaments',       () => loadTournaments());
@@ -1344,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ['profile-modal','deposit-modal','withdraw-modal','challenge-modal',
      'room-modal','create-friend-modal','join-friend-modal','report-result-modal',
-     'waiting-friend-modal'].forEach(id => {
+     'waiting-friend-modal','txn-modal'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', e => { if (e.target === el) closeModal(id); });
     });
