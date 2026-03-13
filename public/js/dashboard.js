@@ -702,7 +702,7 @@ async function confirmChallenge(method) {
 async function doJoinTournament(paymentMethod, checkoutId) {
     try {
         console.log('📝 Joining tournament:', currentTournamentId, 'Payment:', paymentMethod);
-        const res = await fetchWithAuth('/tournament/join', {
+        const res = await fetchWithAuth('/tournaments/join', {
             method: 'POST',
             body: JSON.stringify({
                 tournamentId: currentTournamentId,
@@ -945,9 +945,23 @@ async function loadMyFriendMatches() {
             countLabel.textContent = `${matches.length} total ·`;
         }
         renderMyMatches(matches);
+        updateStats(matches);
     } catch (e) {
         console.warn('loadMyFriendMatches failed:', e);
     }
+}
+
+function updateStats(matches) {
+    const completed = (matches || []).filter(m => m.status === 'completed');
+    const wins   = completed.filter(m => m.winner_id === currentUser.id).length;
+    const losses = completed.filter(m => m.winner_id && m.winner_id !== currentUser.id).length;
+    const played = completed.length;
+    const wEl = document.getElementById('stat-wins');
+    const lEl = document.getElementById('stat-losses');
+    const pEl = document.getElementById('stat-played');
+    if (wEl) wEl.textContent = wins;
+    if (lEl) lEl.textContent = losses;
+    if (pEl) pEl.textContent = played;
 }
 
 function renderMyMatches(matches, showAll = false) {
@@ -1357,34 +1371,7 @@ function openProfileModal() {
     document.getElementById('profile-modal').classList.add('open');
 }
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-    stopBalanceAutoRefresh();
-    stopMatchStatusPolling();
-    stopNotificationPolling();
-    if (supabaseRealtime && realtimeChannel) {
-        supabaseRealtime.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-    }
-    if (matchesRefreshInterval) {
-        clearInterval(matchesRefreshInterval);
-        matchesRefreshInterval = null;
-    }
-    currentBalance = 0;
-    currentUser = null;
-    currentUsername = '';
-    currentPhone = '';
-    currentTeam = '';
-    authToken = null;
-    currentCheckoutId = null;
-    currentFriendMatch = null;
-    currentTournamentId = null;
-    currentTournamentFee = 0;
-    currentTournamentName = '';
-    supabaseRealtime = null;
-    sessionStorage.removeItem('supabaseToken');
-    sessionStorage.removeItem('supabaseUser');
-    window.location.href = '/login';
-});
+
 
 function openWarRoom(data) {
     sessionStorage.setItem('warRoomData', JSON.stringify(data));
@@ -1543,6 +1530,34 @@ document.addEventListener('DOMContentLoaded', () => {
     wire('create-friend-btn',          () => createFriendMatch());
     wire('btn-join-friend-match',      () => joinFriendMatch());
     wire('btn-back-to-dashboard',      () => closeModal('report-result-modal'));
+    wire('logoutBtn', () => {
+        stopBalanceAutoRefresh();
+        stopMatchStatusPolling();
+        stopNotificationPolling();
+        if (supabaseRealtime && realtimeChannel) {
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+        }
+        if (matchesRefreshInterval) {
+            clearInterval(matchesRefreshInterval);
+            matchesRefreshInterval = null;
+        }
+        currentBalance = 0;
+        currentUser = null;
+        currentUsername = '';
+        currentPhone = '';
+        currentTeam = '';
+        authToken = null;
+        currentCheckoutId = null;
+        currentFriendMatch = null;
+        currentTournamentId = null;
+        currentTournamentFee = 0;
+        currentTournamentName = '';
+        supabaseRealtime = null;
+        sessionStorage.removeItem('supabaseToken');
+        sessionStorage.removeItem('supabaseUser');
+        window.location.href = '/login';
+    });
 
     const quickCard = document.getElementById('quick-card-friend');
     if (quickCard) quickCard.addEventListener('click', () =>

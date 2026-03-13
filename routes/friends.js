@@ -11,7 +11,6 @@ const {
     validateEFootballCode,
     sendGenericError,
     getAuthUser,
-    isValidScreenshotUrl,
     extractTeamNames,
     sendMatchNotification,
     isValidUUID,
