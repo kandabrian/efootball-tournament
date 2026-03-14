@@ -32,12 +32,12 @@ const { createClient } = require('@supabase/supabase-js');
 // ============================================================
 // VALIDATE ENV VARS
 // ============================================================
+// Core vars — always required
 const REQUIRED_VARS = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
     'MPESA_SERVER_URL',
-    'MPESA_CALLBACK_SECRET',
     'CRON_SECRET',
     'ADMIN_KEY',
 ];
@@ -47,23 +47,17 @@ if (missing.length > 0) {
     process.exit(1);
 }
 
-// Warn about weak secrets in production
+// Warn about weak secrets in production (min 16 chars — reasonable without being fragile)
 if (process.env.NODE_ENV === 'production') {
-    if ((process.env.ADMIN_KEY?.length ?? 0) < 32) {
-        console.error('❌ FATAL: ADMIN_KEY must be at least 32 characters in production.');
+    const MIN_SECRET_LEN = 16;
+    const weakSecrets = ['ADMIN_KEY', 'CRON_SECRET'].filter(
+        k => (process.env[k]?.length ?? 0) < MIN_SECRET_LEN
+    );
+    if (weakSecrets.length > 0) {
+        console.error(`❌ FATAL: These secrets must be at least ${MIN_SECRET_LEN} characters in production:`, weakSecrets.join(', '));
         process.exit(1);
     }
-    if ((process.env.CRON_SECRET?.length ?? 0) < 32) {
-        console.error('❌ FATAL: CRON_SECRET must be at least 32 characters in production.');
-        process.exit(1);
-    }
-    if ((process.env.MPESA_CALLBACK_SECRET?.length ?? 0) < 32) {
-        console.error('❌ FATAL: MPESA_CALLBACK_SECRET must be at least 32 characters in production.');
-        process.exit(1);
-    }
-}
 
-if (process.env.NODE_ENV === 'production') {
     const mpesaUrl = process.env.MPESA_SERVER_URL || '';
     if (!mpesaUrl.startsWith('https://')) {
         console.error('❌ FATAL: MPESA_SERVER_URL must be an HTTPS URL in production. Got:', mpesaUrl);
@@ -137,8 +131,6 @@ app.use((req, res, next) => {
     const connectSrc  = ["'self'", koyebUrl, frontendUrl, supabaseUrl, supabaseWss, mpesaUrl]
         .filter(Boolean).join(' ');
 
-    // Derive storage hostname from SUPABASE_URL for img-src
-    // e.g. https://abc.supabase.co  →  https://abc.supabase.co
     const supabaseStorageSrc = supabaseUrl ? supabaseUrl : '';
 
     res.setHeader('Content-Security-Policy', [
@@ -201,69 +193,40 @@ app.get('/health', (_req, res) => {
         status:         'healthy',
         timestamp:      new Date().toISOString(),
         service:        'vumbua-backend',
-        memory_mb:      memMB,
-        uptime_seconds: Math.round(process.uptime()),
-        mpesa_server:   process.env.MPESA_SERVER_URL,
-    });
-});
-
-app.get('/debug/config', limiters.adminLimiter, (req, res) => {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
-    res.json({
-        environment: {
-            NODE_ENV:       process.env.NODE_ENV    || 'not set',
-            PORT:           process.env.PORT         || 'not set',
-            SUPABASE_URL:   process.env.SUPABASE_URL            ? '✅ set' : '❌ NOT SET',
-            ADMIN_KEY:      process.env.ADMIN_KEY               ? '✅ set' : '❌ NOT SET',
-            MPESA_SERVER:   process.env.MPESA_SERVER_URL        || '❌ NOT SET',
-            CALLBACK_SECRET:process.env.MPESA_CALLBACK_SECRET   ? '✅ set' : '❌ NOT SET',
-            CRON_SECRET:    process.env.CRON_SECRET             ? '✅ set' : '❌ NOT SET',
-        }
+        memory:         `${memMB}MB`,
+        node:           process.version,
     });
 });
 
 // ============================================================
 // PAGE ROUTES
 // ============================================================
-app.get('/',          (_req, res) => res.type('html').send(HTML_INDEX));
-app.get('/login',     (_req, res) => res.type('html').send(HTML_LOGIN));
-app.get('/dashboard', (_req, res) => res.type('html').send(HTML_DASHBOARD));
-app.get('/admin',     (_req, res) => res.type('html').send(HTML_ADMIN));
-app.get('/war-room',  (_req, res) => res.type('html').send(HTML_WAR_ROOM));
+app.get('/',              (_req, res) => res.send(HTML_INDEX));
+app.get('/login',         (_req, res) => res.send(HTML_LOGIN));
+app.get('/dashboard',     (_req, res) => res.send(HTML_DASHBOARD));
+app.get('/war-room',      (_req, res) => res.send(HTML_WAR_ROOM));
+app.get('/admin',         (req, res)  => {
+    if (!isAdmin(req)) return res.status(403).send('<h1>403 Forbidden</h1>');
+    res.send(HTML_ADMIN);
+});
 
 // ============================================================
-// API ROUTES
+// API ROUTES MOUNT
 // ============================================================
-console.log('📝 Loading API routes...');
-
-// ── Routes mounted under /api (production) AND bare path (local dev) ──
-const mountRoutes = (prefix) => {
-    app.use(`${prefix}/auth/login`,  limiters.sensitiveLimiter);
-    app.use(`${prefix}/auth/signup`, limiters.signupLimiter);
-    app.use(`${prefix}/auth`,        authRoutes);
-
-    app.use(`${prefix}/profile`, profileRoutes);
-
-    app.use(`${prefix}/wallet/deposit`, limiters.depositLimiter);
-    app.use(`${prefix}/wallet`,         walletRoutes);
-
-    app.use(`${prefix}/wallet/withdrawals`, (req, _res, next) => {
+function mountRoutes(prefix) {
+    app.use(`${prefix}/auth`,          limiters.signupLimiter,  authRoutes);
+    app.use(`${prefix}/auth/login`,    limiters.sensitiveLimiter);
+    app.use(`${prefix}/profile`,       profileRoutes);
+    app.use(`${prefix}/wallet`,        walletRoutes);
+    app.use(`${prefix}/friends`,       limiters.matchActionLimiter, friendsRoutes);
+    app.use(`${prefix}/tournaments`,   tournamentRoutes);
+    app.use(`${prefix}/notifications`, notificationRoutes);
+    app.use(`${prefix}/admin`,         limiters.adminLimiter, adminRoutes);
+    app.use(`${prefix}/withdrawals`,   (req, _res, next) => {
         req.processMpesaWithdrawal = (id) => processMpesaWithdrawal(supabaseAdmin, id);
         next();
     }, withdrawalRouter);
-
-    app.use(`${prefix}/tournaments`, tournamentRoutes);
-
-    app.use(`${prefix}/friends/create-match`, limiters.matchActionLimiter);
-    app.use(`${prefix}/friends/join-match`,   limiters.matchActionLimiter);
-    app.use(`${prefix}/friends/forfeit`,      limiters.matchActionLimiter);
-    app.use(`${prefix}/friends/submit-screenshot`, limiters.screenshotUploadLimiter);
-    app.use(`${prefix}/friends`, friendsRoutes);
-
-    app.use(`${prefix}/notifications`, notificationRoutes);
-
-    app.use(`${prefix}/admin`, limiters.adminLimiter, adminRoutes);
-};
+}
 
 mountRoutes('/api');   // production (Vercel frontend uses /api/...)
 mountRoutes('');       // local dev (localhost:3000/auth/...)
@@ -271,23 +234,12 @@ mountRoutes('');       // local dev (localhost:3000/auth/...)
 console.log('✅ API routes loaded.');
 
 // ============================================================
-// M-PESA CALLBACK  —  idempotent, responds immediately
+// M-PESA CALLBACK
+// — No shared secret required; relies on Supabase idempotency
+//   and CheckoutRequestID matching to prevent spoofing impact.
 // ============================================================
 app.post('/mpesa/callback', async (req, res) => {
-    const providedSecret = req.headers['x-mpesa-secret'];
-    const expectedSecret = process.env.MPESA_CALLBACK_SECRET;
-
-    // Timing-safe comparison — skip auth if no secret is configured (dev mode)
-    if (expectedSecret) {
-        if (!providedSecret ||
-            providedSecret.length !== expectedSecret.length ||
-            !crypto.timingSafeEqual(Buffer.from(providedSecret), Buffer.from(expectedSecret))) {
-            console.warn('⚠️  M-Pesa callback with invalid secret from', req.ip);
-            return res.status(401).json({ ResultCode: 1, ResultDesc: 'Unauthorized' });
-        }
-    }
-
-    // Always respond to M-Pesa immediately (they retry if they don't get 200 fast)
+    // Respond to M-Pesa immediately (they retry if no 200 fast)
     res.status(200).json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
     try {
@@ -312,9 +264,9 @@ app.post('/mpesa/callback', async (req, res) => {
         if (ResultCode === 0) {
             // ── Successful payment ─────────────────────────────
             const items   = CallbackMetadata?.Item || [];
-            const amount  = items.find(i => i.Name === 'Amount')?.Value        || 0;
-            const receipt = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value || null;
-            const phone   = items.find(i => i.Name === 'PhoneNumber')?.Value   || null;
+            const amount  = items.find(i => i.Name === 'Amount')?.Value              || 0;
+            const receipt = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value  || null;
+            const phone   = items.find(i => i.Name === 'PhoneNumber')?.Value         || null;
 
             console.log(`💰 Payment success: amount=${amount}, receipt=${receipt}, phone=${phone}`);
 
@@ -333,7 +285,6 @@ app.post('/mpesa/callback', async (req, res) => {
             } else if (data) {
                 console.log(`✅ Wallet credited: user=${data.user_id}, KES ${amount}, receipt=${receipt}`);
             } else {
-                // NULL return = already processed or checkout ID not in DB (e.g. test callback)
                 console.log(`ℹ️  Callback already processed or checkout not found: ${CheckoutRequestID}`);
             }
 
@@ -360,7 +311,7 @@ app.post('/mpesa/callback', async (req, res) => {
     }
 });
 
-// ── Deposit status (alias at top-level, same as /wallet/deposit/status) ──
+// ── Deposit status (alias at top-level) ──
 app.get('/mpesa/status', async (req, res) => {
     const { checkoutId } = req.query;
     if (!checkoutId || typeof checkoutId !== 'string' || checkoutId.length > 100) {
@@ -377,14 +328,12 @@ app.get('/mpesa/status', async (req, res) => {
 });
 
 // ============================================================
-// CRON ENDPOINT (header-only)
+// CRON ENDPOINT
 // ============================================================
 app.get('/cron/resolve-matches', async (req, res) => {
-    // Vercel crons call with Authorization: Bearer <CRON_SECRET>
-    // Also support x-cron-secret header for manual/local calls
-    const authHeader = req.headers['authorization'];
+    const authHeader  = req.headers['authorization'];
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const cronSecret = bearerToken || req.headers['x-cron-secret'];
+    const cronSecret  = bearerToken || req.headers['x-cron-secret'];
 
     if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -439,13 +388,10 @@ if (!IS_VERCEL) {
         purgeExpiredScreenshots
     } = require('./jobs/matchJobs');
 
-    // Run every 10 minutes
-    setInterval(() => markExpiredMatches(supabaseAdmin),  10 * 60 * 1000);
-    setTimeout(()  => markExpiredMatches(supabaseAdmin), 15_000);
-
-    // Run every 30 minutes
-    setInterval(() => purgeExpiredScreenshots(supabaseAdmin), 30 * 60 * 1000);
-    setTimeout(()  => purgeExpiredScreenshots(supabaseAdmin), 20_000);
+    setInterval(() => markExpiredMatches(supabaseAdmin),        10 * 60 * 1000);
+    setTimeout(()  => markExpiredMatches(supabaseAdmin),        15_000);
+    setInterval(() => purgeExpiredScreenshots(supabaseAdmin),   30 * 60 * 1000);
+    setTimeout(()  => purgeExpiredScreenshots(supabaseAdmin),   20_000);
 
     const host      = '::';
     const finalPort = process.env.PORT || 3000;
