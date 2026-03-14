@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "crons": [
+ "crons": [
     {
       "path": "/cron/resolve-matches",
-      "schedule": "*/2 * * * *"
+      "schedule": "0 0 * * *" 
     }
   ],
   "functions": {
