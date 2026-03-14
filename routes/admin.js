@@ -15,7 +15,11 @@ router.use((req, res, next) => {
     next();
 });
 
+// ============================================================
+// SETTLE MATCH — uses SECURITY DEFINER RPC to bypass RLS
+// ============================================================
 async function settleMatch(supabaseAdmin, matchId, winnerId, resolution, adminNotes) {
+    // Fetch match details
     const { data: match, error: matchErr } = await supabaseAdmin
         .from('friend_matches')
         .select('id, status, creator_id, joiner_id, winner_prize, wager_amount')
@@ -34,35 +38,44 @@ async function settleMatch(supabaseAdmin, matchId, winnerId, resolution, adminNo
     }
 
     if (resolution === 'draw') {
-        const { error: e1 } = await supabaseAdmin.rpc('credit_wallet', {
-            p_user_id: match.creator_id,
-            p_amount:  match.wager_amount,
+        // Use SECURITY DEFINER RPC — bypasses RLS on friend_matches and wallets
+        const { error: rpcErr } = await supabaseAdmin.rpc('admin_settle_match', {
+            p_match_id:       matchId,
+            p_winner_id:      match.creator_id,  // used for draw refund
+            p_loser_id:       match.joiner_id,   // used for draw refund
+            p_creator_result: 'draw',
+            p_joiner_result:  'draw',
+            p_winner_prize:   0,
+            p_wager_amount:   match.wager_amount,
+            p_resolution:     'draw',
+            p_admin_notes:    adminNotes || null,
         });
-        if (e1) throw new Error('Failed to refund creator: ' + e1.message);
+        if (rpcErr) throw new Error('Failed to settle draw: ' + rpcErr.message);
 
-        const { error: e2 } = await supabaseAdmin.rpc('credit_wallet', {
-            p_user_id: match.joiner_id,
-            p_amount:  match.wager_amount,
-        });
-        if (e2) throw new Error('Failed to refund joiner: ' + e2.message);
-
-        await supabaseAdmin
-            .from('friend_matches')
-            .update({
-                status:            'completed',
-                winner_id:         null,
-                loser_id:          null,
-                creator_result:    'draw',
-                joiner_result:     'draw',
-                settlement_method: 'admin_draw',
-                admin_notes:       adminNotes || null,
-                completed_at:      new Date().toISOString(),
-            })
-            .eq('id', matchId);
+        // Notify both players
+        await supabaseAdmin.from('match_notifications').insert([
+            {
+                match_id:     matchId,
+                recipient_id: match.creator_id,
+                type:         'match_draw',
+                payload:      JSON.stringify({ adminSettled: true, refunded: match.wager_amount }),
+                read:         false,
+                created_at:   new Date().toISOString(),
+            },
+            {
+                match_id:     matchId,
+                recipient_id: match.joiner_id,
+                type:         'match_draw',
+                payload:      JSON.stringify({ adminSettled: true, refunded: match.wager_amount }),
+                read:         false,
+                created_at:   new Date().toISOString(),
+            }
+        ]).catch(e => console.warn('[Admin] draw notify failed:', e.message));
 
         return { winnerId: null, prizePaid: 0, resolution: 'draw' };
     }
 
+    // Winner resolution
     if (!isValidUUID(winnerId)) throw new Error('Invalid winner ID');
     if (winnerId !== match.creator_id && winnerId !== match.joiner_id) {
         throw new Error('Winner must be a participant of this match');
@@ -72,47 +85,39 @@ async function settleMatch(supabaseAdmin, matchId, winnerId, resolution, adminNo
     const creatorResult = winnerId === match.creator_id ? 'won' : 'lost';
     const joinerResult  = winnerId === match.joiner_id  ? 'won' : 'lost';
 
-    const { error: creditErr } = await supabaseAdmin.rpc('credit_wallet', {
-        p_user_id: winnerId,
-        p_amount:  match.winner_prize,
+    // Use SECURITY DEFINER RPC — bypasses RLS on friend_matches and wallets
+    const { error: rpcErr } = await supabaseAdmin.rpc('admin_settle_match', {
+        p_match_id:       matchId,
+        p_winner_id:      winnerId,
+        p_loser_id:       loserId,
+        p_creator_result: creatorResult,
+        p_joiner_result:  joinerResult,
+        p_winner_prize:   match.winner_prize,
+        p_wager_amount:   match.wager_amount,
+        p_resolution:     'winner',
+        p_admin_notes:    adminNotes || null,
     });
-    if (creditErr) throw new Error('Failed to credit winner: ' + creditErr.message);
+    if (rpcErr) throw new Error('Failed to settle match: ' + rpcErr.message);
 
-    await supabaseAdmin
-        .from('friend_matches')
-        .update({
-            status:            'completed',
-            winner_id:         winnerId,
-            loser_id:          loserId,
-            creator_result:    creatorResult,
-            joiner_result:     joinerResult,
-            settlement_method: 'admin',
-            admin_notes:       adminNotes || null,
-            completed_at:      new Date().toISOString(),
-        })
-        .eq('id', matchId);
-
-    try {
-        await supabaseAdmin.from('match_notifications').insert({
+    // Notify winner and loser
+    await supabaseAdmin.from('match_notifications').insert([
+        {
             match_id:     matchId,
             recipient_id: winnerId,
             type:         'match_won',
             payload:      JSON.stringify({ prizePaid: match.winner_prize, adminSettled: true }),
             read:         false,
             created_at:   new Date().toISOString(),
-        });
-    } catch (e) { console.warn('[Admin] winner notify failed:', e.message); }
-
-    try {
-        await supabaseAdmin.from('match_notifications').insert({
+        },
+        {
             match_id:     matchId,
             recipient_id: loserId,
             type:         'match_lost',
             payload:      JSON.stringify({ adminSettled: true }),
             read:         false,
             created_at:   new Date().toISOString(),
-        });
-    } catch (e) { console.warn('[Admin] loser notify failed:', e.message); }
+        }
+    ]).catch(e => console.warn('[Admin] notify failed:', e.message));
 
     return { winnerId, prizePaid: match.winner_prize, resolution: 'winner' };
 }
@@ -246,8 +251,8 @@ router.post('/force-winner/:id', async (req, res) => {
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid match ID' });
 
         const { winnerId, resolution, adminNotes } = req.body;
-        if (!resolution)           return res.status(400).json({ error: 'resolution is required' });
-        if (!adminNotes?.trim())   return res.status(400).json({ error: 'Admin notes are required' });
+        if (!resolution)         return res.status(400).json({ error: 'resolution is required' });
+        if (!adminNotes?.trim()) return res.status(400).json({ error: 'Admin notes are required' });
         if (resolution === 'winner' && !winnerId) return res.status(400).json({ error: 'winnerId is required' });
 
         const result = await settleMatch(supabaseAdmin, id, winnerId, resolution, adminNotes.trim());
@@ -272,8 +277,8 @@ router.post('/approve-result/:id', async (req, res) => {
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid match ID' });
 
         const { winnerId, resolution, adminNotes } = req.body;
-        if (!resolution)           return res.status(400).json({ error: 'resolution is required' });
-        if (!adminNotes?.trim())   return res.status(400).json({ error: 'Admin notes are required' });
+        if (!resolution)         return res.status(400).json({ error: 'resolution is required' });
+        if (!adminNotes?.trim()) return res.status(400).json({ error: 'Admin notes are required' });
         if (resolution === 'winner' && !winnerId) return res.status(400).json({ error: 'winnerId is required' });
 
         const result = await settleMatch(supabaseAdmin, id, winnerId, resolution, adminNotes.trim());
@@ -298,8 +303,8 @@ router.post('/resolve-dispute/:id', async (req, res) => {
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid match ID' });
 
         const { winnerId, resolution, adminNotes } = req.body;
-        if (!resolution)           return res.status(400).json({ error: 'resolution is required' });
-        if (!adminNotes?.trim())   return res.status(400).json({ error: 'Admin notes are required' });
+        if (!resolution)         return res.status(400).json({ error: 'resolution is required' });
+        if (!adminNotes?.trim()) return res.status(400).json({ error: 'Admin notes are required' });
         if (resolution === 'winner' && !winnerId) return res.status(400).json({ error: 'winnerId is required' });
 
         const result = await settleMatch(supabaseAdmin, id, winnerId, resolution, adminNotes.trim());
@@ -316,7 +321,6 @@ router.post('/resolve-dispute/:id', async (req, res) => {
 
 // ============================================================
 // WITHDRAWALS – list
-// GET /admin/withdrawals?status=
 // ============================================================
 router.get('/withdrawals', async (req, res) => {
     try {
@@ -334,7 +338,6 @@ router.get('/withdrawals', async (req, res) => {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Enrich with usernames from profiles
         const userIds = [...new Set((data || []).map(w => w.user_id).filter(Boolean))];
         let profileMap = {};
         if (userIds.length > 0) {
@@ -359,7 +362,6 @@ router.get('/withdrawals', async (req, res) => {
 
 // ============================================================
 // WITHDRAWALS – approve
-// POST /admin/withdrawals/:id/approve
 // ============================================================
 router.post('/withdrawals/:id/approve', async (req, res) => {
     try {
@@ -382,7 +384,6 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
             .single();
 
         if (error) throw error;
-
         res.json({ message: 'Withdrawal approved', withdrawal: data });
     } catch (err) {
         console.error('Admin approve withdrawal error:', err.message);
@@ -392,7 +393,6 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
 
 // ============================================================
 // WITHDRAWALS – reject
-// POST /admin/withdrawals/:id/reject
 // ============================================================
 router.post('/withdrawals/:id/reject', async (req, res) => {
     try {
