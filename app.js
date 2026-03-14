@@ -205,8 +205,7 @@ app.get('/',              (_req, res) => res.send(HTML_INDEX));
 app.get('/login',         (_req, res) => res.send(HTML_LOGIN));
 app.get('/dashboard',     (_req, res) => res.send(HTML_DASHBOARD));
 app.get('/war-room',      (_req, res) => res.send(HTML_WAR_ROOM));
-app.get('/admin',         (req, res)  => {
-    if (!isAdmin(req)) return res.status(403).send('<h1>403 Forbidden</h1>');
+app.get('/admin', (_req, res) => {
     res.send(HTML_ADMIN);
 });
 
