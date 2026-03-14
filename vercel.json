@@ -1,24 +1,9 @@
 {
   "version": 2,
-  "builds": [
+  "crons": [
     {
-      "src": "app.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "includeFiles": [
-          "public/**",
-          "public/js/**",
-          "routes/**",
-          "jobs/**"
-        ]
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "app.js"
+      "path": "/cron/resolve-matches",
+      "schedule": "*/2 * * * *"
     }
   ],
   "functions": {
@@ -27,11 +12,8 @@
       "memory": 1024
     }
   },
-  "crons": [
-    {
-      "path": "/cron/resolve-matches",
-      "schedule": "*/2 * * * *"
-    }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/app.js" }
   ],
   "env": {
     "NODE_ENV": "production"
