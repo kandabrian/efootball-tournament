@@ -44,6 +44,17 @@ function mimeToExt(mimetype) {
     return 'jpg';
 }
 
+// ── Safely unwrap Supabase RPC results ──────────────────────
+// Supabase can return the result as a plain object, an array,
+// or wrapped inside a key matching the function name.
+function unwrapRpc(result, fnName) {
+    if (!result) return null;
+    if (Array.isArray(result)) return result[0] || null;
+    if (result.id)             return result;          // already a plain row
+    if (fnName && result[fnName]) return result[fnName]; // wrapped: { create_match_and_deduct: {...} }
+    return result;
+}
+
 // ============================================================
 // CREATE MATCH
 // ============================================================
@@ -82,28 +93,37 @@ router.post('/create-match', async (req, res) => {
         const winnerPrize = (parsedWager * 2) - platformFee;
 
         const { data: matchResult, error: rpcErr } = await supabaseAdmin.rpc('create_match_and_deduct', {
-            p_user_id: user.id,
-            p_wager_amount: parsedWager,
-            p_platform_fee: platformFee,
-            p_winner_prize: winnerPrize,
-            p_match_code: matchCode,
+            p_user_id:        user.id,
+            p_wager_amount:   parsedWager,
+            p_platform_fee:   platformFee,
+            p_winner_prize:   winnerPrize,
+            p_match_code:     matchCode,
             p_efootball_code: efootballCode.toUpperCase(),
-            p_creator_team: creatorProfile.team_name,
-            p_expires_at: expiresAt,
+            p_creator_team:   creatorProfile.team_name,
+            p_expires_at:     expiresAt,
         });
 
         if (rpcErr) {
+            console.error('create_match_and_deduct RPC error:', rpcErr.message);
             const msg = rpcErr.message?.toLowerCase().includes('insufficient')
                 ? 'Insufficient balance' : 'Failed to create match. Please try again.';
             return res.status(400).json({ error: msg });
         }
 
-        const match = Array.isArray(matchResult) ? matchResult[0] : matchResult;
+        // Unwrap result — Supabase may return plain obj, array, or fn-name-keyed obj
+        const match = unwrapRpc(matchResult, 'create_match_and_deduct');
+
+        if (!match?.id) {
+            console.error('create_match_and_deduct returned no id:', JSON.stringify(matchResult));
+            return res.status(500).json({ error: 'Match created but ID not returned. Please try again.' });
+        }
+
+        console.log('✅ Match created:', match.id);
 
         res.status(201).json({
-            matchId: match.id,
+            matchId:       match.id,
             efootballCode: efootballCode.toUpperCase(),
-            wagerAmount: parsedWager,
+            wagerAmount:   parsedWager,
             winnerPrize,
             platformFee,
             expiresAt,
@@ -137,11 +157,11 @@ router.post('/join-match', async (req, res) => {
             return res.status(400).json({ error: 'Please set your team name in profile first' });
 
         const resultPostDeadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-        const { data: updatedMatch, error: rpcErr } = await supabaseAdmin.rpc('join_match_and_deduct', {
-            p_match_code: `VUM-${efootballCode.toUpperCase()}`,
-            p_joiner_id: user.id,
-            p_joiner_team: joinerProfile.team_name,
-            p_result_post_deadline: resultPostDeadline,
+        const { data: joinResult, error: rpcErr } = await supabaseAdmin.rpc('join_match_and_deduct', {
+            p_match_code:            `VUM-${efootballCode.toUpperCase()}`,
+            p_joiner_id:             user.id,
+            p_joiner_team:           joinerProfile.team_name,
+            p_result_post_deadline:  resultPostDeadline,
         });
 
         if (rpcErr) {
@@ -153,6 +173,8 @@ router.post('/join-match', async (req, res) => {
                 : 'Failed to join match. Please try again.';
             return res.status(400).json({ error: msg });
         }
+
+        const updatedMatch = unwrapRpc(joinResult, 'join_match_and_deduct');
 
         await sendMatchNotification(supabaseAdmin, updatedMatch.id, updatedMatch.creator_id, 'match_started', {
             message: 'Your opponent joined! You have 30 minutes to play and submit results.',
@@ -170,12 +192,12 @@ router.post('/join-match', async (req, res) => {
         }
 
         res.status(200).json({
-            message: 'Successfully joined match!',
-            matchId: updatedMatch.id,
-            wagerAmount: updatedMatch.wager_amount,
-            winnerPrize: updatedMatch.winner_prize,
-            opponentId: updatedMatch.creator_id,
-            creatorId: updatedMatch.creator_id,
+            message:             'Successfully joined match!',
+            matchId:             updatedMatch.id,
+            wagerAmount:         updatedMatch.wager_amount,
+            winnerPrize:         updatedMatch.winner_prize,
+            opponentId:          updatedMatch.creator_id,
+            creatorId:           updatedMatch.creator_id,
             creatorTeam,
             creatorUsername,
             resultPostDeadline,
@@ -266,9 +288,12 @@ router.get('/match-status/:matchId', async (req, res) => {
                 declared_score_by, declared_winner_id, score_confirm_deadline,
                 result_post_deadline, creator_result, joiner_result
             `)
-            .eq('id', matchId).single();
+            .eq('id', matchId)
+            .maybeSingle();   // use maybeSingle so missing row = null, not an error
 
-        if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
+        if (!match) return res.status(404).json({ error: 'Match not found' });
+        if (matchErr) throw matchErr;
+
         if (match.creator_id !== user.id && match.joiner_id !== user.id)
             return res.status(403).json({ error: 'Not authorized to view this match' });
 
@@ -288,6 +313,8 @@ router.get('/match-status/:matchId', async (req, res) => {
             statusMessage = 'Match is under admin review.';
         } else if (match.status === 'pending_review') {
             statusMessage = 'Screenshot uploaded. Admin will review and settle the match.';
+        } else if (match.status === 'pending') {
+            statusMessage = 'Waiting for an opponent to join...';
         } else if (match.status === 'active' && match.result_post_deadline) {
             const minsLeft = Math.max(0, Math.ceil((new Date(match.result_post_deadline) - Date.now()) / 60000));
             statusMessage = minsLeft > 0
@@ -297,17 +324,26 @@ router.get('/match-status/:matchId', async (req, res) => {
 
         const isCreator = match.creator_id === user.id;
         res.json({
-            matchId: match.id, matchCode: match.match_code, status: match.status, statusMessage,
-            joinerUsername, wagerAmount: match.wager_amount, winnerPrize: match.winner_prize,
-            winnerId: match.winner_id, loserId: match.loser_id, youWon: match.winner_id === user.id,
-            myResult: isCreator ? match.creator_result : match.joiner_result,
-            expiresAt: match.expires_at, startedAt: match.started_at,
+            matchId:            match.id,
+            matchCode:          match.match_code,
+            status:             match.status,
+            statusMessage,
+            joinerUsername,
+            wagerAmount:        match.wager_amount,
+            winnerPrize:        match.winner_prize,
+            winnerId:           match.winner_id,
+            loserId:            match.loser_id,
+            youWon:             match.winner_id === user.id,
+            myResult:           isCreator ? match.creator_result : match.joiner_result,
+            expiresAt:          match.expires_at,
+            startedAt:          match.started_at,
             resultPostDeadline: match.result_post_deadline || null,
-            challengeDeadline: match.challenge_deadline,
-            penaltyDeadline: match.penalty_deadline || null,
-            drawScore: match.draw_score || null, penaltyScore: match.penalty_score || null,
-            settlementMethod: match.settlement_method || null,
-            efootballRoomCode: match.efootball_room_code || null,
+            challengeDeadline:  match.challenge_deadline,
+            penaltyDeadline:    match.penalty_deadline || null,
+            drawScore:          match.draw_score || null,
+            penaltyScore:       match.penalty_score || null,
+            settlementMethod:   match.settlement_method || null,
+            efootballRoomCode:  match.efootball_room_code || null,
         });
     } catch (err) {
         console.error('Match status error:', err.message);
@@ -344,7 +380,7 @@ router.post('/submit-screenshot', upload.single('screenshot'), async (req, res) 
             return res.status(400).json({ error: 'Match is not active' });
 
         // ── Duplicate screenshot guard ───────────────────────────
-        const isCreator      = user.id === match.creator_id;
+        const isCreator       = user.id === match.creator_id;
         const alreadyUploaded = isCreator
             ? !!match.creator_screenshot_url
             : !!match.joiner_screenshot_url;
@@ -367,10 +403,10 @@ router.post('/submit-screenshot', upload.single('screenshot'), async (req, res) 
 
         // Update the correct player's screenshot field
         const updateField = isCreator ? 'creator_screenshot_url' : 'joiner_screenshot_url';
-        const updateData = {
-            [updateField]: publicUrl,
-            status: 'pending_review',
-            pending_review_reason: 'screenshot_uploaded'
+        const updateData  = {
+            [updateField]:         publicUrl,
+            status:                'pending_review',
+            pending_review_reason: 'screenshot_uploaded',
         };
 
         const { error: updateErr } = await supabaseAdmin
@@ -410,16 +446,24 @@ router.post('/cancel-match', async (req, res) => {
 
         if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
         if (match.creator_id !== user.id) return res.status(403).json({ error: 'Only match creator can cancel' });
-        if (match.status === 'cancelled') return res.status(400).json({ error: 'Match already cancelled' });
-        if (match.status === 'active') return res.status(400).json({ error: 'Cannot cancel — someone already joined' });
-        if (match.status === 'completed') return res.status(400).json({ error: 'Cannot cancel completed match' });
-        if (match.status === 'disputed') return res.status(400).json({ error: 'Cannot cancel disputed match' });
-        if (match.status !== 'pending' && match.status !== 'expired') return res.status(400).json({ error: `Cannot cancel ${match.status} match` });
+        if (match.status === 'cancelled')  return res.status(400).json({ error: 'Match already cancelled' });
+        if (match.status === 'active')     return res.status(400).json({ error: 'Cannot cancel — someone already joined' });
+        if (match.status === 'completed')  return res.status(400).json({ error: 'Cannot cancel completed match' });
+        if (match.status === 'disputed')   return res.status(400).json({ error: 'Cannot cancel disputed match' });
+        if (match.status !== 'pending' && match.status !== 'expired')
+            return res.status(400).json({ error: `Cannot cancel ${match.status} match` });
 
-        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', { p_user_id: user.id, p_amount: match.wager_amount });
+        const { error: refundErr } = await supabaseAdmin.rpc('credit_wallet', {
+            p_user_id: user.id,
+            p_amount:  match.wager_amount,
+        });
         if (refundErr) return res.status(500).json({ error: 'Failed to refund wager' });
 
-        await supabaseAdmin.from('friend_matches').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', matchId);
+        await supabaseAdmin
+            .from('friend_matches')
+            .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+            .eq('id', matchId);
+
         res.status(200).json({ message: 'Match cancelled and wager refunded', refundedAmount: match.wager_amount });
 
     } catch (err) {
@@ -447,20 +491,22 @@ router.post('/forfeit', async (req, res) => {
             .from('friend_matches').select('id, status, creator_id, joiner_id, winner_prize').eq('id', matchId).single();
 
         if (matchErr || !match) return res.status(404).json({ error: 'Match not found' });
-        if (match.creator_id !== user.id && match.joiner_id !== user.id) return res.status(403).json({ error: 'Not part of this match' });
-        if (match.status !== 'active' && match.status !== 'penalty_shootout') return res.status(400).json({ error: 'Match is not active' });
+        if (match.creator_id !== user.id && match.joiner_id !== user.id)
+            return res.status(403).json({ error: 'Not part of this match' });
+        if (match.status !== 'active' && match.status !== 'penalty_shootout')
+            return res.status(400).json({ error: 'Match is not active' });
 
         const winnerId      = match.creator_id === user.id ? match.joiner_id : match.creator_id;
         const creatorResult = winnerId === match.creator_id ? 'won' : 'lost';
         const joinerResult  = winnerId === match.joiner_id  ? 'won' : 'lost';
 
         const { error: rpcErr } = await supabaseAdmin.rpc('forfeit_match', {
-            p_match_id: matchId,
-            p_forfeit_by: user.id,
-            p_winner_id: winnerId,
-            p_winner_prize: match.winner_prize,
+            p_match_id:       matchId,
+            p_forfeit_by:     user.id,
+            p_winner_id:      winnerId,
+            p_winner_prize:   match.winner_prize,
             p_creator_result: creatorResult,
-            p_joiner_result: joinerResult
+            p_joiner_result:  joinerResult,
         });
 
         if (rpcErr) {
@@ -468,7 +514,11 @@ router.post('/forfeit', async (req, res) => {
             return res.status(400).json({ error: rpcErr.message || 'Failed to process forfeit' });
         }
 
-        res.status(200).json({ message: 'Match forfeited. Opponent has been paid.', winnerId, prizePaid: match.winner_prize });
+        res.status(200).json({
+            message:   'Match forfeited. Opponent has been paid.',
+            winnerId,
+            prizePaid: match.winner_prize,
+        });
 
     } catch (err) {
         console.error('Forfeit error:', err.message);
