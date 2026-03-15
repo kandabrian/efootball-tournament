@@ -601,10 +601,13 @@ function updateWithdrawFeeNote() {
     const amt = parseInt(document.getElementById('withdraw-amount').value) || 0;
     const feeNote = document.getElementById('withdraw-fee-note');
     const receiveEl = document.getElementById('withdraw-receive-amount');
-    const WITHDRAWAL_FEE = 5;
+    const feeAmtEl = document.getElementById('withdraw-fee-amount');
+    const fee = Math.round(amt * 0.025 * 100) / 100;
+    const payout = Math.round((amt - fee) * 100) / 100;
     if (amt >= 20) {
         feeNote.style.display = 'block';
-        receiveEl.textContent = 'KES ' + Math.max(0, amt - WITHDRAWAL_FEE).toLocaleString();
+        if (feeAmtEl) feeAmtEl.textContent = 'KES ' + fee.toLocaleString('en-KE', { minimumFractionDigits: 2 });
+        receiveEl.textContent = 'KES ' + payout.toLocaleString('en-KE', { minimumFractionDigits: 2 });
     } else {
         feeNote.style.display = 'none';
     }
@@ -651,7 +654,9 @@ async function processWithdraw() {
 
         document.getElementById('withdraw-step-1').style.display = 'none';
         document.getElementById('withdraw-step-2').style.display = 'block';
-        document.getElementById('withdraw-success-amount').textContent = 'KES ' + Math.max(0, amount - 5).toLocaleString();
+        const _fee = Math.round(amount * 0.025 * 100) / 100;
+        const _payout = Math.round((amount - _fee) * 100) / 100;
+        document.getElementById('withdraw-success-amount').textContent = 'KES ' + _payout.toLocaleString('en-KE', { minimumFractionDigits: 2 });
         document.getElementById('withdraw-success-phone').textContent = '→ ' + cleanPhone;
         
         // ── NEW: Display withdrawal ID if element exists (add in HTML: <span id="withdraw-success-id"></span>) ──

@@ -4,6 +4,20 @@
 
 'use strict';
 
+// ============================================================
+// WHATSAPP NOTIFICATION HELPER
+// ============================================================
+async function notifyAdmin(message) {
+    try {
+        const phone  = process.env.ADMIN_WHATSAPP_PHONE  || '254706826391';
+        const apikey = process.env.ADMIN_WHATSAPP_APIKEY || '3303807';
+        const text   = encodeURIComponent(message);
+        await fetch(`https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${text}&apikey=${apikey}`);
+    } catch (e) {
+        console.warn('[Notify] WhatsApp notification failed:', e.message);
+    }
+}
+
 const express = require('express');
 const router  = express.Router();
 const { normalizePhone, isValidUUID } = require('./helpers');
@@ -88,6 +102,15 @@ router.post('/request', async (req, res) => {
         }
 
         const row = Array.isArray(withdrawal) ? withdrawal[0] : withdrawal;
+
+        // Notify admin via WhatsApp
+        notifyAdmin(
+            `💸 WITHDRAWAL REQUEST\n` +
+            `User: ${user.id.substring(0, 8)}\n` +
+            `Amount: KES ${withdrawAmount}\n` +
+            `Phone: ${cleanPhone}\n` +
+            `Status: Pending your approval`
+        ).catch(() => {});
 
         res.status(201).json({
             message: 'Withdrawal request submitted for review. Admin will approve shortly.',

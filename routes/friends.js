@@ -120,6 +120,15 @@ router.post('/create-match', async (req, res) => {
 
         console.log('✅ Match created:', match.id);
 
+        // Notify admin via WhatsApp
+        notifyAdmin(
+            `⚽ NEW FRIENDLY MATCH\n` +
+            `Player: ${creatorProfile.team_name}\n` +
+            `Wager: KES ${parsedWager}\n` +
+            `Prize: KES ${winnerPrize}\n` +
+            `Code: ${matchCode}`
+        ).catch(() => {});
+
         res.status(201).json({
             matchId:       match.id,
             efootballCode: efootballCode.toUpperCase(),
