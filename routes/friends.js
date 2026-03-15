@@ -4,6 +4,25 @@
 
 'use strict';
 
+// ============================================================
+// WHATSAPP NOTIFICATION — fire and forget, never blocks
+// ============================================================
+function notifyAdmin(message) {
+    try {
+        const https  = require('https');
+        const phone  = process.env.ADMIN_WHATSAPP_PHONE  || '254706826391';
+        const apikey = process.env.ADMIN_WHATSAPP_APIKEY || '3303807';
+        const text   = encodeURIComponent(message);
+        https.get(
+            `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${text}&apikey=${apikey}`,
+            (res) => { res.resume(); }
+        ).on('error', (e) => console.warn('[Notify] WhatsApp failed:', e.message));
+    } catch (e) {
+        console.warn('[Notify] WhatsApp setup failed:', e.message);
+    }
+}
+
+
 const express = require('express');
 const router  = express.Router();
 const multer  = require('multer');
@@ -127,7 +146,7 @@ router.post('/create-match', async (req, res) => {
             `Wager: KES ${parsedWager}\n` +
             `Prize: KES ${winnerPrize}\n` +
             `Code: ${matchCode}`
-        ).catch(() => {});
+        );
 
         res.status(201).json({
             matchId:       match.id,
