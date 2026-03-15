@@ -144,13 +144,13 @@ router.get('/withdrawals', async (req, res) => {
         const db     = req.supabaseAdmin;
         const status = req.query.status || 'pending';
 
+        // Step 1: fetch withdrawals without the broken FK join
         let query = db
             .from('withdrawals')
             .select(`
                 id, user_id, amount, phone_number, status,
                 requested_at, processed_at, review_notes,
-                mpesa_transaction_id, mpesa_receipt_number,
-                profiles:user_id ( username )
+                mpesa_transaction_id, mpesa_receipt_number
             `)
             .order('requested_at', { ascending: false })
             .limit(200);
@@ -160,12 +160,22 @@ router.get('/withdrawals', async (req, res) => {
         const { data, error } = await query;
         if (error) throw error;
 
+        // Step 2: fetch usernames separately (no FK required)
+        const userIds = [...new Set((data || []).map(w => w.user_id).filter(Boolean))];
+        let usernameMap = {};
+        if (userIds.length > 0) {
+            const { data: profiles } = await db
+                .from('profiles')
+                .select('id, username')
+                .in('id', userIds);
+            (profiles || []).forEach(p => { usernameMap[p.id] = p.username; });
+        }
+
         const result = (data || []).map(w => ({
             ...w,
-            // Flatten so browser can use w.phone, w.username, w.name
-            phone:    w.phone_number,
-            username: w.profiles?.username || null,
-            name:     w.profiles?.username || null,
+            phone:      w.phone_number,
+            username:   usernameMap[w.user_id] || null,
+            name:       usernameMap[w.user_id] || null,
             mpesa_code: w.mpesa_receipt_number || w.mpesa_transaction_id || null,
         }));
 
