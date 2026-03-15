@@ -218,6 +218,42 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
 });
 
 // ============================================================
+// WITHDRAWALS — Mark Paid (sets status to 'paid' with M-PESA code)
+// Browser calls: POST /admin/withdrawals/:id/paid
+// ============================================================
+router.post('/withdrawals/:id/paid', async (req, res) => {
+    try {
+        const db    = req.supabaseAdmin;
+        const { id } = req.params;
+        if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid withdrawal ID' });
+
+        const { mpesaCode } = req.body;
+
+        const { data, error } = await db
+            .from('withdrawals')
+            .update({
+                status:                 'paid',
+                mpesa_transaction_id:   mpesaCode || null,
+                mpesa_receipt_number:   mpesaCode || null,
+                review_notes:           mpesaCode ? `Paid. M-PESA: ${mpesaCode}` : 'Marked paid by admin',
+                processed_at:           new Date().toISOString(),
+            })
+            .eq('id', id)
+            .in('status', ['pending', 'approved'])
+            .select()
+            .single();
+
+        if (error) throw error;
+        if (!data) return res.status(404).json({ error: 'Withdrawal not found or already processed' });
+
+        res.json({ message: 'Withdrawal marked as paid', withdrawal: data });
+    } catch (err) {
+        console.error('Mark paid error:', err.message);
+        return sendGenericError(res, 500, 'Failed to mark as paid', err);
+    }
+});
+
+// ============================================================
 // WITHDRAWALS — Reject + refund
 // Browser calls: POST /admin/withdrawals/:id/reject
 // ============================================================
