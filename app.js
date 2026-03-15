@@ -221,10 +221,14 @@ function mountRoutes(prefix) {
     app.use(`${prefix}/tournaments`,   tournamentRoutes);
     app.use(`${prefix}/notifications`, notificationRoutes);
     app.use(`${prefix}/admin`,         limiters.adminLimiter, adminRoutes);
-    app.use(`${prefix}/withdrawals`,   (req, _res, next) => {
+    // Mount at both paths: dashboard calls /wallet/withdrawals/...,
+    // admin routes use /withdrawals/... directly.
+    const withdrawalMiddleware = (req, _res, next) => {
         req.processMpesaWithdrawal = (id) => processMpesaWithdrawal(supabaseAdmin, id);
         next();
-    }, withdrawalRouter);
+    };
+    app.use(`${prefix}/wallet/withdrawals`, withdrawalMiddleware, withdrawalRouter);
+    app.use(`${prefix}/withdrawals`,        withdrawalMiddleware, withdrawalRouter);
 }
 
 mountRoutes('/api');   // production (Vercel frontend uses /api/...)
