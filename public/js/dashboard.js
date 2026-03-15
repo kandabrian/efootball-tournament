@@ -646,10 +646,22 @@ async function processWithdraw() {
         updateBalanceDisplay();
         refreshBalance().catch(console.warn);
 
+        // ── Extract withdrawal details from response (new format) ──
+        const withdrawal = data.withdrawal || {};
+
         document.getElementById('withdraw-step-1').style.display = 'none';
         document.getElementById('withdraw-step-2').style.display = 'block';
         document.getElementById('withdraw-success-amount').textContent = 'KES ' + Math.max(0, amount - 5).toLocaleString();
         document.getElementById('withdraw-success-phone').textContent = '→ ' + cleanPhone;
+        
+        // ── NEW: Display withdrawal ID if element exists (add in HTML: <span id="withdraw-success-id"></span>) ──
+        const idEl = document.getElementById('withdraw-success-id');
+        if (idEl && withdrawal.id) {
+            idEl.textContent = withdrawal.id.substring(0, 8) + '…';
+        }
+
+        // Optional: log full details for debugging
+        console.log('✅ Withdrawal request successful:', withdrawal);
 
         const balEl = document.getElementById('withdraw-balance-display');
         if (balEl) balEl.textContent = 'KES ' + (currentBalance || 0).toLocaleString();
