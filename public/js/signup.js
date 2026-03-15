@@ -18,7 +18,7 @@ console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
 console.log('🔍 API URL:', API);
 
 // Redirect if already logged in
-if (sessionStorage.getItem('supabaseToken')) {
+if (localStorage.getItem('supabaseToken')) {
     window.location.href = '/dashboard';
 }
 
@@ -86,8 +86,8 @@ form.addEventListener('submit', async (e) => {
 
         if (res.ok) {
             if (result.session) {
-                sessionStorage.setItem('supabaseToken', result.session.access_token);
-                sessionStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
+                localStorage.setItem('supabaseToken', result.session.access_token);
+                localStorage.setItem('supabaseUser', JSON.stringify(result.session.user));
                 window.location.href = '/dashboard';
             } else {
                 window.location.href = '/login';

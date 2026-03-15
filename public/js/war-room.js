@@ -1,6 +1,6 @@
 'use strict';
 
-// ---------- Helper ----------
+// ---------- Helpers ----------
 function escapeHtml(s) {
     if (!s) return '—';
     return String(s)
@@ -14,7 +14,10 @@ function escapeHtml(s) {
 function qs(id) { return document.getElementById(id); }
 
 // ---------- Session check ----------
-const authToken = sessionStorage.getItem('supabaseToken');
+// FIX 1: Read token from BOTH sessionStorage (set by updated dashboard.js openWarRoom())
+//         AND localStorage (fallback for older sessions / direct navigation).
+//         Previously only checked sessionStorage, causing immediate redirect to /login.
+const authToken = sessionStorage.getItem('supabaseToken') || localStorage.getItem('supabaseToken');
 if (!authToken) {
     window.location.href = '/login';
 }
@@ -46,8 +49,13 @@ const {
     resultPostDeadline
 } = matchData;
 
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API = isLocal ? 'http://localhost:3000' : '/api';
+// FIX 2: Detect environment the same way dashboard.js does.
+//         The war-room.html CSP sets connect-src 'self', which blocks
+//         http://localhost:3000 in local dev.  To work around this we
+//         keep API calls relative ('/api/...') even in dev — the Express
+//         server strips the /api prefix via the middleware in app.js, so
+//         the same relative path works both locally and in production.
+const API = '/api';
 
 const isCreator = currentUserId === creatorId;
 
@@ -85,8 +93,14 @@ const elapsedInterval = setInterval(updateElapsed, 1000);
 // ---------- 30-min result submission countdown ----------
 const deadlineStrip = qs('deadline-strip');
 const deadlineEl    = qs('deadline-display');
-let deadlineTime = resultPostDeadline ? new Date(resultPostDeadline) : null;
+let deadlineTime    = resultPostDeadline ? new Date(resultPostDeadline) : null;
 let deadlineInterval = null;
+
+// FIX 3: The HTML had both display:none AND display:flex in the same inline
+//         style attribute — display:flex always won, showing the strip before
+//         any deadline was set.  We now control visibility exclusively via JS.
+//         Start hidden; only reveal once we have a valid deadline.
+if (deadlineStrip) deadlineStrip.style.display = 'none';
 
 function updateDeadline() {
     if (!deadlineTime || !deadlineEl) return;
@@ -102,22 +116,26 @@ function updateDeadline() {
     if (remaining === 0) deadlineEl.textContent = 'EXPIRED';
 }
 
-if (deadlineTime) {
-    deadlineStrip.style.display = 'flex';
+function startDeadlineCountdown() {
+    if (!deadlineTime) return;
+    if (deadlineStrip) deadlineStrip.style.display = 'flex';
     updateDeadline();
+    if (deadlineInterval) clearInterval(deadlineInterval);
     deadlineInterval = setInterval(updateDeadline, 1000);
+}
+
+if (deadlineTime) {
+    startDeadlineCountdown();
 } else if (matchId) {
     // Fetch deadline from API if not in sessionStorage
     fetch(`${API}/friends/match-status/${matchId}`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
     })
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(d => {
-            if (d.resultPostDeadline) {
+            if (d && d.resultPostDeadline) {
                 deadlineTime = new Date(d.resultPostDeadline);
-                deadlineStrip.style.display = 'flex';
-                updateDeadline();
-                deadlineInterval = setInterval(updateDeadline, 1000);
+                startDeadlineCountdown();
             }
         })
         .catch(() => {});
@@ -125,8 +143,8 @@ if (deadlineTime) {
 
 // ---------- Result badge display ----------
 function showResultBadge(youWon, prizeAmount) {
-    const badge = qs('result-badge');
-    const title = qs('result-badge-title');
+    const badge  = qs('result-badge');
+    const title  = qs('result-badge-title');
     const amount = qs('result-badge-amount');
 
     if (youWon) {
@@ -139,16 +157,20 @@ function showResultBadge(youWon, prizeAmount) {
         amount.textContent = 'Better luck next time!';
     }
 
-    // Hide other elements to focus on result
-    qs('wager-banner').style.display = 'none';
-    qs('teams-arena').style.display = 'none';
-    qs('war-actions').style.display = 'none';
+    qs('wager-banner').style.display  = 'none';
+    qs('teams-arena').style.display   = 'none';
+    qs('war-actions').style.display   = 'none';
     qs('deadline-strip').style.display = 'none';
-    qs('live-badge').style.display = 'none';
+    qs('live-badge').style.display    = 'none';
 }
 
 // ---------- Live status polling ----------
-let lastStatus = 'active';
+// FIX 4: lastStatus was initialised to 'active' — the most common state a
+//         match is in when the user arrives.  The first poll would immediately
+//         bail out with "nothing changed", so the deadline countdown, status
+//         banners, and completed/disputed states were never applied on load.
+//         Initialise to null so the very first poll always processes the response.
+let lastStatus = null;
 let statusPollTimer = null;
 
 async function pollMatchStatus() {
@@ -164,6 +186,12 @@ async function pollMatchStatus() {
         if (!res.ok) return;
         const data = await res.json();
 
+        // On the very first poll, also sync the deadline if we don't have it yet
+        if (lastStatus === null && !deadlineTime && data.resultPostDeadline) {
+            deadlineTime = new Date(data.resultPostDeadline);
+            startDeadlineCountdown();
+        }
+
         if (data.status === lastStatus) return; // nothing changed
         lastStatus = data.status;
 
@@ -172,7 +200,7 @@ async function pollMatchStatus() {
                 '📋 SCORE DECLARED',
                 data.iDeclared
                     ? 'Waiting for your opponent to confirm. Check the dashboard.'
-                    : `Your opponent declared ${data.myDeclaredScore ?? '?'}-${data.opponentDeclaredScore ?? '?'}. Open the dashboard to confirm or dispute.`,
+                    : `Your opponent declared a result. Open the dashboard to confirm or dispute.`,
                 '#ffb400'
             );
             if (!data.iDeclared) {
@@ -181,7 +209,7 @@ async function pollMatchStatus() {
         } else if (data.status === 'penalty_shootout') {
             showStatusBanner(
                 `⚽ IT'S A DRAW — PENALTIES!`,
-                `Match drew ${data.drawScore || ''}. Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
+                `Match drew${data.drawScore ? ' ' + data.drawScore : ''}. Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
                 '#ffd700'
             );
             const reportBtn = qs('btn-report');
@@ -216,9 +244,6 @@ async function pollMatchStatus() {
     }
 }
 
-// ============================================================
-// FIXED: showStatusBanner uses DOM methods, not innerHTML
-// ============================================================
 function showStatusBanner(title, message, color) {
     let banner = qs('status-banner');
     if (!banner) {
@@ -233,11 +258,10 @@ function showStatusBanner(title, message, color) {
         `;
         document.body.prepend(banner);
     }
-    banner.style.background = 'rgba(0,0,0,0.95)';
-    banner.style.color = color;
+    banner.style.background  = 'rgba(0,0,0,0.95)';
+    banner.style.color       = color;
     banner.style.borderColor = color;
 
-    // Clear existing content
     while (banner.firstChild) banner.removeChild(banner.firstChild);
 
     const titleDiv = document.createElement('div');
@@ -259,7 +283,7 @@ function clearPolling() {
 }
 
 statusPollTimer = setInterval(pollMatchStatus, 10000);
-pollMatchStatus(); // run immediately
+pollMatchStatus(); // run immediately — now works correctly with lastStatus = null
 
 // ---------- Copy code ----------
 function copyCode() {
@@ -285,10 +309,11 @@ async function forfeitMatch() {
             showStatusBanner('🏳️ FORFEITED', 'You forfeited. Returning to dashboard...', '#ff8800');
             setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
         } else {
-            alert(data.error || 'Failed to forfeit');
+            // FIX 5: Replace alert() with a non-blocking status banner
+            showStatusBanner('❌ Forfeit Failed', data.error || 'Could not forfeit. Try again.', '#ff4444');
         }
     } catch (err) {
-        alert('Network error. Try again.');
+        showStatusBanner('❌ Network Error', 'Check your connection and try again.', '#ff4444');
     }
 }
 
@@ -312,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ---------- Cleanup on page unload ----------
 window.addEventListener('beforeunload', () => {
-    if (elapsedInterval) clearInterval(elapsedInterval);
+    if (elapsedInterval)  clearInterval(elapsedInterval);
     if (deadlineInterval) clearInterval(deadlineInterval);
-    if (statusPollTimer) clearInterval(statusPollTimer);
+    if (statusPollTimer)  clearInterval(statusPollTimer);
 });

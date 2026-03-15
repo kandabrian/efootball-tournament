@@ -1,4 +1,4 @@
-// /public/js/dashboard.js – Simplified, no OCR, only admin review
+// /public/js/dashboard.js – Optimized for performance
 
 'use strict';
 
@@ -19,7 +19,7 @@ function createElementSafe(tag, attributes = {}, textContent = '') {
     return el;
 }
 
-let authToken = sessionStorage.getItem('supabaseToken');
+let authToken = localStorage.getItem('supabaseToken');
 let currentUser = null;
 let currentBalance = 0;
 let currentPhone = '';
@@ -36,6 +36,18 @@ let matchStatusPollInterval = null;
 let matchesRefreshInterval = null;
 let realtimeChannel = null;
 
+// ── FIX 5: Create Supabase client ONCE at module level, not inside loadDashboard ──
+const SUPABASE_URL = 'https://wqnnuqudxsnxldlgxhwr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxbm51cXVkeHNueGxkbGd4aHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5MDQ4NDUsImV4cCI6MjA4NjQ4MDg0NX0.MIoGi_PiwbGPrAxEfaypLLlpNkHUNliDNFoehdf7uPg';
+
+let supabaseRealtime = null;
+
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API = isLocal ? 'http://localhost:3000' : '/api';
+
+// ── FIX 3: Cache for match data to skip unnecessary re-renders ──
+let lastMatchesHash = '';
+
 function showError(elementId, message) {
     const el = document.getElementById(elementId);
     if (el) { el.textContent = escapeHtml(message); el.style.display = 'block'; }
@@ -44,14 +56,6 @@ function hideError(elementId) {
     const el = document.getElementById(elementId);
     if (el) el.style.display = 'none';
 }
-
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API = isLocal ? 'http://localhost:3000' : '/api';
-
-const SUPABASE_URL = 'https://wqnnuqudxsnxldlgxhwr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxbm51cXVkeHNueGxkbGd4aHdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5MDQ4NDUsImV4cCI6MjA4NjQ4MDg0NX0.MIoGi_PiwbGPrAxEfaypLLlpNkHUNliDNFoehdf7uPg';
-
-let supabaseRealtime = null;
 
 async function fetchWithAuth(url, options = {}, timeoutMs = 8000) {
     if (!authToken) { window.location.href = '/login'; return; }
@@ -62,16 +66,16 @@ async function fetchWithAuth(url, options = {}, timeoutMs = 8000) {
         ...options.headers
     };
     const fullUrl = url.startsWith('http') ? url : `${API}${url}`;
-    
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    
+
     try {
         const res = await fetch(fullUrl, { ...options, headers, signal: controller.signal });
         clearTimeout(timeoutId);
         if (res.status === 401) {
-            sessionStorage.removeItem('supabaseToken');
-            sessionStorage.removeItem('supabaseUser');
+            localStorage.removeItem('supabaseToken');
+            localStorage.removeItem('supabaseUser');
             window.location.href = '/login';
             return;
         }
@@ -91,15 +95,15 @@ async function subscribeToBalance(userId) {
         startBalanceAutoRefresh();
         return;
     }
-    
+
     console.log('🔔 Setting up realtime subscription for wallet:', userId);
-    
+
     if (realtimeChannel) {
         console.log('🧹 Removing old realtime channel...');
         supabaseRealtime.removeChannel(realtimeChannel);
         realtimeChannel = null;
     }
-    
+
     realtimeChannel = supabaseRealtime
         .channel(`wallet-${userId}`)
         .on(
@@ -134,43 +138,39 @@ async function subscribeToBalance(userId) {
                 startBalanceAutoRefresh(30000);
             }
         });
-    
+
     console.log('✅ Realtime channel created:', `wallet-${userId}`);
 }
 
 async function loadDashboard() {
     try {
         console.log('🚀 Starting loadDashboard...');
-        
-        if (supabaseRealtime && realtimeChannel) {
-            console.log('🧹 Cleaning up old realtime connection...');
-            supabaseRealtime.removeChannel(realtimeChannel);
-            realtimeChannel = null;
-        }
-        
-        authToken = sessionStorage.getItem('supabaseToken');
+
+        // ── FIX 5: Only create realtime client once; reuse if already exists ──
+        authToken = localStorage.getItem('supabaseToken');
         if (!authToken) {
             console.error('❌ No auth token found');
             window.location.href = '/login';
             return;
         }
-        
-        if (typeof supabase !== 'undefined') {
-            console.log('🔌 Creating new Supabase realtime client with fresh token...');
+
+        if (!supabaseRealtime && typeof supabase !== 'undefined') {
+            console.log('🔌 Creating Supabase realtime client (once)...');
             supabaseRealtime = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
                 global: { headers: { Authorization: `Bearer ${authToken}` } },
                 realtime: { params: { apikey: SUPABASE_ANON_KEY } }
             });
-        } else {
-            console.error('❌ Supabase SDK not loaded! Realtime will be unavailable.');
+        } else if (supabaseRealtime && realtimeChannel) {
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
         }
-        
-        const userStr = sessionStorage.getItem('supabaseUser');
+
+        const userStr = localStorage.getItem('supabaseUser');
         if (!userStr) { window.location.href = '/login'; return; }
         currentUser = JSON.parse(userStr);
         console.log('👤 Loaded user:', currentUser.id, currentUser.phone);
-        
-        currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0,8) || 'Player';
+
+        currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0, 8) || 'Player';
         const walletUsernameEl = document.getElementById('wallet-username-display');
         if (walletUsernameEl) walletUsernameEl.textContent = '@' + currentUsername;
         document.getElementById('username-display').innerText = '@' + currentUsername;
@@ -184,37 +184,33 @@ async function loadDashboard() {
             if (wPhone) wPhone.value = phone;
         }
 
-        console.log('🚀 Loading dashboard data...');
-        
-        let balanceLoaded = false;
-        try {
-            await refreshBalance(3);
-            if (currentBalance >= 0) {
-                balanceLoaded = true;
-                console.log('✅ Balance loaded successfully:', currentBalance);
-            }
-        } catch (e) {
-            console.error('❌ Balance fetch failed:', e);
-        }
-        
-        if (!balanceLoaded) {
-            console.error('❌ CRITICAL: Balance could not be loaded!');
+        console.log('🚀 Loading dashboard data in parallel...');
+
+        // ── FIX 1: Run balance + profile in parallel instead of sequentially ──
+        const [balanceOk] = await Promise.allSettled([
+            refreshBalance(3),
+            loadProfile()
+        ]);
+
+        if (balanceOk.status === 'rejected' || currentBalance < 0) {
+            console.error('❌ Balance load issue, defaulting to 0');
             currentBalance = 0;
             updateBalanceDisplay();
-            alert('⚠️ Could not load your balance. Please refresh the page.');
+            // ── FIX 7: Use showToast instead of blocking alert() ──
+            showToast('error', 'Balance unavailable', 'Could not load your balance. Pull down to refresh.', 6000);
         }
-        
-        await loadProfile().catch(e => console.warn('Profile fetch failed:', e));
 
+        // ── FIX 1: Fire non-dependent fetches without awaiting ──
         loadTournaments();
         loadMyFriendMatches();
-        
+
+        // ── FIX 2: Start intervals AFTER showing UI, with slower match refresh ──
         if (matchesRefreshInterval) clearInterval(matchesRefreshInterval);
         matchesRefreshInterval = setInterval(() => {
             console.log('🔄 Auto-refreshing matches list...');
             loadMyFriendMatches();
-        }, 10000);
-        
+        }, 30000); // Slowed from 10s → 30s
+
         if (supabaseRealtime) {
             console.log('🔔 Setting up realtime subscription for user:', currentUser.id);
             subscribeToBalance(currentUser.id);
@@ -222,20 +218,42 @@ async function loadDashboard() {
             console.warn('⚠️ Realtime unavailable, using polling only');
             startBalanceAutoRefresh(30000);
         }
-        
+
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
-        
+
         startBalanceAutoRefresh(120000);
         startNotificationPolling();
-        
+
+        // ── FIX 2: Pause all polling when tab is not visible ──
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         console.log('✅ Dashboard loaded successfully');
-        
+
     } catch (err) {
         console.error('Failed to load dashboard', err);
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
-        alert('⚠️ Error loading dashboard. Some features may not work correctly.');
+        // ── FIX 7: Use showToast instead of blocking alert() ──
+        showToast('error', 'Load error', 'Some features may not work correctly. Please refresh.', 6000);
+    }
+}
+
+// ── FIX 2: Pause/resume polling based on tab visibility ──
+function handleVisibilityChange() {
+    if (document.hidden) {
+        console.log('👁 Tab hidden — pausing non-critical polling');
+        if (matchesRefreshInterval) { clearInterval(matchesRefreshInterval); matchesRefreshInterval = null; }
+        if (notifPollInterval) { clearInterval(notifPollInterval); notifPollInterval = null; }
+        if (balanceRefreshInterval) { clearInterval(balanceRefreshInterval); balanceRefreshInterval = null; }
+    } else {
+        console.log('👁 Tab visible — resuming polling');
+        loadMyFriendMatches();
+        startNotificationPolling();
+        startBalanceAutoRefresh(120000);
+        if (!matchesRefreshInterval) {
+            matchesRefreshInterval = setInterval(() => loadMyFriendMatches(), 30000);
+        }
     }
 }
 
@@ -279,6 +297,7 @@ async function refreshBalance(retries = 2) {
     console.error('❌ refreshBalance: All attempts failed, balance remains:', currentBalance);
 }
 
+// ── FIX 4: Remove forced reflow (void offsetWidth) — use requestAnimationFrame instead ──
 function updateBalanceDisplay() {
     const balElement = document.getElementById('balance');
     if (!balElement) {
@@ -286,9 +305,12 @@ function updateBalanceDisplay() {
         return;
     }
     balElement.innerText = currentBalance.toFixed(2);
-    balElement.classList.remove('balance-flash');
-    void balElement.offsetWidth;
-    balElement.classList.add('balance-flash');
+    // Restart CSS animation without triggering a synchronous layout recalc
+    balElement.style.animation = 'none';
+    requestAnimationFrame(() => {
+        balElement.style.animation = '';
+        balElement.classList.add('balance-flash');
+    });
 }
 
 function startBalanceAutoRefresh(intervalMs = 30000) {
@@ -301,7 +323,7 @@ function startBalanceAutoRefresh(intervalMs = 30000) {
             console.error('Failed to auto-refresh balance:', err);
         });
     }, intervalMs);
-    console.log(`✅ Balance auto-refresh started (${intervalMs/1000}s interval)`);
+    console.log(`✅ Balance auto-refresh started (${intervalMs / 1000}s interval)`);
 }
 
 function stopBalanceAutoRefresh() {
@@ -351,7 +373,8 @@ async function saveProfile() {
         document.getElementById('team-display').innerText = teamName;
         document.getElementById('profile-team').value = escapeHtml(teamName);
         closeModal('profile-modal');
-        alert('Team name updated successfully!');
+        // ── FIX 7: Replace alert() with showToast ──
+        showToast('success', 'Profile updated', 'Team name saved successfully.', 4000);
     } catch (err) {
         showError('profile-error', err.message);
     } finally {
@@ -503,14 +526,12 @@ async function processDeposit() {
     }
 }
 
-// ── Deposit status polling ─────────────────────────────────────────────────
 let depositPollCount = 0;
-const DEPOSIT_POLL_MAX = 40; // 40 × 3s = 2 minutes max
+const DEPOSIT_POLL_MAX = 40;
 
 async function checkDepositStatus(checkoutId) {
     depositPollCount++;
 
-    // Update status text with elapsed time
     const statusEl = document.getElementById('deposit-status-text');
     const elapsed = depositPollCount * 3;
     const dots = '.'.repeat((depositPollCount % 3) + 1);
@@ -518,12 +539,11 @@ async function checkDepositStatus(checkoutId) {
         if (elapsed < 30) {
             statusEl.textContent = `Waiting for M-PESA confirmation${dots}`;
         } else {
-            statusEl.textContent = `Still waiting${dots} (${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')} elapsed)`;
+            statusEl.textContent = `Still waiting${dots} (${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} elapsed)`;
             statusEl.style.color = elapsed > 90 ? '#ffb400' : 'var(--muted)';
         }
     }
 
-    // Timeout after 2 minutes
     if (depositPollCount >= DEPOSIT_POLL_MAX) {
         clearInterval(pollInterval); pollInterval = null;
         depositPollCount = 0;
@@ -533,7 +553,6 @@ async function checkDepositStatus(checkoutId) {
     }
 
     try {
-        // Cache-bust with timestamp to avoid 304 responses
         const res = await fetchWithAuth(`/wallet/deposit/status?checkoutId=${encodeURIComponent(checkoutId)}&t=${Date.now()}`, {}, 5000);
         if (!res) return;
         const data = await res.json();
@@ -558,12 +577,10 @@ function openWithdrawModal() {
     document.getElementById('withdraw-amount').value = '';
     document.getElementById('withdraw-step-1').style.display = 'block';
     document.getElementById('withdraw-step-2').style.display = 'none';
-    // Show current balance in modal
     const balEl = document.getElementById('withdraw-balance-display');
     if (balEl) balEl.textContent = 'KES ' + (currentBalance || 0).toLocaleString();
     document.getElementById('withdraw-modal').classList.add('open');
 
-    // Wire preset buttons
     document.querySelectorAll('.withdraw-preset-btn').forEach(btn => {
         btn.classList.remove('active');
         btn.onclick = () => {
@@ -574,7 +591,6 @@ function openWithdrawModal() {
         };
     });
 
-    // Live fee note on amount input
     document.getElementById('withdraw-amount').oninput = () => {
         document.querySelectorAll('.withdraw-preset-btn').forEach(b => b.classList.remove('active'));
         updateWithdrawFeeNote();
@@ -625,15 +641,16 @@ async function processWithdraw() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || (data.reasons ? data.reasons.join('. ') : 'Withdrawal failed'));
 
-        await refreshBalance();
+        // ── FIX 6: Optimistically update balance immediately, confirm in background ──
+        currentBalance = Math.max(0, currentBalance - amount);
+        updateBalanceDisplay();
+        refreshBalance().catch(console.warn);
 
-        // Show success step — display NET amount after KES 5 fee
         document.getElementById('withdraw-step-1').style.display = 'none';
         document.getElementById('withdraw-step-2').style.display = 'block';
         document.getElementById('withdraw-success-amount').textContent = 'KES ' + Math.max(0, amount - 5).toLocaleString();
         document.getElementById('withdraw-success-phone').textContent = '→ ' + cleanPhone;
 
-        // Update balance chip
         const balEl = document.getElementById('withdraw-balance-display');
         if (balEl) balEl.textContent = 'KES ' + (currentBalance || 0).toLocaleString();
 
@@ -687,9 +704,9 @@ async function confirmChallenge(method) {
                         switchStep('challenge-modal', 1);
                         showError('challenge-error', 'M-PESA payment failed.');
                     }
-                } catch(e) {}
+                } catch (e) { }
             }, 3000);
-        } catch(err) {
+        } catch (err) {
             switchStep('challenge-modal', 1);
             showError('challenge-error', err.message);
         }
@@ -713,19 +730,22 @@ async function doJoinTournament(paymentMethod, checkoutId) {
         }, 10000);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        
+
         console.log('✅ Tournament joined successfully');
-        
+
         closeModal('challenge-modal');
-        
-        await refreshBalance(3);
-        console.log('💰 Balance refreshed after tournament join:', currentBalance);
-        
+
+        // ── FIX 6: Optimistic balance deduction, confirm in background ──
+        currentBalance = Math.max(0, currentBalance - currentTournamentFee);
+        updateBalanceDisplay();
+        refreshBalance(3).catch(console.warn);
+        console.log('💰 Balance optimistically updated after tournament join');
+
         if (data.roomCode) {
             document.getElementById('room-code-display').textContent = data.roomCode;
             document.getElementById('room-modal').classList.add('open');
         } else {
-            alert(`✅ ${data.message || 'Umejiunga!'}`);
+            showToast('success', '✅ Umejiunga!', data.message || 'Tournament joined successfully.', 4000);
         }
         await loadTournaments();
     } catch (err) {
@@ -736,7 +756,7 @@ async function doJoinTournament(paymentMethod, checkoutId) {
 
 function openCreateMatchModal() {
     if (!currentTeam) {
-        alert('Please set your team name in profile before creating a match.');
+        showToast('info', 'Set team name first', 'Please update your team name in profile before creating a match.', 5000);
         openProfileModal();
         return;
     }
@@ -748,7 +768,7 @@ function openCreateMatchModal() {
 
 function openJoinMatchModal() {
     if (!currentTeam) {
-        alert('Please set your team name in profile before joining a match.');
+        showToast('info', 'Set team name first', 'Please update your team name in profile before joining a match.', 5000);
         openProfileModal();
         return;
     }
@@ -779,7 +799,6 @@ function updateFriendBreakdown() {
 async function createFriendMatch() {
     const wagerAmount = parseInt(document.getElementById('friend-wager-input').value);
     const efootballCode = document.getElementById('friend-efootball-code').value.trim().toUpperCase();
-    const errorEl = document.getElementById('create-friend-error');
     const btn = document.getElementById('create-friend-btn');
 
     if (!efootballCode) { showError('create-friend-error', 'Please enter your eFootball room code'); return; }
@@ -801,8 +820,11 @@ async function createFriendMatch() {
 
         currentFriendMatch = data;
 
-        await refreshBalance(3);
-        console.log('💰 Balance refreshed after create:', currentBalance);
+        // ── FIX 6: Optimistic balance deduction, confirm in background ──
+        currentBalance = Math.max(0, currentBalance - wagerAmount);
+        updateBalanceDisplay();
+        refreshBalance(3).catch(console.warn);
+        console.log('💰 Balance optimistically updated after create match');
 
         document.getElementById('friend-match-code').textContent = data.efootballCode;
         document.getElementById('waiting-stake-display').textContent = wagerAmount;
@@ -818,11 +840,13 @@ async function createFriendMatch() {
             console.warn('⚠️ No matchId returned from server – polling disabled');
         }
 
-        await loadMyFriendMatches();
+        // ── FIX 3: loadMyFriendMatches without blocking — hash check skips re-render if unchanged ──
+        loadMyFriendMatches();
     } catch (err) {
         console.error('❌ Error creating match:', err);
         showError('create-friend-error', err.message);
-        await refreshBalance(3);
+        // Restore balance display if action failed
+        refreshBalance(1).catch(console.warn);
     } finally {
         btn.disabled = false;
         btn.textContent = '';
@@ -837,7 +861,6 @@ async function createFriendMatch() {
 
 async function joinFriendMatch() {
     const efootballCode = document.getElementById('join-friend-code').value.trim().toUpperCase();
-    const errorEl = document.getElementById('join-friend-error');
     if (!efootballCode) { showError('join-friend-error', 'Please enter your opponent\'s eFootball room code'); return; }
     try {
         console.log('📝 Joining friend match with eFootball code:', efootballCode);
@@ -850,11 +873,15 @@ async function joinFriendMatch() {
 
         console.log('✅ Match joined successfully');
 
-        await refreshBalance(3);
-        console.log('💰 Balance refreshed after join:', currentBalance);
-
         currentFriendMatch = data;
         closeModal('join-friend-modal');
+
+        // ── FIX 6: Optimistic balance update, confirm in background ──
+        currentBalance = Math.max(0, currentBalance - (data.wagerAmount || 0));
+        updateBalanceDisplay();
+        refreshBalance(3).catch(console.warn);
+        console.log('💰 Balance optimistically updated after join match');
+
         openWarRoom({
             matchId:         data.matchId,
             matchCode:       data.matchCode || null,
@@ -872,7 +899,7 @@ async function joinFriendMatch() {
     } catch (err) {
         console.error('❌ Error joining match:', err);
         showError('join-friend-error', err.message);
-        await refreshBalance(3);
+        refreshBalance(1).catch(console.warn);
     }
 }
 
@@ -887,20 +914,23 @@ async function cancelFriendMatch() {
         }, 10000);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        
+
         console.log('✅ Match cancelled, refund:', data.refundedAmount);
-        
-        await refreshBalance(3);
-        console.log('💰 Balance refreshed after cancel:', currentBalance);
-        
+
         if (friendMatchTimer) { clearInterval(friendMatchTimer); friendMatchTimer = null; }
         closeModal('waiting-friend-modal');
+
+        // ── FIX 6: Optimistic refund, confirm in background ──
+        currentBalance += (data.refundedAmount || 0);
+        updateBalanceDisplay();
+        refreshBalance(3).catch(console.warn);
+
         showToast('info', 'Match Cancelled', `KES ${data.refundedAmount} refunded to your wallet.`, 5000);
-        await loadMyFriendMatches();
+        loadMyFriendMatches();
     } catch (err) {
         console.error('❌ Error cancelling match:', err);
         showToast('error', 'Cancellation Failed', err.message, 5000);
-        await refreshBalance(3);
+        refreshBalance(1).catch(console.warn);
     }
 }
 
@@ -922,7 +952,7 @@ function startFriendTimer(expiresAt) {
         const diff = Math.max(0, expires - now);
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
-        document.getElementById('friend-match-timer').textContent = 
+        document.getElementById('friend-match-timer').textContent =
             `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
         if (diff === 0) {
             clearInterval(friendMatchTimer);
@@ -934,12 +964,21 @@ function startFriendTimer(expiresAt) {
     }, 1000);
 }
 
+// ── FIX 3: Skip re-render when match data hasn't changed ──
 async function loadMyFriendMatches() {
     try {
         const res = await fetchWithAuth('/friends/my-matches', {}, 8000);
         if (!res) return;
         const matches = await res.json();
-        // Update count label in header
+
+        // Build a lightweight hash of statuses — only re-render if something changed
+        const hash = JSON.stringify(matches.map(m => `${m.id}:${m.status}:${m.creator_screenshot_url || ''}:${m.joiner_screenshot_url || ''}`));
+        if (hash === lastMatchesHash) {
+            console.log('⏭ Matches unchanged, skipping re-render');
+            return;
+        }
+        lastMatchesHash = hash;
+
         const countLabel = document.getElementById('match-count-label');
         if (countLabel && matches.length > 0) {
             countLabel.textContent = `${matches.length} total ·`;
@@ -986,6 +1025,9 @@ function renderMyMatches(matches, showAll = false) {
     const PREVIEW_COUNT = 3;
     const displayMatches = showAll ? matches : matches.slice(0, PREVIEW_COUNT);
 
+    // Use a DocumentFragment to batch DOM insertion — avoids reflow on each appendChild
+    const fragment = document.createDocumentFragment();
+
     displayMatches.forEach(m => {
         const item = createElementSafe('div', { class: 'match-item' });
         const isCreator = m.creator_id === currentUser.id;
@@ -995,7 +1037,6 @@ function renderMyMatches(matches, showAll = false) {
         const myTeam  = isCreator ? (m.creator_team || 'My Team') : (m.joiner_team  || 'My Team');
         const oppTeam = isCreator ? (m.joiner_team  || '—')       : (m.creator_team || '—');
 
-        // Header row: code + status badge
         const headerDiv = createElementSafe('div', { class: 'match-header' });
         const codeDisplay = m.match_code ? m.match_code.replace('VUM-', '') : '—';
         headerDiv.appendChild(createElementSafe('span', { class: 'match-code' }, codeDisplay));
@@ -1021,7 +1062,6 @@ function renderMyMatches(matches, showAll = false) {
         ));
         item.appendChild(headerDiv);
 
-        // Teams row — always visible
         const teamsRow = document.createElement('div');
         teamsRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0 4px;font-size:0.82rem;';
         const myTeamEl = document.createElement('span');
@@ -1038,11 +1078,9 @@ function renderMyMatches(matches, showAll = false) {
         teamsRow.appendChild(oppEl);
         item.appendChild(teamsRow);
 
-        // Wager/prize line
         item.appendChild(createElementSafe('div', { class: 'match-detail' },
             `KES ${m.wager_amount} wager · Prize KES ${m.winner_prize}`));
 
-        // Status-specific actions / results
         if (m.status === 'pending' && isCreator) {
             const actionsDiv = createElementSafe('div', { class: 'match-actions' });
             const cancelBtn = createElementSafe('button', { class: 'btn btn-red' }, 'Cancel & Refund');
@@ -1083,10 +1121,12 @@ function renderMyMatches(matches, showAll = false) {
             item.appendChild(resultDiv);
         }
 
-        container.appendChild(item);
+        fragment.appendChild(item);
     });
 
-    // See all / Show less button
+    // Single DOM insertion — avoids multiple reflows
+    container.appendChild(fragment);
+
     if (matches.length > PREVIEW_COUNT) {
         const toggleBtn = document.createElement('button');
         toggleBtn.style.cssText = `
@@ -1109,7 +1149,11 @@ function renderMyMatches(matches, showAll = false) {
             toggleBtn.style.borderColor = 'rgba(255,255,255,0.07)';
         });
         toggleBtn.addEventListener('click', () => {
-            renderMyMatches(matches, !showAll);
+            // Refetch current matches to pass to renderer
+            fetchWithAuth('/friends/my-matches', {}, 8000)
+                .then(r => r.json())
+                .then(matches => renderMyMatches(matches, !showAll))
+                .catch(console.warn);
             if (showAll) {
                 document.querySelector('.my-matches-section')?.scrollIntoView({ behavior: 'smooth' });
             }
@@ -1127,12 +1171,19 @@ async function cancelPendingMatch(matchId) {
         }, 10000);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        await refreshBalance(3);
+
+        // ── FIX 6: Optimistic refund ──
+        currentBalance += (data.refundedAmount || 0);
+        updateBalanceDisplay();
+        refreshBalance(1).catch(console.warn);
+
+        lastMatchesHash = ''; // Force re-render on next load
         await loadMyFriendMatches();
     } catch (err) {
         console.error('❌ Error cancelling pending match:', err);
-        alert(err.message);
-        await refreshBalance(3);
+        // ── FIX 7: Replace alert() ──
+        showToast('error', 'Cancel failed', err.message, 5000);
+        refreshBalance(1).catch(console.warn);
     }
 }
 
@@ -1151,14 +1202,13 @@ function showToast(type, title, msg, duration = 4000) {
     setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-// --- Simplified upload handler ---
 async function handleScreenshotSelected(file) {
     if (!file || !currentReportMatch) return;
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
         showError('declare-error-2', 'Please upload a JPEG, PNG or WebP image.');
         return;
     }
-    if (file.size > 10*1024*1024) {
+    if (file.size > 10 * 1024 * 1024) {
         showError('declare-error-2', 'File too large. Max 10MB.');
         return;
     }
@@ -1205,6 +1255,7 @@ async function handleScreenshotSelected(file) {
 
         setTimeout(() => {
             closeModal('report-result-modal');
+            lastMatchesHash = ''; // Force re-render to show updated state
             loadMyFriendMatches();
             showToast('info', '📸 Screenshot Received', 'Admin will review and settle the match.', 5000);
         }, 2000);
@@ -1371,14 +1422,13 @@ function openProfileModal() {
     document.getElementById('profile-modal').classList.add('open');
 }
 
-
-
 function openWarRoom(data) {
+    // ── Store token in sessionStorage for war-room.js ──
+    sessionStorage.setItem('supabaseToken', authToken);
     sessionStorage.setItem('warRoomData', JSON.stringify(data));
     window.location.href = '/war-room';
 }
 
-// ── Transaction History ────────────────────────────────────────────────────
 async function openTransactionHistory() {
     document.getElementById('txn-list').innerHTML = '<div style="text-align:center;padding:30px;color:#444;">Loading...</div>';
     document.getElementById('txn-modal').classList.add('open');
@@ -1402,12 +1452,12 @@ function renderTransactions(txns) {
         container.appendChild(empty);
         return;
     }
+    const fragment = document.createDocumentFragment();
     txns.forEach(t => {
         const item = document.createElement('div');
         item.className = 'txn-item';
-        // All transactions from this table are deposits
         const statusColor = t.status === 'completed' ? '#00ff41' : t.status === 'failed' ? '#ff4455' : '#ffb400';
-        const date = new Date(t.created_at).toLocaleDateString('en-KE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+        const date = new Date(t.created_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         const shortId = t.checkout_request_id ? t.checkout_request_id.slice(-8) : '—';
         item.innerHTML = `
             <div class="txn-row">
@@ -1421,11 +1471,11 @@ function renderTransactions(txns) {
                     <div class="txn-status" style="color:${statusColor}">${t.status}</div>
                 </div>
             </div>`;
-        container.appendChild(item);
+        fragment.appendChild(item);
     });
+    container.appendChild(fragment);
 }
 
-// ── Match Notifications ────────────────────────────────────────────────────
 let notifPollInterval = null;
 let lastNotifCount = 0;
 
@@ -1436,21 +1486,19 @@ async function loadNotifications() {
         const notifs = await res.json();
         const unread = notifs.filter(n => !n.read);
 
-        // Update badge
         const badge = document.getElementById('notif-badge');
         if (badge) {
             badge.textContent = unread.length > 0 ? unread.length : '';
             badge.style.display = unread.length > 0 ? 'flex' : 'none';
         }
 
-        // Show toast for new notifications since last check
         if (unread.length > lastNotifCount && lastNotifCount >= 0) {
             const newest = unread[0];
             const type = newest?.type || 'update';
             const messages = {
-                match_joined:    ['⚔️ Opponent Joined!', 'Your match is now live. Go to war room!'],
-                match_completed: ['🏆 Match Settled!', 'Check your balance for results.'],
-                match_disputed:  ['⚠️ Match Disputed', 'An admin is reviewing your match.'],
+                match_joined:        ['⚔️ Opponent Joined!', 'Your match is now live. Go to war room!'],
+                match_completed:     ['🏆 Match Settled!', 'Check your balance for results.'],
+                match_disputed:      ['⚠️ Match Disputed', 'An admin is reviewing your match.'],
                 screenshot_received: ['📸 Screenshot Received', 'Admin will settle shortly.'],
             };
             const [title, msg] = messages[type] || ['🔔 Match Update', 'Check your matches.'];
@@ -1458,9 +1506,8 @@ async function loadNotifications() {
         }
         lastNotifCount = unread.length;
 
-        // Mark as read after showing
         if (unread.length > 0) {
-            fetchWithAuth('/notifications/read', { method: 'PATCH', body: JSON.stringify({}) }, 3000).catch(() => {});
+            fetchWithAuth('/notifications/read', { method: 'PATCH', body: JSON.stringify({}) }, 3000).catch(() => { });
         }
     } catch (err) {
         console.warn('Notification poll failed:', err.message);
@@ -1469,7 +1516,7 @@ async function loadNotifications() {
 
 function startNotificationPolling() {
     if (notifPollInterval) clearInterval(notifPollInterval);
-    loadNotifications(); // immediate check
+    loadNotifications();
     notifPollInterval = setInterval(loadNotifications, 15000);
 }
 
@@ -1490,6 +1537,7 @@ window.onload = () => {
 };
 
 window.addEventListener('beforeunload', () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     if (pollInterval)            { clearInterval(pollInterval);            pollInterval = null; }
     if (friendMatchTimer)        { clearInterval(friendMatchTimer);        friendMatchTimer = null; }
     if (matchStatusPollInterval) { clearInterval(matchStatusPollInterval); matchStatusPollInterval = null; }
@@ -1516,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     wire('btn-load-tournaments',       () => loadTournaments());
     wire('btn-open-create-match',      () => openCreateMatchModal());
     wire('btn-open-join-match',        () => openJoinMatchModal());
-    wire('btn-refresh-friend-matches', () => loadMyFriendMatches());
+    wire('btn-refresh-friend-matches', () => { lastMatchesHash = ''; loadMyFriendMatches(); });
     wire('btn-save-profile',           () => saveProfile());
     wire('btn-close-profile',          () => closeModal('profile-modal'));
     wire('btn-process-deposit',        () => processDeposit());
@@ -1534,6 +1582,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stopBalanceAutoRefresh();
         stopMatchStatusPolling();
         stopNotificationPolling();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         if (supabaseRealtime && realtimeChannel) {
             supabaseRealtime.removeChannel(realtimeChannel);
             realtimeChannel = null;
@@ -1553,9 +1602,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTournamentId = null;
         currentTournamentFee = 0;
         currentTournamentName = '';
-        supabaseRealtime = null;
-        sessionStorage.removeItem('supabaseToken');
-        sessionStorage.removeItem('supabaseUser');
+        lastMatchesHash = '';
+        localStorage.removeItem('supabaseToken');
+        localStorage.removeItem('supabaseUser');
         window.location.href = '/login';
     });
 
@@ -1563,12 +1612,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (quickCard) quickCard.addEventListener('click', () =>
         document.querySelector('.friend-section')?.scrollIntoView({ behavior: 'smooth' }));
 
-    ['profile-modal','deposit-modal','withdraw-modal','challenge-modal',
-     'room-modal','create-friend-modal','join-friend-modal','report-result-modal',
-     'waiting-friend-modal','txn-modal'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('click', e => { if (e.target === el) closeModal(id); });
-    });
+    ['profile-modal', 'deposit-modal', 'withdraw-modal', 'challenge-modal',
+        'room-modal', 'create-friend-modal', 'join-friend-modal', 'report-result-modal',
+        'waiting-friend-modal', 'txn-modal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', e => { if (e.target === el) closeModal(id); });
+        });
 
     document.querySelectorAll('[data-close-modal]').forEach(btn =>
         btn.addEventListener('click', () => closeModal(btn.dataset.closeModal)));

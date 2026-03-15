@@ -18,7 +18,7 @@ console.log('🔍 Environment:', isLocal ? 'LOCAL' : 'PRODUCTION');
 console.log('🔍 API URL:', API);
 
 // Redirect if already logged in
-if (sessionStorage.getItem('supabaseToken')) {
+if (localStorage.getItem('supabaseToken')) {
     window.location.href = '/dashboard';
 }
 
@@ -66,8 +66,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         const result = await res.json();
 
         if (res.ok) {
-            sessionStorage.setItem('supabaseToken', result.session.access_token);
-            sessionStorage.setItem('supabaseUser',  JSON.stringify(result.session.user));
+            localStorage.setItem('supabaseToken', result.session.access_token);
+            localStorage.setItem('supabaseUser',  JSON.stringify(result.session.user));
             window.location.href = '/dashboard';
         } else {
             showError(result.error || 'Namba ya simu au password si sahihi.');
