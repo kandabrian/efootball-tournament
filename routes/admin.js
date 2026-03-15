@@ -22,13 +22,17 @@ router.get('/analytics', async (req, res) => {
     try {
         const db = req.supabaseAdmin;
         const now = new Date();
-        const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const mtdStart       = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
         const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const todayStr       = now.toISOString().substring(0, 10);
+        const sevenDaysAgo   = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const thirtyDaysAgo  = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
         const [
             { data: completedMatches },
             { data: mtdMatches },
+            { data: lastMonthMatches },
             { data: allUsers },
             { data: newTodayUsers },
             { data: newMtdUsers },
@@ -37,51 +41,52 @@ router.get('/analytics', async (req, res) => {
             { data: mtdWithdrawals },
             { data: wallets },
             { data: activeTournaments },
-            { data: lastMonthMatches },
             { data: dailyChart },
+            { data: recentMatches },
             { count: disputedCount },
             { count: totalMatches },
         ] = await Promise.all([
-            db.from('friend_matches').select('wager_amount, winner_prize, platform_fee').eq('status', 'completed'),
-            db.from('friend_matches').select('wager_amount, winner_prize, platform_fee').eq('status', 'completed').gte('completed_at', mtdStart),
+            db.from('friend_matches').select('wager_amount, winner_prize').eq('status', 'completed'),
+            db.from('friend_matches').select('wager_amount, winner_prize').eq('status', 'completed').gte('completed_at', mtdStart),
+            db.from('friend_matches').select('wager_amount').eq('status', 'completed').gte('completed_at', lastMonthStart).lt('completed_at', lastMonthEnd),
             db.from('profiles').select('id, created_at'),
-            db.from('profiles').select('id').gte('created_at', new Date().toISOString().substring(0, 10)),
+            db.from('profiles').select('id').gte('created_at', todayStr),
             db.from('profiles').select('id').gte('created_at', mtdStart),
             db.from('withdrawals').select('amount').in('status', ['pending', 'approved']),
-            db.from('withdrawals').select('amount, completed_at').in('status', ['paid', 'completed']),
-            db.from('withdrawals').select('amount').in('status', ['paid', 'completed']).gte('completed_at', mtdStart),
+            db.from('withdrawals').select('amount').in('status', ['paid', 'completed', 'processing']),
+            db.from('withdrawals').select('amount').in('status', ['paid', 'completed', 'processing']).gte('requested_at', mtdStart),
             db.from('wallets').select('balance'),
             db.from('tournaments').select('id, entry_fee, max_players').in('status', ['open', 'live']),
-            db.from('friend_matches').select('platform_fee').eq('status', 'completed').gte('completed_at', lastMonthStart).lt('completed_at', lastMonthEnd),
-            db.from('friend_matches').select('wager_amount, completed_at').eq('status', 'completed').gte('completed_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()).order('completed_at', { ascending: true }),
+            db.from('friend_matches').select('wager_amount, completed_at').eq('status', 'completed').gte('completed_at', thirtyDaysAgo).order('completed_at', { ascending: true }),
+            db.from('friend_matches').select('creator_id, joiner_id').gte('created_at', sevenDaysAgo),
             db.from('friend_matches').select('id', { count: 'exact', head: true }).eq('status', 'disputed'),
             db.from('friend_matches').select('id', { count: 'exact', head: true }),
         ]);
 
-        const allTimeFees    = (completedMatches || []).reduce((s, m) => s + Number(m.platform_fee || 0), 0);
-        const mtdFees        = (mtdMatches       || []).reduce((s, m) => s + Number(m.platform_fee || 0), 0);
-        const lastMonthFees  = (lastMonthMatches  || []).reduce((s, m) => s + Number(m.platform_fee || 0), 0);
-        const allTimeVolume  = (completedMatches || []).reduce((s, m) => s + Number(m.wager_amount || 0) * 2, 0);
-        const mtdVolume      = (mtdMatches       || []).reduce((s, m) => s + Number(m.wager_amount || 0) * 2, 0);
-        const feesGrowthPct  = lastMonthFees > 0 ? Math.round(((mtdFees - lastMonthFees) / lastMonthFees) * 100) : null;
-        const avgWager       = completedMatches?.length ? allTimeVolume / 2 / completedMatches.length : 0;
-        const disputeRate    = totalMatches > 0 ? Math.round(((disputedCount || 0) / totalMatches) * 100) : 0;
-        const totalFloat     = (wallets || []).reduce((s, w) => s + Number(w.balance || 0), 0);
-        const livePoolValue  = (activeTournaments || []).reduce((s, t) => s + Number(t.entry_fee || 0) * Number(t.max_players || 0), 0);
-        const pendingVolume  = (pendingWithdrawals || []).reduce((s, w) => s + Number(w.amount || 0), 0);
-        const allTimeWdVol   = (paidWithdrawals   || []).reduce((s, w) => s + Number(w.amount || 0), 0);
-        const mtdWdVol       = (mtdWithdrawals    || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+        // Fee is 10% of total pot (wager_amount * 2 * 0.10 = wager_amount * 0.2)
+        const calcFee = (m) => Number(m.wager_amount || 0) * 0.20;
 
-        // Active users in last 7 days — count profiles with recent match activity
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: recentMatches } = await db
-            .from('friend_matches')
-            .select('creator_id, joiner_id')
-            .gte('created_at', sevenDaysAgo);
+        const allTimeFees   = (completedMatches || []).reduce((s, m) => s + calcFee(m), 0);
+        const mtdFees       = (mtdMatches       || []).reduce((s, m) => s + calcFee(m), 0);
+        const lastMonthFees = (lastMonthMatches  || []).reduce((s, m) => s + calcFee(m), 0);
+        const allTimeVolume = (completedMatches || []).reduce((s, m) => s + Number(m.wager_amount || 0) * 2, 0);
+        const mtdVolume     = (mtdMatches       || []).reduce((s, m) => s + Number(m.wager_amount || 0) * 2, 0);
+        const feesGrowthPct = lastMonthFees > 0 ? Math.round(((mtdFees - lastMonthFees) / lastMonthFees) * 100) : null;
+        const avgWager      = completedMatches?.length ? (allTimeVolume / 2) / completedMatches.length : 0;
+        const disputeRate   = totalMatches > 0 ? Math.round(((disputedCount || 0) / totalMatches) * 100) : 0;
+        const totalFloat    = (wallets || []).reduce((s, w) => s + Number(w.balance || 0), 0);
+        const livePoolValue = (activeTournaments || []).reduce((s, t) => s + Number(t.entry_fee || 0) * Number(t.max_players || 0), 0);
+        const pendingVolume = (pendingWithdrawals || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+        const allTimeWdVol  = (paidWithdrawals   || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+        const mtdWdVol      = (mtdWithdrawals    || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+
         const activeUserSet = new Set();
-        (recentMatches || []).forEach(m => { if (m.creator_id) activeUserSet.add(m.creator_id); if (m.joiner_id) activeUserSet.add(m.joiner_id); });
+        (recentMatches || []).forEach(m => {
+            if (m.creator_id) activeUserSet.add(m.creator_id);
+            if (m.joiner_id)  activeUserSet.add(m.joiner_id);
+        });
 
-        // Build daily chart (last 30 days)
+        // Daily chart — last 30 days
         const dayMap = {};
         (dailyChart || []).forEach(m => {
             const day = (m.completed_at || '').substring(0, 10);
@@ -95,10 +100,7 @@ router.get('/analytics', async (req, res) => {
             .map(([date, v]) => ({ date, ...v }));
 
         res.json({
-            revenue: {
-                allTimeFees, mtdFees, lastMonthFees, feesGrowthPct,
-                allTimeVolume, mtdVolume,
-            },
+            revenue: { allTimeFees, mtdFees, lastMonthFees, feesGrowthPct, allTimeVolume, mtdVolume },
             matches: {
                 totalCompleted: completedMatches?.length || 0,
                 mtdCompleted:   mtdMatches?.length       || 0,
@@ -114,11 +116,11 @@ router.get('/analytics', async (req, res) => {
                 active7Days: activeUserSet.size,
             },
             withdrawals: {
-                pendingCount:      pendingWithdrawals?.length || 0,
+                pendingCount:    pendingWithdrawals?.length || 0,
                 pendingVolume,
-                allTimeVolume:     allTimeWdVol,
-                mtdVolume:         mtdWdVol,
-                avgProcessingHrs:  null,
+                allTimeVolume:   allTimeWdVol,
+                mtdVolume:       mtdWdVol,
+                avgProcessingHrs: null,
             },
             platform: {
                 totalFloat,
@@ -134,7 +136,8 @@ router.get('/analytics', async (req, res) => {
 });
 
 // ============================================================
-// WITHDRAWALS
+// WITHDRAWALS — GET list
+// Browser calls: GET /admin/withdrawals?status=pending
 // ============================================================
 router.get('/withdrawals', async (req, res) => {
     try {
@@ -145,11 +148,12 @@ router.get('/withdrawals', async (req, res) => {
             .from('withdrawals')
             .select(`
                 id, user_id, amount, phone_number, status,
-                requested_at, completed_at, review_notes,
-                reference_id, mpesa_transaction_code,
-                profiles:user_id ( username, full_name )
+                requested_at, processed_at, review_notes,
+                mpesa_transaction_id, mpesa_receipt_number,
+                profiles:user_id ( username )
             `)
-            .order('requested_at', { ascending: false });
+            .order('requested_at', { ascending: false })
+            .limit(200);
 
         if (status !== 'all') query = query.eq('status', status);
 
@@ -158,9 +162,11 @@ router.get('/withdrawals', async (req, res) => {
 
         const result = (data || []).map(w => ({
             ...w,
-            username: w.profiles?.username   || null,
-            name:     w.profiles?.full_name   || w.profiles?.username || null,
+            // Flatten so browser can use w.phone, w.username, w.name
             phone:    w.phone_number,
+            username: w.profiles?.username || null,
+            name:     w.profiles?.username || null,
+            mpesa_code: w.mpesa_receipt_number || w.mpesa_transaction_id || null,
         }));
 
         res.json(result);
@@ -170,6 +176,10 @@ router.get('/withdrawals', async (req, res) => {
     }
 });
 
+// ============================================================
+// WITHDRAWALS — Approve
+// Browser calls: POST /admin/withdrawals/:id/approve
+// ============================================================
 router.post('/withdrawals/:id/approve', async (req, res) => {
     try {
         const db    = req.supabaseAdmin;
@@ -183,7 +193,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
             .update({
                 status:       'approved',
                 review_notes: notes || 'Approved by admin',
-                updated_at:   new Date().toISOString(),
+                processed_at: new Date().toISOString(),
             })
             .eq('id', id)
             .in('status', ['pending', 'approved'])
@@ -193,7 +203,7 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
         if (error) throw error;
         if (!data) return res.status(404).json({ error: 'Withdrawal not found or already processed' });
 
-        // Trigger M-Pesa payout if the helper is attached
+        // Trigger M-Pesa B2C payout in background
         if (req.processMpesaWithdrawal) {
             req.processMpesaWithdrawal(id).catch(e =>
                 console.error('Background M-Pesa payout error:', e.message)
@@ -207,6 +217,10 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
     }
 });
 
+// ============================================================
+// WITHDRAWALS — Reject + refund
+// Browser calls: POST /admin/withdrawals/:id/reject
+// ============================================================
 router.post('/withdrawals/:id/reject', async (req, res) => {
     try {
         const db    = req.supabaseAdmin;
@@ -215,7 +229,6 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
 
         const { notes } = req.body;
 
-        // Fetch withdrawal first to get amount + user_id for refund
         const { data: wd, error: fetchErr } = await db
             .from('withdrawals')
             .select('id, user_id, amount, status')
@@ -226,20 +239,19 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
         if (!['pending', 'approved'].includes(wd.status))
             return res.status(400).json({ error: 'Withdrawal already processed' });
 
-        // Refund balance
-        const { error: refundErr } = await db.rpc('increment_wallet_balance', {
+        // Refund wallet using the same RPC withdrawals.js uses
+        const { error: refundErr } = await db.rpc('credit_wallet', {
             p_user_id: wd.user_id,
             p_amount:  Number(wd.amount),
         });
         if (refundErr) throw refundErr;
 
-        // Mark rejected
         const { error: updateErr } = await db
             .from('withdrawals')
             .update({
                 status:       'rejected',
                 review_notes: notes || 'Rejected by admin',
-                updated_at:   new Date().toISOString(),
+                processed_at: new Date().toISOString(),
             })
             .eq('id', id);
 
@@ -264,11 +276,10 @@ router.get('/tournaments', async (req, res) => {
 
         if (error) throw error;
 
-        const result = (data || []).map(t => ({
+        res.json((data || []).map(t => ({
             ...t,
             current_players: t.bookings?.[0]?.count || 0,
-        }));
-        res.json(result);
+        })));
     } catch (err) {
         console.error('Admin get tournaments error:', err.message);
         return sendGenericError(res, 500, 'Failed to fetch tournaments', err);
@@ -299,12 +310,11 @@ router.patch('/tournaments/:id', async (req, res) => {
     try {
         const { id } = req.params;
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid ID' });
-
         const { name, entry_fee, start_time, max_players, room_code, status } = req.body;
 
         const { data, error } = await req.supabaseAdmin
             .from('tournaments')
-            .update({ name, entry_fee, start_time, max_players, room_code, status, updated_at: new Date().toISOString() })
+            .update({ name, entry_fee, start_time, max_players, room_code, status })
             .eq('id', id)
             .select()
             .single();
@@ -322,11 +332,7 @@ router.delete('/tournaments/:id', async (req, res) => {
         const { id } = req.params;
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid ID' });
 
-        const { error } = await req.supabaseAdmin
-            .from('tournaments')
-            .delete()
-            .eq('id', id);
-
+        const { error } = await req.supabaseAdmin.from('tournaments').delete().eq('id', id);
         if (error) throw error;
         res.json({ message: 'Tournament deleted' });
     } catch (err) {
@@ -336,12 +342,13 @@ router.delete('/tournaments/:id', async (req, res) => {
 });
 
 // ============================================================
-// FRIEND MATCHES
+// FRIEND MATCHES — GET list
+// Browser calls: GET /admin/friend-matches?status=pending_review
 // ============================================================
 router.get('/friend-matches', async (req, res) => {
     try {
         const db     = req.supabaseAdmin;
-        const status = req.query.status || 'pending_review';
+        const status = req.query.status || 'all';
 
         let query = db
             .from('friend_matches')
@@ -354,17 +361,17 @@ router.get('/friend-matches', async (req, res) => {
                 declared_score_by, declared_winner_id,
                 settlement_method, dispute_reason,
                 created_at, started_at, completed_at,
-                result_post_deadline, admin_notes
+                result_post_deadline
             `)
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(300);
 
         if (status !== 'all') query = query.eq('status', status);
 
         const { data: matches, error } = await query;
         if (error) throw error;
 
-        // Enrich with usernames
+        // Enrich with usernames in one query
         const userIds = new Set();
         (matches || []).forEach(m => {
             if (m.creator_id) userIds.add(m.creator_id);
@@ -380,19 +387,21 @@ router.get('/friend-matches', async (req, res) => {
             (profiles || []).forEach(p => { profileMap[p.id] = p.username; });
         }
 
-        const result = (matches || []).map(m => ({
+        res.json((matches || []).map(m => ({
             ...m,
             creator_username: profileMap[m.creator_id] || null,
             joiner_username:  profileMap[m.joiner_id]  || null,
-        }));
-
-        res.json(result);
+        })));
     } catch (err) {
         console.error('Admin get friend matches error:', err.message);
         return sendGenericError(res, 500, 'Failed to fetch matches', err);
     }
 });
 
+// ============================================================
+// FRIEND MATCHES — GET single (used by override + dispute modals)
+// Browser calls: GET /admin/friend-matches/:id
+// ============================================================
 router.get('/friend-matches/:id', async (req, res) => {
     try {
         const db    = req.supabaseAdmin;
@@ -408,7 +417,7 @@ router.get('/friend-matches/:id', async (req, res) => {
                 creator_screenshot_url, joiner_screenshot_url,
                 declared_score_creator, declared_score_joiner,
                 declared_score_by, declared_winner_id,
-                settlement_method, dispute_reason, admin_notes,
+                settlement_method, dispute_reason,
                 created_at, started_at, completed_at,
                 result_post_deadline, disputed_at
             `)
@@ -436,13 +445,17 @@ router.get('/friend-matches/:id', async (req, res) => {
     }
 });
 
+// ============================================================
+// FRIEND MATCHES — DELETE
+// Browser calls: DELETE /admin/friend-matches/:id
+// ============================================================
 router.delete('/friend-matches/:id', async (req, res) => {
     try {
         const db    = req.supabaseAdmin;
         const { id } = req.params;
         if (!isValidUUID(id)) return res.status(400).json({ error: 'Invalid match ID' });
 
-        // Fetch screenshots to delete from storage
+        // Clean up screenshots from storage
         const { data: match } = await db
             .from('friend_matches')
             .select('creator_screenshot_url, joiner_screenshot_url')
@@ -455,16 +468,15 @@ router.delete('/friend-matches/:id', async (req, res) => {
                 .map(url => {
                     try {
                         const u = new URL(url);
-                        // Extract path after /storage/v1/object/public/screenshots/
-                        const match = u.pathname.match(/\/storage\/v1\/object\/public\/screenshots\/(.+)/);
-                        return match ? match[1] : null;
+                        const m = u.pathname.match(/\/storage\/v1\/object\/public\/(?:screenshots|match-screenshots)\/(.+)/);
+                        return m ? m[1] : null;
                     } catch { return null; }
                 })
                 .filter(Boolean);
 
             if (paths.length > 0) {
                 await db.storage.from('screenshots').remove(paths)
-                    .catch(e => console.warn('Screenshot delete warning:', e.message));
+                    .catch(e => console.warn('Screenshot cleanup warning:', e.message));
             }
         }
 
@@ -479,8 +491,8 @@ router.delete('/friend-matches/:id', async (req, res) => {
 });
 
 // ============================================================
-// FORCE WINNER  —  uses force_winner_48916 RPC
-// Called by: POST /admin/force-winner/:id
+// FORCE WINNER  —  uses force_winner RPC (force_winner_48916)
+// Browser calls: POST /admin/force-winner/:id
 // Body: { winnerId, resolution, adminNotes }
 // resolution: 'winner' | 'draw'
 // ============================================================
@@ -499,13 +511,10 @@ router.post('/force-winner/:id', async (req, res) => {
         if (resolution === 'winner' && !isValidUUID(winnerId))
             return res.status(400).json({ error: 'Valid winnerId is required when resolution is "winner"' });
 
-        const isDraw   = resolution === 'draw';
-        const adminIp  = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+        const isDraw  = resolution === 'draw';
+        const adminIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
-        // ── Use force_winner_48916 RPC ──────────────────────────
-        // Params: p_match_id, p_winner_id, p_is_draw, p_admin_notes, p_admin_ip
-        // p_winner_id is ignored by the RPC when p_is_draw = true
-        const { data: rpcData, error: rpcErr } = await db.rpc('force_winner', {
+        const { error: rpcErr } = await db.rpc('force_winner', {
             p_match_id:    matchId,
             p_winner_id:   isDraw ? null : winnerId,
             p_is_draw:     isDraw,
@@ -518,7 +527,6 @@ router.post('/force-winner/:id', async (req, res) => {
             return res.status(400).json({ error: rpcErr.message || 'Failed to settle match' });
         }
 
-        // Fetch the settled match to return prize info
         const { data: settled } = await db
             .from('friend_matches')
             .select('winner_id, winner_prize, status')
@@ -528,11 +536,11 @@ router.post('/force-winner/:id', async (req, res) => {
         console.log(`✅ Admin force-winner: match=${matchId} resolution=${resolution} winner=${winnerId || 'draw'}`);
 
         res.json({
-            message:    isDraw ? 'Match declared a draw. Both players refunded.' : 'Winner declared and prize paid.',
+            message:   isDraw ? 'Match declared a draw. Both players refunded.' : 'Winner declared and prize paid.',
             resolution,
-            winnerId:   settled?.winner_id   || null,
-            prizePaid:  settled?.winner_prize || null,
-            status:     settled?.status       || 'completed',
+            winnerId:  settled?.winner_id   || null,
+            prizePaid: settled?.winner_prize || null,
+            status:    settled?.status       || 'completed',
         });
     } catch (err) {
         console.error('Force winner error:', err.message);
@@ -541,10 +549,9 @@ router.post('/force-winner/:id', async (req, res) => {
 });
 
 // ============================================================
-// RESOLVE DISPUTE  —  uses resolve_dispute_48915 RPC
-// Called by: POST /admin/resolve-dispute/:id
+// RESOLVE DISPUTE  —  uses resolve_dispute RPC (resolve_dispute_48915)
+// Browser calls: POST /admin/resolve-dispute/:id
 // Body: { winnerId, resolution, adminNotes }
-// resolution: 'winner' | 'draw'
 // ============================================================
 router.post('/resolve-dispute/:id', async (req, res) => {
     try {
@@ -564,8 +571,6 @@ router.post('/resolve-dispute/:id', async (req, res) => {
         const isDraw  = resolution === 'draw';
         const adminIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
-        // ── Use resolve_dispute_48915 RPC ───────────────────────
-        // Params: p_match_id, p_winner_id, p_is_draw, p_admin_notes, p_admin_ip
         const { error: rpcErr } = await db.rpc('resolve_dispute', {
             p_match_id:    matchId,
             p_winner_id:   isDraw ? null : winnerId,
