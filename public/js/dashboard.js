@@ -945,7 +945,7 @@ function shareFriendCode() {
     const wager = parseInt(document.getElementById('waiting-stake-display').textContent);
     const prize = parseInt(document.getElementById('waiting-prize-display').textContent);
     const text = encodeURIComponent(
-        `🎮 Challenge me on Vumbua Dream League Soccer!\n\nRoom Code: ${code}\nWager: KES ${wager}\nWinner gets: KES ${prize}\n\n1. Open DLS → Friends → Join Room → enter code: ${code}\n2. Enter the same code on Vumbua to lock your wager\n\nJoin here: https://vumbua.app`
+        `🎮 Challenge me on Vumbua Dream League Soccer!\n\nRoom Code: ${code}\nWager: KES ${wager}\nWinner gets: KES ${prize}\n\n1. Open DLS → Friends → Join Room → enter code: ${code}\n2. Enter the same code on Vumbua to lock your wager\n\nJoin here: https://dlsvumbua.vercel.app`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
 }
@@ -1417,7 +1417,7 @@ function onMatchExpiredOrCancelled(matchData) {
 
 function shareRoomCode() {
     const code = document.getElementById('room-code-display').innerText;
-    const text = encodeURIComponent(`Join my match on Vumbua eFootball! Room code: ${code}. Play here: https://vumbua.app`);
+    const text = encodeURIComponent(`Join my match on Vumbua DLS! Room code: ${code}. Play here: https://dlsvumbua.vercel.app`);
     window.open(`https://wa.me/?text=${text}`, '_blank');
 }
 
