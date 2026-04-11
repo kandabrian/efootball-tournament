@@ -84,11 +84,13 @@ function normalizePhone(phone) {
 }
 
 // ============================================================
-// eFOOTBALL CODE VALIDATION
+// DLS ROOM CODE VALIDATION
+// DLS lets players choose any code — alphanumeric, 3–8 chars
 // ============================================================
 function validateEFootballCode(code) {
     if (!code || typeof code !== 'string') return false;
-    return /^[A-Z0-9]{4,8}$/.test(code.toUpperCase());
+    const upper = code.toUpperCase().trim();
+    return /^[A-Z0-9]{3,8}$/.test(upper);
 }
 
 // ============================================================

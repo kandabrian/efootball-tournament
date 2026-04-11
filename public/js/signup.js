@@ -49,10 +49,10 @@ form.addEventListener('submit', async (e) => {
     const password = document.getElementById('password').value;
     const confirm = document.getElementById('confirm-password').value;
 
-    if (password !== confirm) return showError("Passwords do not match. Tafadhali rudia.");
+    if (password !== confirm) return showError("Passwords do not match. Please try again.");
     if (password.length < 6) return showError("Password must be at least 6 characters.");
-    if (!teamName) return showError("Team name is required.");
-    if (teamName.length < 3) return showError("Team name must be at least 3 characters.");
+    if (!teamName) return showError("DLS Club name is required.");
+    if (teamName.length < 3) return showError("DLS Club name must be at least 3 characters.");
 
     // Phone formatting
     let cleanPhone = rawPhone.replace(/\s+/g, '');
@@ -63,12 +63,12 @@ form.addEventListener('submit', async (e) => {
         cleanPhone = '254' + cleanPhone;
     }
     if (!/^254[17]\d{8}$/.test(cleanPhone)) {
-        return showError("Weka namba ya simu sahihi (e.g., 0712345678).");
+        return showError("Invalid phone number. Use format: 0712 345 678");
     }
     cleanPhone = '+' + cleanPhone;
 
     btn.disabled = true; 
-    btn.textContent = 'Inaload...';
+    btn.textContent = 'Loading...';
 
     try {
         const res = await fetch(`${API}/auth/signup`, {
@@ -93,12 +93,12 @@ form.addEventListener('submit', async (e) => {
                 window.location.href = '/login';
             }
         } else { 
-            showError(result.error || 'Kuna shida kidogo. Please try again.'); 
+            showError(result.error || 'Something went wrong. Please try again.'); 
         }
     } catch (err) { 
-        showError('Network error. Check connection yako ya internet.'); 
+        showError('Network error. Please check your internet connection.'); 
     } finally { 
         btn.disabled = false; 
-        btn.textContent = 'Ingia Uwanjani →'; 
+        btn.textContent = 'Create DLS Account →'; 
     }
 });

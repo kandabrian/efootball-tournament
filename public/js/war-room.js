@@ -76,8 +76,11 @@ if (isCreator) {
 qs('prize-display').textContent = winnerPrize ? `KES ${winnerPrize}` : `KES ${(wagerAmount || 0) * 2}`;
 qs('wager-sub').textContent = wagerAmount ? `KES ${wagerAmount} staked each · Winner takes all` : 'Winner takes all';
 
-qs('code-display').textContent = matchCode || '—';
+qs('code-display').textContent = matchCode ? matchCode.replace('VUM-', '') : '—';
 if (!matchCode) qs('match-code-strip').style.display = 'none';
+// Update code label text
+const codeLabelEl = document.querySelector('.code-label');
+if (codeLabelEl) codeLabelEl.textContent = 'DLS Room Code';
 
 // ---------- Elapsed timer ----------
 const startTime = startedAt ? new Date(startedAt) : new Date();
@@ -209,11 +212,11 @@ async function pollMatchStatus() {
         } else if (data.status === 'penalty_shootout') {
             showStatusBanner(
                 `⚽ IT'S A DRAW — PENALTIES!`,
-                `Match drew${data.drawScore ? ' ' + data.drawScore : ''}. Go to eFootball → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
+                `Match drew${data.drawScore ? ' ' + data.drawScore : ''}. Go to DLS → create a new Friends Match room → play a Penalty Shootout → come back and upload the result.`,
                 '#ffd700'
             );
             const reportBtn = qs('btn-report');
-            if (reportBtn) reportBtn.textContent = '📸 Upload Penalty Result';
+            if (reportBtn) reportBtn.textContent = '📸 Upload DLS Penalty Result';
         } else if (data.status === 'no_show_forfeit') {
             clearPolling();
             showStatusBanner(
@@ -288,7 +291,8 @@ pollMatchStatus(); // run immediately — now works correctly with lastStatus = 
 // ---------- Copy code ----------
 function copyCode() {
     if (!matchCode) return;
-    navigator.clipboard.writeText(matchCode).then(() => {
+    const cleanCode = matchCode.replace('VUM-', '');
+    navigator.clipboard.writeText(cleanCode).then(() => {
         const btn = qs('copy-code-btn');
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);
@@ -297,7 +301,7 @@ function copyCode() {
 
 // ---------- Forfeit ----------
 async function forfeitMatch() {
-    if (!confirm('Are you sure you want to forfeit? Your opponent will win the wager.')) return;
+    if (!confirm('Are you sure you want to abandon this match? Your opponent will win the wager.')) return;
     try {
         const res = await fetch(`${API}/friends/forfeit`, {
             method: 'POST',
@@ -306,11 +310,11 @@ async function forfeitMatch() {
         });
         const data = await res.json();
         if (res.ok) {
-            showStatusBanner('🏳️ FORFEITED', 'You forfeited. Returning to dashboard...', '#ff8800');
+            showStatusBanner('🏳️ MATCH ABANDONED', 'You abandoned the match. Returning to dashboard...', '#ff8800');
             setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
         } else {
             // FIX 5: Replace alert() with a non-blocking status banner
-            showStatusBanner('❌ Forfeit Failed', data.error || 'Could not forfeit. Try again.', '#ff4444');
+            showStatusBanner('❌ Abandon Failed', data.error || 'Could not abandon match. Try again.', '#ff4444');
         }
     } catch (err) {
         showStatusBanner('❌ Network Error', 'Check your connection and try again.', '#ff4444');

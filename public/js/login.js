@@ -49,12 +49,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         cleanPhone = '254' + cleanPhone;
     }
     if (!/^254[17]\d{8}$/.test(cleanPhone)) {
-        return showError('Namba ya simu si sahihi.');
+        return showError('Invalid phone number. Use format: 0712 345 678');
     }
     cleanPhone = '+' + cleanPhone;
 
     btn.disabled    = true;
-    btn.textContent = 'Inaload...';
+    btn.textContent = 'Loading...';
 
     try {
         const res = await fetch(`${API}/auth/login`, {
@@ -70,12 +70,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
             localStorage.setItem('supabaseUser',  JSON.stringify(result.session.user));
             window.location.href = '/dashboard';
         } else {
-            showError(result.error || 'Namba ya simu au password si sahihi.');
+            showError(result.error || 'Incorrect phone number or password. Please try again.');
         }
     } catch {
-        showError('Network error. Check connection yako.');
+        showError('Network error. Please check your connection.');
     } finally {
         btn.disabled    = false;
-        btn.textContent = 'Enter Uwanja →';
+        btn.textContent = 'Enter DLS Pitch →';
     }
 });

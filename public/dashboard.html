@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="theme-color" content="#050507">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vumbua — eFootball Wagers</title>
+    <title>Vumbua — Dream League Soccer Wagers</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wqnnuqudxsnxldlgxhwr.supabase.co wss://wqnnuqudxsnxldlgxhwr.supabase.co;">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -513,7 +513,7 @@
 <div id="loading-screen">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:6px;color:rgba(0,255,65,0.9);text-shadow:0 0 30px rgba(0,255,65,0.4);margin-bottom:20px;">VUMBUA</div>
     <div class="spinner"></div>
-    <div class="loading-text" style="margin-top:12px;">Loading your wallet...</div>
+    <div class="loading-text" style="margin-top:12px;">Loading your DLS club...</div>
 </div>
 
 <div class="pitch-bg"></div>
@@ -545,11 +545,11 @@
             </div>
             <div class="wallet-meta" style="margin-top:18px;display:flex;justify-content:space-between;align-items:flex-end;">
                 <div class="wallet-phone" style="font-size:0.72rem;color:#333;">
-                    <span style="color:#3a3a4a;letter-spacing:1px;text-transform:uppercase;font-size:0.6rem;">Team</span><br>
+                    <span style="color:#3a3a4a;letter-spacing:1px;text-transform:uppercase;font-size:0.6rem;">DLS Club</span><br>
                     <span id="team-display" style="color:#666;font-weight:600;">—</span>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:#2a2a38;margin-bottom:3px;">Username</div>
+                    <div style="font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:#2a2a38;margin-bottom:3px;">Gamertag</div>
                     <div style="font-size:0.72rem;color:#3a3a50;font-weight:600;" id="wallet-username-display">@player</div>
                 </div>
             </div>
@@ -587,7 +587,7 @@
         <div class="quick-grid">
             <div class="quick-card" id="quick-card-friend">
                 <span class="quick-icon">⚔️</span>
-                <div class="quick-label">Piga Rafiki</div>
+                <div class="quick-label">Challenge</div>
             </div>
             <div class="quick-card">
                 <span class="quick-icon">🏆</span>
@@ -595,7 +595,7 @@
             </div>
             <div class="quick-card">
                 <span class="quick-icon">📊</span>
-                <div class="quick-label">Matokeo</div>
+                <div class="quick-label">My Results</div>
             </div>
         </div>
 
@@ -611,7 +611,7 @@
 
         <div class="friend-section">
             <div class="section-header">
-                <div class="section-title">CHALLENGE RAFIKI</div>
+                <div class="section-title">CHALLENGE A FRIEND</div>
             </div>
             <div class="friend-card">
                 <div class="friend-buttons">
@@ -625,8 +625,8 @@
                 <div class="friend-info" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:16px;">
                     <div style="display:flex;gap:8px;align-items:flex-start;"><span>💰</span><span>Equal stakes from both players</span></div>
                     <div style="display:flex;gap:8px;align-items:flex-start;"><span>🏆</span><span>Winner takes 90% of the pot</span></div>
-                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>📸</span><span>Upload screenshot to settle</span></div>
-                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>⏱️</span><span>Codes expire in 30 minutes</span></div>
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>📸</span><span>Upload Full Time screenshot to settle</span></div>
+                    <div style="display:flex;gap:8px;align-items:flex-start;"><span>🎮</span><span>Powered by Dream League Soccer</span></div>
                 </div>
             </div>
         </div>
@@ -670,14 +670,14 @@
     <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">YOUR PROFILE</div>
-        <p class="modal-subtitle">Update your eFootball team name</p>
+        <p class="modal-subtitle">Update your Dream League Soccer club name</p>
         <div class="profile-field">
-            <label>Username</label>
+            <label>Gamertag</label>
             <input type="text" id="profile-username" class="modal-input" disabled>
         </div>
         <div class="profile-field">
-            <label>Team Name</label>
-            <input type="text" id="profile-team" class="modal-input" placeholder="e.g., Manchester United">
+            <label>DLS Club Name</label>
+            <input type="text" id="profile-team" class="modal-input" placeholder="e.g., Nairobi Warriors FC">
         </div>
         <div class="balance-insufficient" id="profile-error"></div>
         <button class="btn-mpesa" id="btn-save-profile" style="background:var(--neon);color:#000;">SAVE CHANGES</button>
@@ -837,19 +837,20 @@
     <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">CREATE CHALLENGE ⚔️</div>
-        <p class="modal-subtitle">Enter your eFootball room code & set your wager</p>
+        <p class="modal-subtitle">Set your DLS room code & wager amount</p>
 
         <!-- Guidelines Info Box -->
         <div style="background:rgba(0,255,65,0.05);border:1px solid rgba(0,255,65,0.15);border-radius:12px;padding:12px 14px;margin-bottom:18px;font-size:0.78rem;color:#aaa;line-height:1.6;">
-            <strong style="color:#e0e0e0;display:block;margin-bottom:4px;">📱 How to get your room code:</strong>
-            Open eFootball → Friends Match → Create Room → copy the code shown
-            <a href="EFOOTBALL_GUIDELINES.md" target="_blank" style="color:var(--neon);text-decoration:none;display:block;margin-top:6px;font-weight:600;">📖 Full guidelines →</a>
+            <strong style="color:#e0e0e0;display:block;margin-bottom:4px;">🎮 How DLS Friend Matches work:</strong>
+            1. Choose any code (e.g. <span style="color:var(--neon);font-weight:700;">MAMBA99</span>) — it's your room name<br>
+            2. Open DLS → Friends → Create Room → use the <strong style="color:#fff;">same code</strong><br>
+            3. Share the code with your opponent — they enter it here &amp; in DLS to find you
         </div>
 
         <!-- Room Code Input -->
         <div class="modal-input-group">
-            <label style="color:#ccc;font-size:0.72rem;letter-spacing:2px;">EFOOTBALL ROOM CODE</label>
-            <input type="text" id="friend-efootball-code" class="modal-input" placeholder="ABC123"
+            <label style="color:#ccc;font-size:0.72rem;letter-spacing:2px;">YOUR DLS ROOM CODE</label>
+            <input type="text" id="friend-efootball-code" class="modal-input" placeholder="e.g. MAMBA99"
                 style="text-transform:uppercase;letter-spacing:6px;font-size:1.4rem;font-weight:700;text-align:center;background:rgba(0,0,0,0.5);border-color:rgba(0,255,65,0.25);color:#fff;padding:16px;" maxlength="8">
         </div>
 
@@ -894,7 +895,7 @@
         <div class="modal-title">WAITING FOR OPPONENT ⏳</div>
         <p class="modal-subtitle" id="friend-match-timer">Expires in 30:00</p>
         <div style="font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--neon); letter-spacing:8px; margin:20px 0; text-shadow:0 0 30px rgba(0,255,65,0.4);" id="friend-match-code">ABC123</div>
-        <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 20px;">Share this code with your friend on eFootball</p>
+        <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 20px;">Share this code with your opponent on DLS — they enter it in DLS <em>and</em> here to join</p>
         <div class="friend-info" style="margin-bottom:20px;">
             Your wager: KES <strong id="waiting-stake-display">0</strong> · Winner gets: KES <strong id="waiting-prize-display">0</strong>
         </div>
@@ -910,20 +911,19 @@
     <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">JOIN CHALLENGE 🎯</div>
-        <p class="modal-subtitle">Enter the eFootball room code your opponent shared.</p>
+        <p class="modal-subtitle">Enter the DLS room code your opponent shared.</p>
 
         <!-- Guidelines Info Box -->
         <div style="background: rgba(255,180,0,0.05); border: 1px solid rgba(255,180,0,0.2); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 0.75rem; color: var(--muted); line-height: 1.4;">
-            <strong style="color: var(--text);">📌 Important:</strong><br>
-            • Your opponent created a room in eFootball<br>
-            • They're sharing the room code with you<br>
-            • Use that exact code here to join<br>
-            <a href="EFOOTBALL_GUIDELINES.md" target="_blank" style="color: #ffb400; text-decoration: none;">📖 Full guidelines →</a>
+            <strong style="color: var(--text);">📌 How to join:</strong><br>
+            • Get the room code from your opponent (e.g. <strong style="color:#ffb400;">MAMBA99</strong>)<br>
+            • Open DLS → Friends → Join Room → enter that code<br>
+            • Enter the same code below to lock in your wager
         </div>
 
         <div class="modal-input-group">
-            <label>eFootball Room Code</label>
-            <input type="text" id="join-friend-code" class="modal-input" placeholder="ABC123" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
+            <label>DLS Room Code</label>
+            <input type="text" id="join-friend-code" class="modal-input" placeholder="e.g. MAMBA99" style="text-transform:uppercase; letter-spacing:4px; font-size:1.3rem; text-align:center;" maxlength="8">
         </div>
         <div class="balance-insufficient" id="join-friend-error"></div>
         <button class="btn-mpesa" id="btn-join-friend-match" style="background:var(--neon);color:#000;">JOIN & PAY WAGER</button>
@@ -948,7 +948,7 @@
         <!-- Step 1: Upload screenshot (only step) -->
         <div class="step active" id="declare-step-1">
             <div class="modal-title">UPLOAD SCREENSHOT 📲</div>
-            <p class="modal-subtitle">Upload the final result screen from eFootball – an admin will review.</p>
+            <p class="modal-subtitle">Upload the Full Time screen from Dream League Soccer — an admin will review.</p>
 
             <!-- Match details for context -->
             <div class="match-details-box" style="margin-bottom:18px;">
@@ -962,7 +962,7 @@
                     <span class="upload-icon" id="upload-icon" style="font-size:2.8rem;">📲</span>
                     <div class="upload-label" id="upload-label">
                         <strong style="font-size:0.9rem;">Tap to upload screenshot</strong><br>
-                        <span style="font-size:0.75rem;color:#444;margin-top:4px;display:block;">Upload the "Full Time" screen from eFootball</span>
+                        <span style="font-size:0.75rem;color:#444;margin-top:4px;display:block;">Upload the "Full Time" screen from Dream League Soccer</span>
                     </div>
                     <div class="upload-hint" style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(0,255,65,0.08);">
                         <span>📷 JPEG</span><span>·</span><span>🖼 PNG</span><span>·</span><span>Max 10MB</span>

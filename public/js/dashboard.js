@@ -146,23 +146,11 @@ async function loadDashboard() {
     try {
         console.log('🚀 Starting loadDashboard...');
 
-        // ── FIX 5: Only create realtime client once; reuse if already exists ──
         authToken = localStorage.getItem('supabaseToken');
         if (!authToken) {
             console.error('❌ No auth token found');
             window.location.href = '/login';
             return;
-        }
-
-        if (!supabaseRealtime && typeof supabase !== 'undefined') {
-            console.log('🔌 Creating Supabase realtime client (once)...');
-            supabaseRealtime = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                global: { headers: { Authorization: `Bearer ${authToken}` } },
-                realtime: { params: { apikey: SUPABASE_ANON_KEY } }
-            });
-        } else if (supabaseRealtime && realtimeChannel) {
-            supabaseRealtime.removeChannel(realtimeChannel);
-            realtimeChannel = null;
         }
 
         const userStr = localStorage.getItem('supabaseUser');
@@ -171,6 +159,10 @@ async function loadDashboard() {
         console.log('👤 Loaded user:', currentUser.id, currentUser.phone);
 
         currentUsername = currentUser.user_metadata?.username || currentUser.phone?.substring(0, 8) || 'Player';
+
+        // ── FAST START: Populate UI from cache instantly — no waiting ──
+        const cachedBalance = parseFloat(localStorage.getItem('cachedBalance') || '0');
+        currentBalance = cachedBalance;
         const walletUsernameEl = document.getElementById('wallet-username-display');
         if (walletUsernameEl) walletUsernameEl.textContent = '@' + currentUsername;
         document.getElementById('username-display').innerText = '@' + currentUsername;
@@ -184,57 +176,64 @@ async function loadDashboard() {
             if (wPhone) wPhone.value = phone;
         }
 
-        console.log('🚀 Loading dashboard data in parallel...');
+        // ── Show UI immediately — no blocking awaits before this ──
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        updateBalanceDisplay(); // show cached value right away
 
-        // ── FIX 1: Run balance + profile in parallel instead of sequentially ──
-        const [balanceOk] = await Promise.allSettled([
-            refreshBalance(3),
-            loadProfile()
-        ]);
-
-        if (balanceOk.status === 'rejected' || currentBalance < 0) {
-            console.error('❌ Balance load issue, defaulting to 0');
-            currentBalance = 0;
-            updateBalanceDisplay();
-            // ── FIX 7: Use showToast instead of blocking alert() ──
-            showToast('error', 'Balance unavailable', 'Could not load your balance. Pull down to refresh.', 6000);
+        // ── Create realtime client once ──
+        if (!supabaseRealtime && typeof supabase !== 'undefined') {
+            console.log('🔌 Creating Supabase realtime client (once)...');
+            supabaseRealtime = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                global: { headers: { Authorization: `Bearer ${authToken}` } },
+                realtime: { params: { apikey: SUPABASE_ANON_KEY } }
+            });
+        } else if (supabaseRealtime && realtimeChannel) {
+            supabaseRealtime.removeChannel(realtimeChannel);
+            realtimeChannel = null;
         }
 
-        // ── FIX 1: Fire non-dependent fetches without awaiting ──
+        // ── Fire all data loads in parallel, none block the UI ──
+        Promise.allSettled([
+            refreshBalance(1),   // 1 attempt only on initial load — fast fail, cache covers UI
+            loadProfile(),
+        ]).then(([balResult]) => {
+            if (balResult.status === 'fulfilled') {
+                // Balance already updated inside refreshBalance
+                console.log('✅ Initial balance loaded');
+            } else {
+                console.warn('⚠️ Initial balance fetch failed, showing cached value');
+                // Don't toast — cached value is showing, silent fallback is fine
+            }
+        });
+
         loadTournaments();
         loadMyFriendMatches();
 
-        // ── FIX 2: Start intervals AFTER showing UI, with slower match refresh ──
+        // ── Intervals ──
         if (matchesRefreshInterval) clearInterval(matchesRefreshInterval);
         matchesRefreshInterval = setInterval(() => {
             console.log('🔄 Auto-refreshing matches list...');
             loadMyFriendMatches();
-        }, 30000); // Slowed from 10s → 30s
+        }, 30000);
 
         if (supabaseRealtime) {
-            console.log('🔔 Setting up realtime subscription for user:', currentUser.id);
             subscribeToBalance(currentUser.id);
         } else {
-            console.warn('⚠️ Realtime unavailable, using polling only');
             startBalanceAutoRefresh(30000);
         }
-
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('main-content').style.display = 'block';
 
         startBalanceAutoRefresh(120000);
         startNotificationPolling();
 
-        // ── FIX 2: Pause all polling when tab is not visible ──
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        console.log('✅ Dashboard loaded successfully');
+        console.log('✅ Dashboard rendered immediately, data loading in background');
 
     } catch (err) {
         console.error('Failed to load dashboard', err);
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
-        // ── FIX 7: Use showToast instead of blocking alert() ──
         showToast('error', 'Load error', 'Some features may not work correctly. Please refresh.', 6000);
     }
 }
@@ -257,44 +256,34 @@ function handleVisibilityChange() {
     }
 }
 
-async function refreshBalance(retries = 2) {
+async function refreshBalance(retries = 1) {
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             console.log(`📡 Fetching balance (attempt ${attempt}/${retries})...`);
             const res = await fetchWithAuth('/wallet/balance', {}, 5000);
             if (!res) {
-                console.error('❌ refreshBalance: No response from server');
-                if (attempt < retries) {
-                    await new Promise(r => setTimeout(r, 1000 * attempt));
-                    continue;
-                }
+                if (attempt < retries) { await new Promise(r => setTimeout(r, 800 * attempt)); continue; }
                 return;
             }
             if (!res.ok) {
-                console.error('❌ refreshBalance: HTTP', res.status);
-                if (attempt < retries) {
-                    await new Promise(r => setTimeout(r, 1000 * attempt));
-                    continue;
-                }
+                if (attempt < retries) { await new Promise(r => setTimeout(r, 800 * attempt)); continue; }
                 return;
             }
             const data = await res.json();
             if (typeof data.balance === 'number') {
                 console.log(`✅ Balance updated: ${currentBalance} → ${data.balance}`);
                 currentBalance = data.balance;
+                // ── Cache balance so next page load is instant ──
+                localStorage.setItem('cachedBalance', String(data.balance));
                 updateBalanceDisplay();
                 return;
-            } else {
-                console.error('❌ Invalid balance response:', data);
             }
         } catch (err) {
-            console.error(`❌ refreshBalance attempt ${attempt} failed:`, err.message, err);
-            if (attempt < retries) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
-            }
+            console.error(`❌ refreshBalance attempt ${attempt} failed:`, err.message);
+            if (attempt < retries) { await new Promise(r => setTimeout(r, 800 * attempt)); }
         }
     }
-    console.error('❌ refreshBalance: All attempts failed, balance remains:', currentBalance);
+    console.warn('⚠️ refreshBalance: all attempts failed, showing cached value');
 }
 
 // ── FIX 4: Remove forced reflow (void offsetWidth) — use requestAnimationFrame instead ──
@@ -777,8 +766,8 @@ function openCreateMatchModal() {
         openProfileModal();
         return;
     }
-    document.getElementById('friend-wager-input').value = 200;
-    updateFriendBreakdown();
+    document.getElementById('friend-efootball-code').value = '';
+    document.getElementById('friend-wager-input').value = 200;    updateFriendBreakdown();
     hideError('create-friend-error');
     document.getElementById('create-friend-modal').classList.add('open');
 }
@@ -818,7 +807,7 @@ async function createFriendMatch() {
     const efootballCode = document.getElementById('friend-efootball-code').value.trim().toUpperCase();
     const btn = document.getElementById('create-friend-btn');
 
-    if (!efootballCode) { showError('create-friend-error', 'Please enter your eFootball room code'); return; }
+    if (!efootballCode) { showError('create-friend-error', 'Please enter your DLS room code'); return; }
     if (wagerAmount < 20) { showError('create-friend-error', 'Minimum wager is KES 20'); return; }
     if (wagerAmount > currentBalance) { showError('create-friend-error', 'Insufficient balance'); return; }
 
@@ -878,7 +867,7 @@ async function createFriendMatch() {
 
 async function joinFriendMatch() {
     const efootballCode = document.getElementById('join-friend-code').value.trim().toUpperCase();
-    if (!efootballCode) { showError('join-friend-error', 'Please enter your opponent\'s eFootball room code'); return; }
+    if (!efootballCode) { showError('join-friend-error', 'Please enter your opponent\'s DLS room code'); return; }
     try {
         console.log('📝 Joining friend match with eFootball code:', efootballCode);
         const res = await fetchWithAuth('/friends/join-match', {
@@ -956,7 +945,7 @@ function shareFriendCode() {
     const wager = parseInt(document.getElementById('waiting-stake-display').textContent);
     const prize = parseInt(document.getElementById('waiting-prize-display').textContent);
     const text = encodeURIComponent(
-        `🎮 Challenge me on Vumbua eFootball!\n\nMatch Code: ${code}\nWager: KES ${wager}\nWinner gets: KES ${prize}\n\nJoin here: https://vumbua.app`
+        `🎮 Challenge me on Vumbua Dream League Soccer!\n\nRoom Code: ${code}\nWager: KES ${wager}\nWinner gets: KES ${prize}\n\n1. Open DLS → Friends → Join Room → enter code: ${code}\n2. Enter the same code on Vumbua to lock your wager\n\nJoin here: https://vumbua.app`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
 }
@@ -1309,7 +1298,7 @@ function openReportResultModal(matchId) {
             label.textContent = '';
             const s = document.createElement('strong'); s.textContent = 'Tap to upload screenshot'; label.appendChild(s);
             label.appendChild(document.createElement('br'));
-            const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from eFootball'; label.appendChild(sm);
+            const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from Dream League Soccer'; label.appendChild(sm);
         }
         if (progress) progress.classList.remove('visible');
         if (error) error.style.display = 'none';
@@ -1355,7 +1344,7 @@ function resetReportModal() {
         label.textContent = '';
         const s = document.createElement('strong'); s.textContent = 'Tap to upload screenshot'; label.appendChild(s);
         label.appendChild(document.createElement('br'));
-        const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from eFootball'; label.appendChild(sm);
+        const sm = document.createElement('span'); sm.style.cssText = 'font-size:0.78rem;color:#555;'; sm.textContent = 'Take it directly from Dream League Soccer'; label.appendChild(sm);
     }
     if (progress) progress.classList.remove('visible');
     if (error) error.style.display = 'none';
@@ -1622,6 +1611,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastMatchesHash = '';
         localStorage.removeItem('supabaseToken');
         localStorage.removeItem('supabaseUser');
+        localStorage.removeItem('cachedBalance');
         window.location.href = '/login';
     });
 

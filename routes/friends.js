@@ -91,9 +91,9 @@ router.post('/create-match', async (req, res) => {
         if (!wagerAmount || isNaN(parsedWager) || parsedWager < 20)
             return res.status(400).json({ error: 'Minimum wager is KES 20' });
         if (!efootballCode)
-            return res.status(400).json({ error: 'eFootball room code is required' });
+            return res.status(400).json({ error: 'DLS room code is required' });
         if (!validateEFootballCode(efootballCode))
-            return res.status(400).json({ error: 'Invalid eFootball code format' });
+            return res.status(400).json({ error: 'Invalid room code. Use 3–8 letters/numbers (e.g. MAMBA99)' });
 
         const { data: creatorProfile } = await supabaseAdmin
             .from('profiles').select('team_name').eq('id', user.id).single();
@@ -105,7 +105,7 @@ router.post('/create-match', async (req, res) => {
             .from('friend_matches').select('id').eq('match_code', matchCode)
             .eq('status', 'pending').gte('expires_at', new Date().toISOString()).maybeSingle();
         if (existing)
-            return res.status(400).json({ error: 'This eFootball code is already in use' });
+            return res.status(400).json({ error: 'This room code is already in use by another active match. Choose a different code.' });
 
         const expiresAt   = new Date(Date.now() + 30 * 60 * 1000).toISOString();
         const platformFee = Math.floor(parsedWager * 0.10);
@@ -141,11 +141,11 @@ router.post('/create-match', async (req, res) => {
 
         // Notify admin via WhatsApp
         notifyAdmin(
-            `⚽ NEW FRIENDLY MATCH\n` +
+            `🎮 NEW DLS FRIENDLY MATCH\n` +
             `Player: ${creatorProfile.team_name}\n` +
             `Wager: KES ${parsedWager}\n` +
             `Prize: KES ${winnerPrize}\n` +
-            `Code: ${matchCode}`
+            `Room Code: ${efootballCode.toUpperCase()}`
         );
 
         res.status(201).json({
@@ -176,8 +176,8 @@ router.post('/join-match', async (req, res) => {
         if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
 
         const { efootballCode } = req.body;
-        if (!efootballCode) return res.status(400).json({ error: 'eFootball room code is required' });
-        if (!validateEFootballCode(efootballCode)) return res.status(400).json({ error: 'Invalid eFootball code format' });
+        if (!efootballCode) return res.status(400).json({ error: 'DLS room code is required' });
+        if (!validateEFootballCode(efootballCode)) return res.status(400).json({ error: 'Invalid room code. Use 3–8 letters/numbers (e.g. MAMBA99)' });
 
         const { data: joinerProfile } = await supabaseAdmin
             .from('profiles').select('team_name').eq('id', user.id).single();
@@ -193,10 +193,10 @@ router.post('/join-match', async (req, res) => {
         });
 
         if (rpcErr) {
-            const msg = rpcErr.message?.toLowerCase().includes('not found')     ? 'Invalid eFootball code. No active match found.'
+            const msg = rpcErr.message?.toLowerCase().includes('not found')     ? 'No active match found with that room code. Check the code and try again.'
                 : rpcErr.message?.toLowerCase().includes('own match')           ? 'You cannot join your own match.'
                 : rpcErr.message?.toLowerCase().includes('already joined')      ? 'Match already has two players.'
-                : rpcErr.message?.toLowerCase().includes('expired')             ? 'Match code has expired.'
+                : rpcErr.message?.toLowerCase().includes('expired')             ? 'This room code has expired.'
                 : rpcErr.message?.toLowerCase().includes('insufficient')        ? 'Insufficient balance.'
                 : 'Failed to join match. Please try again.';
             return res.status(400).json({ error: msg });
